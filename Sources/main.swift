@@ -12,6 +12,14 @@ if let i = arguments.firstIndex(of: "--export-preview"), i + 1 < arguments.count
     try Exporter.exportPreview(to: arguments[i + 1], coat: coat)
     exit(0)
 }
+if let i = arguments.firstIndex(of: "--export-sounds"), i + 1 < arguments.count {
+    MainActor.assumeIsolated {
+        let dir = URL(fileURLWithPath: arguments[i + 1])
+        try? Meow.meow.write(to: dir.appendingPathComponent("miau.wav"))
+        try? Meow.trill.write(to: dir.appendingPathComponent("mrrp.wav"))
+    }
+    exit(0)
+}
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared

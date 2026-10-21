@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pomodoroItem: NSMenuItem!
     private var pomodoroInfoItem: NSMenuItem!
     private var reminderItem: NSMenuItem!
+    private var soundItem: NSMenuItem!
+    private var climbItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
     private var startleItem: NSMenuItem!
@@ -22,10 +24,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let defaults = UserDefaults.standard
-        defaults.register(defaults: ["scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false])
+        defaults.register(defaults: [
+            "scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false, "sounds": true, "climbing": false,
+        ])
         let coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
         cat = CatController(scale: defaults.double(forKey: "scale"), coat: coat)
         cat.breakReminders = defaults.bool(forKey: "breakReminders")
+        cat.sounds = defaults.bool(forKey: "sounds")
+        cat.climbing = defaults.bool(forKey: "climbing")
         setUpStatusItem()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         cat.show()
@@ -56,9 +62,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pomodoroInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         pomodoroInfoItem.isEnabled = false
         menu.addItem(pomodoroInfoItem)
+        soundItem = item("Miauen bei Pomodoro", #selector(toggleSounds))
+        menu.addItem(soundItem)
         reminderItem = item("Pausen-Erinnerung", #selector(toggleReminders))
         menu.addItem(reminderItem)
         menu.addItem(.separator())
+
+        climbItem = item("Klettern", #selector(toggleClimbing))
+        menu.addItem(climbItem)
 
         feedItem = item("Füttern", #selector(feed))
         menu.addItem(feedItem)
@@ -136,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pomodoroInfoItem.isHidden = true
         }
         reminderItem.state = cat.breakReminders ? .on : .off
+        soundItem.state = cat.sounds ? .on : .off
+        climbItem.state = cat.climbing ? .on : .off
         reminderItem.isEnabled = cat.pomodoro == nil
 
         // Während der Fokuszeit schläft die Katze – dann gibt es nichts zu füttern oder zu spielen
@@ -161,6 +174,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func togglePomodoro() {
         cat.show()
         cat.pomodoro == nil ? cat.startPomodoro() : cat.stopPomodoro()
+    }
+
+    @objc private func toggleSounds() {
+        cat.sounds.toggle()
+        UserDefaults.standard.set(cat.sounds, forKey: "sounds")
+        // Zum Probehören
+        if cat.sounds { Meow.playMeow() }
+    }
+
+    @objc private func toggleClimbing() {
+        cat.show()
+        cat.climbing.toggle()
+        UserDefaults.standard.set(cat.climbing, forKey: "climbing")
     }
 
     @objc private func toggleReminders() {

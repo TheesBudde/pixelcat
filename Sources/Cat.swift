@@ -1,10 +1,13 @@
 import AppKit
 
-/// Maße der Zeichenfläche in Katzenpixeln. Links und rechts bleibt etwas Luft.
+/// Maße der Zeichenfläche in Katzenpixeln. Links und rechts bleibt etwas Luft,
+/// oben genug Platz für die hochkant kletternde Katze.
 enum Layout {
     static let canvasWidth = 32
-    static let canvasHeight = 22
+    static let canvasHeight = 26
     static let margin = 4
+    /// Wo die hochkant gedrehten Kletterbilder stehen
+    static let climbX = 8
 }
 
 /// Was gerade zu sehen ist.
@@ -12,10 +15,27 @@ struct CatLook: Equatable {
     var sprite: Sprite
     var facingRight: Bool
     var hop = 0
+    var drawX = Layout.margin
 
     static func == (a: CatLook, b: CatLook) -> Bool {
-        a.sprite === b.sprite && a.facingRight == b.facingRight && a.hop == b.hop
+        a.sprite === b.sprite && a.facingRight == b.facingRight && a.hop == b.hop && a.drawX == b.drawX
     }
+}
+
+/// Sichtbarer Teil einer Fensteroberkante, auf dem die Katze laufen kann.
+/// Alle Werte in Bildschirmpunkten, y zählt von unten.
+struct Perch: Equatable {
+    /// Fensternummer – bleibt gleich, solange das Fenster existiert
+    let id: Int
+    /// Höhe der Oberkante
+    let y: CGFloat
+    /// begehbarer, nicht verdeckter Abschnitt der Oberkante
+    let minX: CGFloat
+    let maxX: CGFloat
+    /// Fensterränder, an denen die Katze hoch- und runterklettert
+    let left: CGFloat
+    let right: CGFloat
+    let bottom: CGFloat
 }
 
 // MARK: - Tageszeit
@@ -95,12 +115,13 @@ final class Bowl {
 // MARK: - Verhalten
 
 /// Zustandsautomat: herumlaufen → hinsetzen → hinlegen → schlafen → aufwachen → …
-/// Dazu: erschrecken, gestreichelt werden, fressen, mit dem Knäuel spielen, Pomodoro.
+/// Dazu: erschrecken, gestreichelt werden, fressen, spielen, Pomodoro und auf Fenster klettern.
 @MainActor
 final class CatBrain {
     enum Phase {
         case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled, petted
         case stretching, yawning, grooming, headWashing, backRolling, eating, chasing, batting, watching
+        case climbingUp, climbingDown, jumping, falling
     }
 
     enum Mode {
@@ -111,17 +132,46 @@ final class CatBrain {
         case focusBreak
     }
 
-    private enum Goal { case wander, bowl, center }
+    /// Kletterweg an einer Fensterseite
+    private struct Wall {
+        let perchID: Int
+        /// true: linke Fensterseite – die Wand ist rechts von der Katze
+        let wallOnRight: Bool
+    }
+
+    private enum Landing {
+        case dock
+        case perch(Int)
+        case wall(Wall)
+    }
+
+    private struct Jump {
+        let fromX, fromY, toX, toY: CGFloat
+        let duration: Double
+        let arc: CGFloat
+        let landing: Landing
+    }
+
+    private enum Goal {
+        case wander, bowl, center
+        case climbUp(Wall)
+        case climbDown(Wall)
+        /// Am Ziel abspringen – die Landestelle steht als Mitte der Katze (Bildschirm-x) drin
+        case jump(toCenter: CGFloat, toY: CGFloat, landing: Landing)
+    }
 
     private(set) var phase: Phase = .standing
     private var phaseTime = 0.0
     private var phaseDuration = 1.0
     private var animTime = 0.0
 
-    /// Linke Kante des Fensters in Bildschirmpunkten.
+    /// Linke untere Ecke des Fensters in Bildschirmpunkten.
     var x: CGFloat = 0
+    var y: CGFloat = 0
+    /// Grenzen auf dem Dock (für die linke Fensterkante) und Höhe der Dock-Oberkante.
     var minX: CGFloat = 0
     var maxX: CGFloat = 800
+    var dockY: CGFloat = 0
     /// Punkte pro Katzenpixel; das Tempo wächst mit, damit es bei jeder Größe gleich wirkt.
     var scale: CGFloat = 3
     /// Austauschbar, damit sich Tag und Nacht testen lassen.
@@ -132,6 +182,10 @@ final class CatBrain {
     }
     var ball: Ball?
     var bowl: Bowl?
+    var climbingEnabled = false {
+        didSet { if !climbingEnabled { leaveWindows() } }
+    }
+    private(set) var perches: [Perch] = []
 
     private var goal: Goal = .wander
     private var targetX: CGFloat = 0
@@ -151,10 +205,21 @@ final class CatBrain {
     private var chaseMoving = false
     private var batsUntilRest = Int.random(in: 6...12)
 
+    /// Auf welchem Fenster sie steht – nil heißt: auf dem Dock
+    private var perchID: Int?
+    private var wall: Wall?
+    private var jump: Jump?
+    private var fallSpeed: CGFloat = 0
+
     private var unit: CGFloat { scale / 3 }
     private var temperament: Temperament { .at(clock()) }
     private var center: CGFloat { x + CGFloat(Layout.canvasWidth) / 2 * scale }
+    private var currentPerch: Perch? { perchID.flatMap(perch) }
+    private var isAirborne: Bool { [.climbingUp, .climbingDown, .jumping, .falling].contains(phase) }
     var isBeingPetted: Bool { phase == .petted }
+    var isOnWindow: Bool { perchID != nil || isAirborne }
+
+    private func perch(_ id: Int) -> Perch? { perches.first { $0.id == id } }
 
     // MARK: Von außen
 
@@ -163,7 +228,15 @@ final class CatBrain {
         animTime += dt
         updateBlink(dt)
         updateTail(dt)
-        x = clampX(x)
+        if !isAirborne {
+            if let perch = currentPerch {
+                y = perch.y
+            } else {
+                perchID = nil
+                y = dockY
+            }
+            x = clampX(x)
+        }
 
         switch phase {
         case .walking, .fleeing:
@@ -176,6 +249,12 @@ final class CatBrain {
             }
         case .chasing:
             updateChase(dt)
+        case .climbingUp, .climbingDown:
+            updateClimb(dt)
+        case .jumping:
+            updateJump()
+        case .falling:
+            updateFall(dt)
         case .petted:
             timeSinceStroke += dt
             if timeSinceStroke > 1.2 { pettingStopped() }
@@ -196,14 +275,39 @@ final class CatBrain {
         }
     }
 
+    /// Neue Fensterkanten. Bewegt sich das Fenster unter der Katze, bewegt sie sich mit;
+    /// verschwindet es oder wird ihre Stelle verdeckt, fällt sie herunter.
+    func setPerches(_ newPerches: [Perch]) {
+        let old = perches
+        perches = newPerches
+        guard let id = perchID ?? wall?.perchID else { return }
+        guard let now = perch(id) else {
+            if perchID != nil || wall != nil { startFalling() }
+            return
+        }
+        if let before = old.first(where: { $0.id == id }), !isAirborne {
+            x += now.left - before.left
+        }
+        if perchID != nil, !isAirborne,
+           center < now.minX - 2 * scale || center > now.maxX + 2 * scale {
+            startFalling()
+        }
+    }
+
     func startle() {
-        guard mode != .focus, phase != .startled, phase != .fleeing else { return }
+        guard mode != .focus, phase != .startled, phase != .fleeing, phase != .jumping, phase != .falling else {
+            return
+        }
+        if phase == .climbingUp || phase == .climbingDown {
+            startFalling()
+            return
+        }
         goal = .wander
         enter(.startled, for: 0.45)
     }
 
     func goToSleep() {
-        guard ![.sleeping, .lyingDown, .sittingDown, .backRolling].contains(phase) else { return }
+        guard !isAirborne, ![.sleeping, .lyingDown, .sittingDown, .backRolling].contains(phase) else { return }
         walksBeforeNap = 0
         goal = .wander
         enter(.sittingDown, for: 1.0)
@@ -212,7 +316,7 @@ final class CatBrain {
     /// Wird aufgerufen, solange die Maus über die Katze streicht.
     func stroke() {
         timeSinceStroke = 0
-        guard phase != .petted, phase != .startled, phase != .fleeing else { return }
+        guard !isAirborne, phase != .petted, phase != .startled, phase != .fleeing else { return }
         pettedWhileLying = mode == .focus
             || [.sittingDown, .lyingDown, .sleeping, .wakingUp, .backRolling].contains(phase)
         goal = .wander
@@ -230,7 +334,7 @@ final class CatBrain {
             goal = .wander
             enter(.standing, for: 0.3)
         default:
-            break // erschrocken, gestreichelt oder am Fressen: danach geht's weiter
+            break // erschrocken, gestreichelt, beim Fressen oder Klettern: danach geht's weiter
         }
     }
 
@@ -308,16 +412,24 @@ final class CatBrain {
                 enter(.standing, for: .random(in: 0.2...0.7))
             }
         case .startled:
-            startFleeing()
-        case .walking, .fleeing, .petted, .chasing:
+            if perchID != nil {
+                // Auf dem Fenster erschreckt: runterspringen
+                jumpDown(quick: true)
+            } else {
+                startFleeing()
+            }
+        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling:
             break
         }
     }
 
     /// Was als Nächstes? Wird aus dem Stehen heraus entschieden.
     private func decideNext() {
+        let needsDock = (bowl?.food ?? 0) > 0 || reminderPending || ball != nil
         if mode == .focus {
-            enter(.sittingDown, for: 1.0)
+            enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
+        } else if perchID != nil, needsDock || !climbingEnabled {
+            leaveWindows()
         } else if let bowl, bowl.food > 0 {
             walk(mouthTo: bowl.x, goal: .bowl, speed: 70 * unit)
         } else if reminderPending {
@@ -327,6 +439,9 @@ final class CatBrain {
         } else if ball != nil {
             enter(.chasing)
         } else if mode == .focusBreak || walksBeforeNap > 0 {
+            // Auf dem Fenster öfter etwas unternehmen, damit sie nicht ewig oben bleibt
+            let adventure = perchID == nil ? 0.35 : 0.5
+            if climbingEnabled, Double.random(in: 0..<1) < adventure, tryClimbingAdventure() { return }
             startWalking()
         } else {
             enter(.sittingDown, for: .random(in: 1.0...1.8))
@@ -361,6 +476,12 @@ final class CatBrain {
             } else {
                 enter(.standing, for: walksBeforeNap > 0 ? .random(in: 0.4...2.5) : .random(in: 0.3...0.8))
             }
+        case .climbUp(let wall):
+            startClimbingUp(wall)
+        case .climbDown(let wall):
+            startClimbingDown(wall)
+        case .jump(let toCenter, let toY, let landing):
+            startJump(toX: toCenter - CGFloat(Layout.canvasWidth) / 2 * scale, toY: toY, landing: landing)
         }
     }
 
@@ -382,6 +503,7 @@ final class CatBrain {
             switch phase {
             case .sleeping: phaseDuration = .infinity
             case .lyingDown, .sittingDown, .startled, .fleeing: break // landet ohnehin im Schlaf
+            case .climbingUp, .climbingDown, .jumping, .falling: break // erst ankommen
             case .backRolling: enter(.lyingDown, for: 1.5)
             case .petted: pettedWhileLying = true
             default: enter(.sittingDown, for: 1.0)
@@ -406,8 +528,18 @@ final class CatBrain {
 
     // MARK: Laufen
 
+    /// Wo die linke Fensterkante sein darf, damit die Katze auf ihrem Untergrund bleibt.
+    private var walkRange: ClosedRange<CGFloat> {
+        let half = CGFloat(Layout.canvasWidth) / 2 * scale
+        if let perch = currentPerch {
+            let low = perch.minX + 9 * scale - half
+            return low...max(low, perch.maxX - 9 * scale - half)
+        }
+        return minX...max(minX, maxX)
+    }
+
     private func clampX(_ value: CGFloat) -> CGFloat {
-        min(max(value, minX), maxX)
+        min(max(value, walkRange.lowerBound), walkRange.upperBound)
     }
 
     private func walk(to windowX: CGFloat, speed: CGFloat) {
@@ -426,10 +558,15 @@ final class CatBrain {
     }
 
     private func startWalking() {
-        guard maxX > minX else { return }
+        let range = walkRange
+        guard range.upperBound > range.lowerBound + 10 else {
+            enter(.standing, for: 1)
+            walksBeforeNap -= 1
+            return
+        }
         var target = x
         for _ in 0..<10 {
-            target = .random(in: minX...maxX)
+            target = .random(in: range)
             if abs(target - x) > 60 * unit { break }
         }
         let maxDistance = 450 * unit
@@ -451,6 +588,288 @@ final class CatBrain {
         speed = temperament.fleeSpeed * unit
         facingRight = right
         enter(.fleeing)
+    }
+
+    // MARK: Klettern
+
+    /// Wo das Fenster der Katze stehen muss, damit ihre Pfoten die Wand berühren.
+    private func climbX(wallX: CGFloat, wallOnRight: Bool) -> CGFloat {
+        wallOnRight ? wallX - 23 * scale : wallX - 9 * scale
+    }
+
+    private func wallX(_ wall: Wall, _ perch: Perch) -> CGFloat {
+        wall.wallOnRight ? perch.left : perch.right
+    }
+
+    /// Hoch aufs Fenster, von Fenster zu Fenster oder wieder runter.
+    private func tryClimbingAdventure() -> Bool {
+        if let perch = currentPerch {
+            if Double.random(in: 0..<1) < 0.45, jumpToNeighbor(from: perch) { return true }
+            if Double.random(in: 0..<1) < 0.65 {
+                leaveWindows()
+                return true
+            }
+            return false
+        }
+        return climbOntoWindow()
+    }
+
+    /// Vom Dock aus: an einer Fensterseite hochklettern oder direkt hinaufspringen.
+    private func climbOntoWindow() -> Bool {
+        var options: [() -> Void] = []
+        let half = CGFloat(Layout.canvasWidth) / 2 * scale
+        for perch in perches where perch.y - dockY > 40 * unit {
+            // Die Fensterseite reicht bis (fast) aufs Dock: dort hochklettern
+            if perch.bottom - dockY <= 150 * unit {
+                let standLeft = perch.left - 10 * scale - half
+                if perch.minX <= perch.left + 2, (minX...maxX).contains(standLeft) {
+                    options.append { [unowned self] in
+                        goal = .climbUp(Wall(perchID: perch.id, wallOnRight: true))
+                        walk(to: standLeft, speed: .random(in: temperament.walkSpeed) * unit)
+                    }
+                }
+                let standRight = perch.right + 10 * scale - half
+                if perch.maxX >= perch.right - 2, (minX...maxX).contains(standRight) {
+                    options.append { [unowned self] in
+                        goal = .climbUp(Wall(perchID: perch.id, wallOnRight: false))
+                        walk(to: standRight, speed: .random(in: temperament.walkSpeed) * unit)
+                    }
+                }
+            }
+            // Niedriges Fenster: einfach hinaufspringen
+            if perch.y - dockY <= 170 * unit, perch.maxX - perch.minX > 30 * scale {
+                let fromLeft = Bool.random()
+                let landing = fromLeft ? perch.minX + 13 * scale : perch.maxX - 13 * scale
+                let takeoff = landing + (fromLeft ? -55 : 55) * unit
+                if (minX...maxX).contains(takeoff - half) {
+                    options.append { [unowned self] in
+                        goal = .jump(toCenter: landing, toY: perch.y, landing: .perch(perch.id))
+                        walk(to: takeoff - half, speed: .random(in: temperament.walkSpeed) * unit)
+                    }
+                }
+            }
+        }
+        guard let option = options.randomElement() else { return false }
+        option()
+        return true
+    }
+
+    /// Auf ein anderes Fenster in Sprungweite hüpfen.
+    private func jumpToNeighbor(from perch: Perch) -> Bool {
+        var options: [() -> Void] = []
+        for other in perches where other.id != perch.id && other.maxX - other.minX > 30 * scale {
+            let dy = other.y - perch.y
+            guard dy <= 170 * unit, dy >= -450 * unit else { continue }
+            let takeoff: CGFloat
+            let landing: CGFloat
+            if other.minX > perch.maxX - 12 * scale {
+                // liegt rechts daneben
+                guard other.minX - perch.maxX <= 260 * unit else { continue }
+                takeoff = perch.maxX - 11 * scale
+                landing = other.minX + 13 * scale
+            } else if other.maxX < perch.minX + 12 * scale {
+                // liegt links daneben
+                guard perch.minX - other.maxX <= 260 * unit else { continue }
+                takeoff = perch.minX + 11 * scale
+                landing = other.maxX - 13 * scale
+            } else {
+                // darüber oder darunter
+                guard abs(dy) > 30 * unit else { continue }
+                let low = max(perch.minX, other.minX) + 13 * scale
+                let high = min(perch.maxX, other.maxX) - 13 * scale
+                guard high > low else { continue }
+                takeoff = .random(in: low...high)
+                landing = takeoff + .random(in: -30...30) * unit
+            }
+            options.append { [unowned self] in
+                goal = .jump(toCenter: landing, toY: other.y, landing: .perch(other.id))
+                walk(to: takeoff - CGFloat(Layout.canvasWidth) / 2 * scale,
+                     speed: .random(in: temperament.walkSpeed) * unit)
+            }
+        }
+        guard let option = options.randomElement() else { return false }
+        option()
+        return true
+    }
+
+    /// Vom Fenster zurück aufs Dock: an der Seite runterklettern oder runterspringen.
+    private func leaveWindows() {
+        switch phase {
+        case .climbingUp:
+            if let wall { startClimbingDown(wall) }
+            return
+        case .climbingDown, .jumping, .falling:
+            return
+        default:
+            break
+        }
+        guard let perch = currentPerch else { return }
+        let toLeft = center - perch.minX < perch.maxX - center
+        let canClimb = perch.bottom - dockY <= 150 * unit
+            && (toLeft ? perch.minX <= perch.left + 2 : perch.maxX >= perch.right - 2)
+        if canClimb, Double.random(in: 0..<1) < 0.5 {
+            let edge = toLeft ? perch.left + 10 * scale : perch.right - 10 * scale
+            goal = .climbDown(Wall(perchID: perch.id, wallOnRight: toLeft))
+            walk(to: edge - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 45 * unit)
+        } else {
+            jumpDown(quick: !climbingEnabled)
+        }
+    }
+
+    private func jumpDown(quick: Bool) {
+        guard let perch = currentPerch else { return }
+        let toLeft = center - perch.minX < perch.maxX - center
+        let landingCenter = toLeft ? perch.minX - 25 * unit : perch.maxX + 25 * unit
+        let half = CGFloat(Layout.canvasWidth) / 2 * scale
+        if quick {
+            // gleich von hier aus
+            startJump(toX: center + (toLeft ? -50 : 50) * unit - half, toY: dockY, landing: .dock)
+        } else {
+            let edge = toLeft ? perch.minX + 11 * scale : perch.maxX - 11 * scale
+            goal = .jump(toCenter: landingCenter, toY: dockY, landing: .dock)
+            walk(to: edge - half, speed: 45 * unit)
+        }
+    }
+
+    private func startClimbingUp(_ wall: Wall) {
+        guard let perch = perch(wall.perchID) else {
+            enter(.standing, for: 0.5)
+            return
+        }
+        let wallX = wallX(wall, perch)
+        let climbX = climbX(wallX: wallX, wallOnRight: wall.wallOnRight)
+        if perch.bottom > dockY + 6 * unit {
+            // Fenster endet etwas über dem Dock: hinspringen und festkrallen
+            startJump(toX: climbX, toY: perch.bottom + 2 * unit, landing: .wall(wall))
+        } else {
+            self.wall = wall
+            perchID = nil
+            x = climbX
+            enter(.climbingUp)
+        }
+    }
+
+    private func startClimbingDown(_ wall: Wall) {
+        guard let perch = perch(wall.perchID) else {
+            startFalling()
+            return
+        }
+        self.wall = wall
+        perchID = nil
+        x = climbX(wallX: wallX(wall, perch), wallOnRight: wall.wallOnRight)
+        y = min(y, perch.y - 24 * scale)
+        enter(.climbingDown)
+    }
+
+    private func updateClimb(_ dt: Double) {
+        guard let wall, let perch = perch(wall.perchID) else {
+            startFalling()
+            return
+        }
+        let wallX = wallX(wall, perch)
+        x = climbX(wallX: wallX, wallOnRight: wall.wallOnRight)
+        let step = 45 * unit * CGFloat(dt)
+        if phase == .climbingUp {
+            y += step
+            if y + 24 * scale >= perch.y {
+                // oben angekommen: hochziehen und aufs Fenster treten
+                self.wall = nil
+                perchID = perch.id
+                y = perch.y
+                facingRight = wall.wallOnRight
+                let edge = wall.wallOnRight ? perch.left + 11 * scale : perch.right - 11 * scale
+                x = clampX(edge - CGFloat(Layout.canvasWidth) / 2 * scale)
+                enter(.standing, for: .random(in: 0.5...1.2))
+            }
+        } else {
+            y -= step
+            let bottom = max(perch.bottom, dockY)
+            if y <= bottom {
+                self.wall = nil
+                if bottom > dockY + 4 * unit {
+                    startFalling()
+                } else {
+                    y = dockY
+                    facingRight = !wall.wallOnRight
+                    let foot = wall.wallOnRight ? wallX - 12 * scale : wallX + 12 * scale
+                    x = foot - CGFloat(Layout.canvasWidth) / 2 * scale
+                    enter(.standing, for: .random(in: 0.4...1.0))
+                }
+            }
+        }
+    }
+
+    private func startJump(toX: CGFloat, toY: CGFloat, landing: Landing) {
+        let dx = toX - x, dy = toY - y
+        let distance = hypot(dx, dy)
+        jump = Jump(fromX: x, fromY: y, toX: toX, toY: toY,
+                    duration: min(0.9, 0.35 + Double(distance / (900 * unit))),
+                    arc: max(0, dy) / 2 + 25 * unit, landing: landing)
+        if abs(dx) > 2 { facingRight = dx > 0 }
+        perchID = nil
+        wall = nil
+        enter(.jumping)
+    }
+
+    private func updateJump() {
+        guard let jump else {
+            startFalling()
+            return
+        }
+        let t = CGFloat(min(phaseTime / jump.duration, 1))
+        x = jump.fromX + (jump.toX - jump.fromX) * t
+        y = jump.fromY + (jump.toY - jump.fromY) * t + jump.arc * 4 * t * (1 - t)
+        guard t >= 1 else { return }
+        self.jump = nil
+        switch jump.landing {
+        case .dock:
+            y = dockY
+            enter(.standing, for: .random(in: 0.3...0.7))
+        case .perch(let id):
+            if let perch = perch(id), center >= perch.minX, center <= perch.maxX {
+                perchID = id
+                y = perch.y
+                x = clampX(x)
+                enter(.standing, for: .random(in: 0.4...0.9))
+            } else {
+                startFalling()
+            }
+        case .wall(let wall):
+            if perch(wall.perchID) != nil {
+                self.wall = wall
+                enter(.climbingUp)
+            } else {
+                startFalling()
+            }
+        }
+    }
+
+    private func startFalling() {
+        perchID = nil
+        wall = nil
+        jump = nil
+        fallSpeed = 0
+        enter(.falling)
+    }
+
+    private func updateFall(_ dt: Double) {
+        fallSpeed += 1500 * unit * CGFloat(dt)
+        let newY = y - fallSpeed * CGFloat(dt)
+        // Landet auf der höchsten Fläche, die sie beim Fallen passiert
+        let landingPerch = perches
+            .filter { $0.y <= y && $0.y >= newY && center >= $0.minX + 6 * scale && center <= $0.maxX - 6 * scale }
+            .max { $0.y < $1.y }
+        if let landingPerch {
+            perchID = landingPerch.id
+            y = landingPerch.y
+            enter(.standing, for: .random(in: 0.4...0.8))
+        } else if newY <= dockY {
+            y = dockY
+            x = min(max(x, minX), maxX)
+            enter(.standing, for: .random(in: 0.4...0.8))
+        } else {
+            y = newY
+        }
     }
 
     // MARK: Spielen
@@ -593,6 +1012,18 @@ final class CatBrain {
             look.sprite = alternate(Frames.eatA, Frames.eatB, every: 0.25)
         case .batting:
             look.sprite = Frames.bat
+        case .climbingUp:
+            // Bild zeigt Pfoten rechts – gespiegelt, wenn die Wand links ist
+            look.sprite = alternate(Frames.climbUpA, Frames.climbUpB, every: 0.16)
+            look.facingRight = wall?.wallOnRight ?? true
+            look.drawX = Layout.climbX
+        case .climbingDown:
+            // Bild zeigt Pfoten links – gespiegelt, wenn die Wand rechts ist
+            look.sprite = alternate(Frames.climbDownA, Frames.climbDownB, every: 0.16)
+            look.facingRight = !(wall?.wallOnRight ?? false)
+            look.drawX = Layout.climbX
+        case .jumping, .falling:
+            look.sprite = Frames.walkA
         }
         return look
     }
@@ -631,7 +1062,7 @@ final class CatView: NSView {
         guard let look, bounds.contains(point) else { return false }
         var px = Int(floor(point.x / scale))
         if !look.facingRight { px = Layout.canvasWidth - 1 - px }
-        let sx = px - Layout.margin
+        let sx = px - look.drawX
         let row = look.sprite.height - 1 - (Int(floor(point.y / scale)) - look.hop)
         // etwas großzügig, damit auch Lücken zwischen den Beinen treffen
         for dy in -1...1 {
@@ -650,7 +1081,7 @@ final class CatView: NSView {
             ctx.translateBy(x: bounds.width, y: 0)
             ctx.scaleBy(x: -1, y: 1)
         }
-        look.sprite.draw(in: ctx, x: CGFloat(Layout.margin), y: CGFloat(look.hop), scale: scale,
+        look.sprite.draw(in: ctx, x: CGFloat(look.drawX), y: CGFloat(look.hop), scale: scale,
                          colors: coat.colors)
     }
 }

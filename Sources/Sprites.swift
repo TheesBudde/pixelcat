@@ -114,6 +114,24 @@ final class Sprite {
         }
     }
 
+    /// Um 90° gegen den Uhrzeigersinn gedreht: Aus „schaut nach rechts“ wird „schaut nach oben“.
+    var rotatedCounterclockwise: Sprite {
+        var result: [Character] = []
+        for y in 0..<width {
+            for x in 0..<height { result.append(pixel(width - 1 - y, x)) }
+        }
+        return Sprite(width: height, height: width, pixels: result)
+    }
+
+    /// Um 90° im Uhrzeigersinn gedreht: Aus „schaut nach rechts“ wird „schaut nach unten“.
+    var rotatedClockwise: Sprite {
+        var result: [Character] = []
+        for y in 0..<width {
+            for x in 0..<height { result.append(pixel(y, height - 1 - x)) }
+        }
+        return Sprite(width: height, height: width, pixels: result)
+    }
+
     /// Zeichnet das Bild; `x`/`y` sind die linke untere Ecke in Pixeleinheiten.
     func draw(in ctx: CGContext, x: CGFloat, y: CGFloat, scale: CGFloat, colors: [Character: CGColor]) {
         for row in 0..<height {
@@ -390,11 +408,19 @@ enum Frames {
     static let petLie = lie.withHappyEyes
     static let petLieNuzzle = lieNuzzle.withHappyEyes
 
+    // An einer Fensterkante: Pfoten an der Wand rechts, Kopf oben bzw. unten.
+    static let climbUpA = walkA.rotatedCounterclockwise
+    static let climbUpB = walkB.rotatedCounterclockwise
+    /// Kopf unten, Pfoten an der Wand links
+    static let climbDownA = walkA.rotatedClockwise
+    static let climbDownB = walkB.rotatedClockwise
+
     static let all: [Sprite] = [
         stand, walkA, walkB, sit, yawn, stretch,
         groomA, groomB, headWashA, headWashB, lie, lieTailUp,
         sleepB, rollA, rollB, eatA, eatB, bat,
         startled, petStandTall, petLieNuzzle,
+        climbUpA, climbUpB, climbDownA, climbDownB,
     ]
 
     // MARK: Napf und Wollknäuel

@@ -13,6 +13,11 @@ Schwanzspitze.
 - **Pomodoro:** 25 Minuten Fokus, in denen die Katze tief schläft und sich nicht aufscheuchen
   lässt. Danach wacht sie auf, streckt sich und läuft 5 Minuten herum. Dann beginnt die
   nächste Runde. Die Restzeit steht neben dem Symbol in der Menüleiste.
+- **Klettern:** Im Kletter-Modus klettert sie an Fensterseiten hoch, balanciert oben entlang,
+  springt von Fenster zu Fenster und wieder herunter. Verschiebst du ein Fenster, fährt sie mit;
+  schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
+  Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
+- **Miauen:** Zu Beginn der Pause ein leises „Miau“, zurück an die Arbeit ein kurzes „Mrrp“.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen und rollt sich manchmal auf den Rücken.
@@ -33,7 +38,9 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 |---|---|
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
 | Pomodoro starten / beenden | Fokus-Modus mit 25/5-Minuten-Rhythmus |
+| Miauen bei Pomodoro | Leise Töne beim Wechsel zwischen Fokus und Pause (an/aus) |
 | Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
+| Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |
 | Füttern | Napf hinstellen |
 | Mit Wollknäuel spielen | Knäuel an/aus – mit der Maus greifen und werfen |
 | Aufscheuchen | Wie ein Klick auf die Katze |
@@ -80,6 +87,7 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
      Napf ──► hinlaufen → fressen → putzen
      Knäuel ──► jagen → mit der Tatze schlagen → (zuschauen / putzen) → jagen …
      Pomodoro ──► Fokus: schlafen (lässt sich nicht stören) ⇄ Pause: aufwachen, strecken, laufen
+     Klettern ──► Wand hoch / hinaufspringen → oben laufen ⇄ zum Nachbarfenster springen → runter
      Klick ──► zusammenzucken → weglaufen → verschnaufen → (laufen) → hinlegen …
      Maus streicht drüber ──► genießen & anschmiegen → wieder einkuscheln / weiterlaufen
   ```
@@ -89,6 +97,12 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
   Maus über den Katzenpixeln, ohne dass eine Taste gedrückt ist, zählt das als Streicheln.
   Dafür braucht die App keine besonderen Rechte.
 - **Menüleisten-Symbol:** als Vektorgrafik gezeichnet, damit es auf jedem Bildschirm scharf ist.
+- **Fenster zum Klettern:** `CGWindowListCopyWindowInfo` liefert fünfmal pro Sekunde die Positionen
+  aller Fenster – ohne Sonderrechte, da keine Fenstertitel gelesen werden. Von jeder Oberkante wird
+  abgezogen, was Fenster weiter vorne verdecken (`CatController.perches`). Ein Fenster in voller
+  Bildschirmhöhe heißt Vollbild oder Split View – dann wird nicht geklettert.
+- **Töne (`Sound.swift`):** Das Miau ist synthetisch: ein Grundton mit Obertönen, dessen Tonhöhe
+  steigt und fällt, gefiltert durch wandernde Vokal-Formanten (i → a → u).
 - **Napf und Knäuel:** eigene kleine Fenster. Das Knäuel hat eine einfache Physik
   (Schwerkraft, Abprallen, Rollreibung) und lässt sich ziehen und werfen.
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche

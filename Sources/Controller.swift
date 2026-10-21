@@ -144,6 +144,7 @@ final class CatController {
 
     private(set) var pomodoro: Pomodoro?
     private var nextReminder = Date.distantFuture
+    private var perchRefresh = 0.0
     private var statusText: String?
     /// Meldet Änderungen des Texts neben dem Menüleisten-Symbol (nil = kein Text).
     var onStatusChange: ((String?) -> Void)?
@@ -159,6 +160,18 @@ final class CatController {
     var breakReminders = false {
         didSet { if breakReminders != oldValue { scheduleReminder() } }
     }
+
+    /// Kletter-Modus: Die Katze darf auf offene Fenster.
+    var climbing: Bool {
+        get { brain.climbingEnabled }
+        set {
+            if newValue { brain.setPerches(findPerches()) }
+            brain.climbingEnabled = newValue
+        }
+    }
+
+    /// Miauen beim Wechsel zwischen Fokus und Pause
+    var sounds = true
 
     var isPlaying: Bool { ball != nil }
     var isInFocus: Bool { pomodoro?.stage == .focus }
@@ -356,6 +369,61 @@ final class CatController {
         }
     }
 
+    /// Sichtbare Oberkanten der offenen Fenster auf dem Hauptbildschirm.
+    /// Die Fensterpositionen liefert macOS ohne Sonderrechte (nur Titel wären geschützt).
+    /// Ist ein Fenster im Vollbild oder in Split View, gibt es nichts zum Klettern.
+    private func findPerches() -> [Perch] {
+        guard let screen,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                    kCGNullWindowID) as? [[String: Any]]
+        else { return [] }
+        let frame = screen.frame
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+
+        // von vorne nach hinten, in Bildschirmkoordinaten (y von unten)
+        var windows: [(id: Int, rect: CGRect)] = []
+        for info in list {
+            guard (info[kCGWindowLayer as String] as? Int) == 0,
+                  (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
+                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.1,
+                  let id = info[kCGWindowNumber as String] as? Int,
+                  let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsInfo)
+            else { continue }
+            let rect = CGRect(x: bounds.minX, y: frame.maxY - bounds.maxY, width: bounds.width, height: bounds.height)
+            guard rect.width >= 120, rect.height >= 80, rect.intersects(frame) else { continue }
+            if rect.height >= frame.height - 2 { return [] } // Vollbild oder Split View
+            windows.append((id, rect))
+        }
+        return Self.perches(on: windows, frame: frame, visible: screen.visibleFrame, scale: scale)
+    }
+
+    /// Die Fenster kommen von vorne nach hinten sortiert.
+    static func perches(on windows: [(id: Int, rect: CGRect)], frame: CGRect, visible: CGRect,
+                        scale: CGFloat) -> [Perch] {
+        var perches: [Perch] = []
+        for (index, window) in windows.enumerated() {
+            let top = window.rect.maxY
+            guard top < visible.maxY - 18 * scale, top > visible.minY + 20 * scale else { continue }
+            // Was von der Oberkante nicht von Fenstern weiter vorne verdeckt ist
+            var segments = [(max(window.rect.minX, frame.minX), min(window.rect.maxX, frame.maxX))]
+            for front in windows[..<index]
+            where front.rect.minY <= top + 8 * scale && front.rect.maxY >= top {
+                segments = segments.flatMap { segment -> [(CGFloat, CGFloat)] in
+                    let (a, b) = segment
+                    guard front.rect.maxX > a, front.rect.minX < b else { return [segment] }
+                    return [(a, front.rect.minX), (front.rect.maxX, b)].filter { $0.1 - $0.0 > 1 }
+                }
+            }
+            guard let longest = segments.max(by: { $0.1 - $0.0 < $1.1 - $1.0 }),
+                  longest.1 - longest.0 >= 30 * scale
+            else { continue }
+            perches.append(Perch(id: window.id, y: top, minX: longest.0, maxX: longest.1,
+                                 left: window.rect.minX, right: window.rect.maxX, bottom: window.rect.minY))
+        }
+        return perches
+    }
+
     private func updatePomodoro(now: Date) {
         guard var pomodoro, now >= pomodoro.ends else { return }
         switch pomodoro.stage {
@@ -363,11 +431,13 @@ final class CatController {
             // Fokuszeit vorbei: aufwachen, strecken, Pause machen
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Pomodoro.restLength))
             brain.mode = .focusBreak
+            if sounds { Meow.playMeow() }
         case .rest:
             pomodoro = .startFocus(at: now)
             setPlaying(false)
             removeBowl()
             brain.mode = .focus
+            if sounds { Meow.playTrill() }
         }
         self.pomodoro = pomodoro
     }
@@ -387,6 +457,12 @@ final class CatController {
         let date = Date()
 
         updateBounds()
+        brain.dockY = ground
+        perchRefresh -= dt
+        if perchRefresh <= 0, brain.climbingEnabled || brain.isOnWindow {
+            perchRefresh = 0.2
+            brain.setPerches(findPerches())
+        }
         updatePomodoro(now: date)
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
@@ -410,7 +486,7 @@ final class CatController {
         guard isVisible else { return }
 
         // visibleFrame endet unten an der Oberkante des Docks – genau da läuft die Katze
-        panel.setFrameOrigin(NSPoint(x: brain.x.rounded(), y: ground))
+        panel.setFrameOrigin(NSPoint(x: brain.x.rounded(), y: brain.y.rounded()))
         let look = brain.look
         if look != view.look { view.look = look }
 
