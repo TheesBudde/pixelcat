@@ -70,6 +70,10 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
 
 ## Technische Skizze
 
+Eine einseitige Übersicht der Architektur gibt es als PDF:
+[docs/architektur/pixelkatze-architektur.pdf](docs/architektur/pixelkatze-architektur.pdf)
+(LaTeX-Quelltext daneben, kompilierbar mit XeLaTeX, z. B. `tectonic pixelkatze-architektur.tex`).
+
 ```
 ┌──────────── Menüleiste ─────────────────────────── [🐱] ◄── NSStatusItem (AppDelegate)
 │                                                       │     Menü: an/aus, Größe, Beenden
