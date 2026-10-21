@@ -26,6 +26,7 @@ final class PropView: NSView {
     var scale: CGFloat = 3 {
         didSet { needsDisplay = true }
     }
+    var colors = PropColors.colors
     var onMouseDown: ((NSPoint) -> Void)?
     var onMouseDragged: ((NSPoint) -> Void)?
     var onMouseUp: ((NSPoint) -> Void)?
@@ -60,7 +61,7 @@ final class PropView: NSView {
         guard let sprite, let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
         ctx.setShouldAntialias(false)
-        sprite.draw(in: ctx, x: spriteOrigin.x, y: spriteOrigin.y, scale: scale, colors: PropColors.colors)
+        sprite.draw(in: ctx, x: spriteOrigin.x, y: spriteOrigin.y, scale: scale, colors: colors)
     }
 }
 
@@ -185,6 +186,8 @@ final class CatController {
 
     /// Welches Miau beim nächsten Pausen-Strecken kommt (und seit wann es aussteht)
     private var pendingMeow: (kind: Meow.Kind, since: Date)?
+    /// Gedankenblase „Pause“ über der Katze, solange sie an eine Pause erinnert
+    private var bubble: ThoughtBubble?
 
     // MARK: Einstellungen
 
@@ -393,6 +396,7 @@ final class CatController {
     }
 
     func stopPomodoro() {
+        bubble?.pop()
         pomodoro = nil
         brain.mode = .normal
         scheduleReminder()
@@ -409,6 +413,7 @@ final class CatController {
     }
 
     func stopTimer() {
+        if timer?.breakEnds != nil { bubble?.pop() }
         if timer?.finished == true {
             brain.acknowledge() // wie Streicheln
         }
@@ -448,6 +453,7 @@ final class CatController {
         brain.mode = .focusBreak
         pendingMeow = (.reminder, now)
         brain.callToCenter()
+        showBubble(until: now.addingTimeInterval(breakLength))
     }
 
     // MARK: Knäuel ziehen und werfen
@@ -514,6 +520,7 @@ final class CatController {
         brain.scale = scale
         bowlWindow?.scale = scale
         ballWindow?.scale = scale
+        bubble?.scale = scale
         updateBounds()
     }
 
@@ -703,6 +710,7 @@ final class CatController {
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Double(breakMinutes) * 60))
             brain.mode = .focusBreak
             pendingMeow = (.breakStarts, now)
+            showBubble(until: pomodoro.ends)
         case .rest:
             pomodoro = Pomodoro(stage: .focus, ends: now.addingTimeInterval(Double(focusMinutes) * 60))
             setPlaying(false)
@@ -722,6 +730,35 @@ final class CatController {
         }
     }
 
+    // MARK: Gedankenblase
+
+    /// Blase „Pause“ über der Katze zeigen, bis die Pause vorbei ist (eine eventuelle alte verschwindet).
+    private func showBubble(until end: Date) {
+        bubble?.remove()
+        bubble = ThoughtBubble(text: L10n.s("Pause", "Break"), ends: end, scale: scale)
+    }
+
+    /// Blase über dem Kopf halten; am Pausenende platzt sie, danach wird sie weggeräumt.
+    private func updateBubble(dt: Double, now: Date) {
+        guard let bubble else { return }
+        if !bubble.isPopping, now >= bubble.ends { bubble.pop() }
+        var head: CGPoint?
+        if isVisible, !brain.isAway, let look = view.look {
+            // Kopfmitte zwischen den Ohren, darüber ggf. noch der Feiertagshut
+            let sprite = look.sprite
+            let column = CGFloat(look.drawX) + CGFloat(sprite.earAnchor?.center ?? sprite.width / 2) + 0.5
+            let canvasX = look.facingRight ? column : CGFloat(Layout.canvasWidth) - column
+            let hat = sprite.earAnchor != nil ? max(0, (view.accessory?.height ?? 0) - 2) : 0
+            head = CGPoint(x: brain.x.rounded() + canvasX * scale,
+                           y: brain.y.rounded() + CGFloat(look.hop + sprite.height + hat + 1) * scale)
+        }
+        bubble.update(dt: dt, head: head)
+        if bubble.isGone {
+            bubble.remove()
+            self.bubble = nil
+        }
+    }
+
     // MARK: Takt
 
     /// Wie oft der Takt läuft: flüssig bei Bewegung, sparsam in Ruhe, fast gar nicht, wenn sie weg ist.
@@ -731,7 +768,8 @@ final class CatController {
         let interval: TimeInterval
         if !isVisible || brain.isAway {
             interval = 0.5
-        } else if brain.needsSmoothMotion || ball != nil || mouseNearCat || brain.isBeingPetted {
+        } else if brain.needsSmoothMotion || ball != nil || mouseNearCat || brain.isBeingPetted
+                    || bubble?.isPopping == true {
             interval = 1.0 / 30
         } else {
             interval = 1.0 / 8
@@ -783,6 +821,7 @@ final class CatController {
             } else {
                 pendingMeow = (.reminder, date)
                 brain.remindToTakeBreak()
+                showBubble(until: date.addingTimeInterval(breakLength))
             }
             scheduleReminder()
         }
@@ -802,7 +841,10 @@ final class CatController {
             bowl.emptyFor += dt
             if bowl.emptyFor > 12 { removeBowl() }
         }
-        defer { adjustTickRate() }
+        defer {
+            updateBubble(dt: dt, now: date)
+            adjustTickRate()
+        }
 
         // Draußen auf Streifzug: Fenster weg (sonst tauchte es auf einem Nachbarbildschirm auf),
         // liegengebliebenes Spielzeug wird weggeräumt

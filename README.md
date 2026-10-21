@@ -30,6 +30,8 @@ Schwanzspitze.
   mit langsamem Blinzeln anschauen, auf dem Rücken rekeln –, bis du sie streichelst oder anklickst.
   Erst dann ist der Timer vorbei (im Streifzug geht sie danach wieder hinaus). Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
   währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
+- **Gedankenblase:** Erinnert sie an eine Pause (Pausen-Erinnerung, Pomodoro-Pause), schwebt über ihrem Kopf
+  eine Wolke mit „PAUSE“ bzw. „BREAK“. Ein Klick lässt sie platzen, sonst platzt sie am Ende der Pause.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
