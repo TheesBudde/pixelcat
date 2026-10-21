@@ -152,8 +152,6 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
-            hint(t("An Feiertagen verkleidet sie sich: Kürbis an Halloween, Weihnachtsmütze am 24. und 25. Dezember, Partyhut an Silvester und Neujahr.",
-                   "On holidays she dresses up: a pumpkin on Halloween, a Santa hat on December 24 and 25, a party hat on New Year's Eve and Day."))
         }
     }
 
