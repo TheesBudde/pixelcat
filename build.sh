@@ -22,6 +22,7 @@ else
 fi
 
 cp Info.plist "$APP/Contents/Info.plist"
+cp Resources/Sounds/*.wav "$APP/Contents/Resources/"
 
 echo "→ Erzeuge App-Symbol …"
 "$APP/Contents/MacOS/Pixelkatze" --export-icon build/AppIcon.iconset

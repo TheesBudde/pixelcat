@@ -62,12 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pomodoroInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         pomodoroInfoItem.isEnabled = false
         menu.addItem(pomodoroInfoItem)
-        soundItem = item("Miauen bei Pomodoro", #selector(toggleSounds))
-        menu.addItem(soundItem)
         reminderItem = item("Pausen-Erinnerung", #selector(toggleReminders))
         menu.addItem(reminderItem)
         menu.addItem(.separator())
 
+        soundItem = item("Miauen", #selector(toggleSounds))
+        menu.addItem(soundItem)
         climbItem = item("Klettern", #selector(toggleClimbing))
         menu.addItem(climbItem)
 
@@ -180,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cat.sounds.toggle()
         UserDefaults.standard.set(cat.sounds, forKey: "sounds")
         // Zum Probehören
-        if cat.sounds { Meow.playMeow() }
+        if cat.sounds { Meow.play(.breakStarts) }
     }
 
     @objc private func toggleClimbing() {

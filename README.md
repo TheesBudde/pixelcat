@@ -17,7 +17,8 @@ Schwanzspitze.
   springt von Fenster zu Fenster und wieder herunter. Verschiebst du ein Fenster, fährt sie mit;
   schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
   Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
-- **Miauen:** Zu Beginn der Pause ein leises „Miau“, zurück an die Arbeit ein kurzes „Mrrp“.
+- **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
+  bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen und rollt sich manchmal auf den Rücken.
@@ -38,8 +39,8 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 |---|---|
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
 | Pomodoro starten / beenden | Fokus-Modus mit 25/5-Minuten-Rhythmus |
-| Miauen bei Pomodoro | Leise Töne beim Wechsel zwischen Fokus und Pause (an/aus) |
 | Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
+| Miauen | Katzenlaute bei Pomodoro und Pausen-Erinnerung (an/aus) |
 | Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |
 | Füttern | Napf hinstellen |
 | Mit Wollknäuel spielen | Knäuel an/aus – mit der Maus greifen und werfen |
@@ -101,8 +102,8 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
   aller Fenster – ohne Sonderrechte, da keine Fenstertitel gelesen werden. Von jeder Oberkante wird
   abgezogen, was Fenster weiter vorne verdecken (`CatController.perches`). Ein Fenster in voller
   Bildschirmhöhe heißt Vollbild oder Split View – dann wird nicht geklettert.
-- **Töne (`Sound.swift`):** Das Miau ist synthetisch: ein Grundton mit Obertönen, dessen Tonhöhe
-  steigt und fällt, gefiltert durch wandernde Vokal-Formanten (i → a → u).
+- **Töne (`Resources/Sounds`):** echte Katzenaufnahmen aus „Cat Purr & Meow“ von Kerzoven
+  (https://opengameart.org/content/cat-purr-meow, CC0 / gemeinfrei), zugeschnitten und angeglichen.
 - **Napf und Knäuel:** eigene kleine Fenster. Das Knäuel hat eine einfache Physik
   (Schwerkraft, Abprallen, Rollreibung) und lässt sich ziehen und werfen.
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche

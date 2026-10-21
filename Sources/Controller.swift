@@ -170,7 +170,7 @@ final class CatController {
         }
     }
 
-    /// Miauen beim Wechsel zwischen Fokus und Pause
+    /// Miauen bei Pomodoro-Wechsel und Pausen-Erinnerung
     var sounds = true
 
     var isPlaying: Bool { ball != nil }
@@ -431,13 +431,13 @@ final class CatController {
             // Fokuszeit vorbei: aufwachen, strecken, Pause machen
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Pomodoro.restLength))
             brain.mode = .focusBreak
-            if sounds { Meow.playMeow() }
+            if sounds { Meow.play(.breakStarts) }
         case .rest:
             pomodoro = .startFocus(at: now)
             setPlaying(false)
             removeBowl()
             brain.mode = .focus
-            if sounds { Meow.playTrill() }
+            if sounds { Meow.play(.backToWork) }
         }
         self.pomodoro = pomodoro
     }
@@ -467,6 +467,7 @@ final class CatController {
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
             brain.remindToTakeBreak()
+            if sounds { Meow.play(.reminder) }
             scheduleReminder()
         }
 
