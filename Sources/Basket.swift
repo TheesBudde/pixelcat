@@ -32,58 +32,76 @@ final class BasketTileView: NSView {
     }
 }
 
-/// Pixelbilder des Körbchens (einmal berechnet).
+/// Pixelbilder des Körbchens (einmal berechnet): ein rundes, weiches Katzenbett –
+/// ein ovaler Plüschrand mit Kissen in der Mulde. Hinterer Teil hinter, vorderer Teil vor der Katze.
 @MainActor
 struct BasketArt {
     static let shared = BasketArt()
     static let colors = rgbPalette([
-        "K": 0x3B2414, "L": 0xE2B276, "B": 0xB97E42, "b": 0x8A5627, "C": 0xD9536A, "c": 0xA8384F,
+        "K": 0x6B5446, // Umriss
+        "S": 0xE8D5BE, // Plüsch
+        "H": 0xF7EDE0, // Glanz
+        "s": 0xC9B094, // Schatten
+        "C": 0x9DB4D8, // Kissen
+        "c": 0x7F98C0, // Kissen, Falten
     ])
 
     let width = 40
-    let height = 26
-    /// Vorderseite: geflochtener Korb mit Rand oben
-    let front: Sprite
-    /// Hinterer Rand mit Kissen
+    let height = 25
+    /// Hinterer Rand und Kissen (wird zuerst gezeichnet)
     let back: Sprite
-    let backY = 8
-    /// Wo die Katze liegt (Unterkante, von unten gezählt) – ihr Bauch verschwindet hinter dem Rand
-    let catY = 12
+    /// Vorderer Rand – verdeckt den Bauch der Katze
+    let front: Sprite
+    let backY = 0
+    /// Unterkante der Katze (von unten gezählt)
+    let catY = 7
 
     init() {
-        // Vorderseite: 40 × 14, nach unten etwas schmaler
-        var rows: [String] = []
-        for y in 0..<14 {
-            var line = [Character](repeating: ".", count: width)
-            let inset = y < 4 ? 0 : (y - 4) / 3 + 1
-            for x in inset..<(width - inset) {
-                let edge = x == inset || x == width - inset - 1
-                switch y {
-                case 0, 3, 13: line[x] = "K"
-                case 1, 2: line[x] = edge ? "K" : ((x + y) % 3 == 0 ? "B" : "L")      // geflochtener Rand
-                default: line[x] = edge ? "K" : ((x / 3 + y / 2) % 2 == 0 ? "B" : "b") // Korbgeflecht
-                }
-            }
-            rows.append(String(line))
+        let w = width, h = height
+        // Außen-Oval (Rand) und Mulde, die Mulde etwas nach hinten (oben) versetzt
+        let (ocx, ocy, orx, ory) = (19.5, 14.0, 19.6, 10.4)
+        let (icx, icy, irx, iry) = (19.5, 11.5, 12.6, 4.4)
+        func inOuter(_ x: Int, _ y: Int) -> Bool {
+            let dx = (Double(x) - ocx) / orx, dy = (Double(y) - ocy) / ory
+            return dx * dx + dy * dy <= 1
         }
-        front = Sprite(rows)
+        func inInner(_ x: Int, _ y: Int) -> Bool {
+            let dx = (Double(x) - icx) / irx, dy = (Double(y) - icy) / iry
+            return dx * dx + dy * dy <= 1
+        }
 
-        // Hinten: Rand-Bogen und Kissen, 40 × 10
-        var backRows: [String] = []
-        for y in 0..<10 {
-            var line = [Character](repeating: ".", count: width)
-            let inset = max(1, 5 - y)
-            for x in inset..<(width - inset) {
-                let edge = x == inset || x == width - inset - 1
-                switch y {
-                case 0: line[x] = "K"
-                case 1, 2: line[x] = edge ? "K" : "b"
-                default: line[x] = edge ? "K" : ((x + y) % 7 == 0 ? "c" : "C")
+        var backGrid = [[Character]](repeating: [Character](repeating: ".", count: w), count: h)
+        var frontGrid = backGrid
+        for y in 0..<h {
+            for x in 0..<w where inOuter(x, y) {
+                if inInner(x, y) {
+                    // Kissen in der Mulde, mit ein paar weichen Falten
+                    backGrid[y][x] = (x * 3 + y * 5) % 11 == 0 ? "c" : "C"
+                    // Rand der Mulde: dunklerer Übergang zum Plüsch
+                    if !inInner(x, y - 1) || !inInner(x - 1, y) || !inInner(x + 1, y) { backGrid[y][x] = "s" }
+                    continue
                 }
+                // Plüsch wie ein Donut: oben Glanz, unten Schatten, Innenwand vorne etwas dunkler,
+                // dazwischen ein paar flauschige Tupfer
+                let topEdge = !inOuter(x, y - 1) || !inOuter(x, y - 2)
+                let bottomEdge = !inOuter(x, y + 1) || !inOuter(x, y + 2) || !inOuter(x, y + 3)
+                let innerWall = Double(y) > icy && (inInner(x, y - 1) || inInner(x, y - 2))
+                let frontCrest = Double(y) > icy && (inInner(x, y - 3) || inInner(x, y - 4)) && !innerWall
+                var c: Character = (x + 2 * y) % 7 == 0 ? "H" : "S"
+                if topEdge || frontCrest { c = "H" }
+                if bottomEdge || innerWall { c = "s" }
+                if y < Int(icy) { backGrid[y][x] = c } else { frontGrid[y][x] = c }
             }
-            backRows.append(String(line))
         }
-        back = Sprite(backRows)
+        // Umriss um das ganze Bett (auf beide Teile verteilt)
+        for y in 0..<h {
+            for x in 0..<w where !inOuter(x, y) {
+                let near = [(0, 1), (0, -1), (1, 0), (-1, 0)].contains { inOuter(x + $0.0, y + $0.1) }
+                if near { if y < Int(icy) { backGrid[y][x] = "K" } else { frontGrid[y][x] = "K" } }
+            }
+        }
+        back = Sprite(backGrid.map { String($0) })
+        front = Sprite(frontGrid.map { String($0) })
     }
 }
 

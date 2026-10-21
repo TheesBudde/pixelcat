@@ -326,8 +326,8 @@ final class CatBrain {
     /// Wie weit sie auf Körbchengröße geschrumpft ist (0 = normal, 1 = so klein wie im Dock-Symbol)
     var basketShrink: CGFloat {
         switch phase {
-        case .enteringBasket: return CGFloat(min(1, max(0, (phaseTime - 2.4) / 0.6)))
-        case .leavingBasket: return CGFloat(min(1, max(0, 1 - phaseTime / 0.6)))
+        case .enteringBasket: return CGFloat(min(1, max(0, phaseTime / 0.6)))         // erst schrumpfen …
+        case .leavingBasket: return CGFloat(min(1, max(0, 1 - (phaseTime - 1.2) / 0.5))) // … zuletzt wachsen
         default: return 0
         }
     }
@@ -672,7 +672,7 @@ final class CatBrain {
             enter(.away, for: .infinity)
         case .intoBasket:
             // ins Körbchen steigen und es sich gemütlich machen
-            enter(.enteringBasket, for: 3.0)
+            enter(.enteringBasket, for: 3.3)
         case .otherScreen(let left):
             enter(.away, for: .infinity)
             screenSwitchRequest = left
@@ -942,21 +942,21 @@ final class CatBrain {
         y = basketFloorY ?? dockY - 20 * unit
         afterHop = next
         facingRight = basketX < (minX + maxX) / 2 + half
-        enter(.leavingBasket, for: 1.9)
+        enter(.leavingBasket, for: 1.7)
     }
 
-    /// Hinein: Pfote ausstrecken, hineinsteigen, einmal im Kreis drehen, setzen, hinlegen, schrumpfen.
-    /// Heraus: wachsen, aufsetzen, aufstehen, aufs Dock hinaufspringen.
+    /// Hinein: auf Körbchengröße schrumpfen, Pfote ausstrecken, hineinsteigen, im Kreis drehen, setzen, hinlegen.
+    /// Heraus: aufsetzen, aufstehen, aufs Dock hüpfen – und erst dort wieder wachsen.
     private func updateBasketMove() {
         let floor = basketFloorY ?? dockY - 20 * unit
         let t = phaseTime
         if phase == .enteringBasket {
             switch t {
-            case ..<0.4:
+            case ..<1.0:
                 y = dockY
-            case ..<0.8:
-                let u = CGFloat((t - 0.4) / 0.4)
-                y = dockY + (floor - dockY) * u + 10 * unit * 4 * u * (1 - u)
+            case ..<1.4:
+                let u = CGFloat((t - 1.0) / 0.4)
+                y = dockY + (floor - dockY) * u + 4 * unit * 4 * u * (1 - u)
             default:
                 y = floor
             }
@@ -964,12 +964,15 @@ final class CatBrain {
                 enter(.away, for: .infinity)
             }
         } else {
-            if t >= 1.3 {
-                let u = CGFloat(min(1, (t - 1.3) / 0.5))
-                y = floor + (dockY - floor) * u + 14 * unit * 4 * u * (1 - u)
-                x = clampX(x + (facingRight ? 1 : -1) * 40 * unit / 15)
-            } else {
+            switch t {
+            case ..<0.75:
                 y = floor
+            case ..<1.2:
+                let u = CGFloat((t - 0.75) / 0.45)
+                y = floor + (dockY - floor) * u + 8 * unit * 4 * u * (1 - u)
+                x = clampX(x + (facingRight ? 1 : -1) * 12 * unit / 14)
+            default:
+                y = dockY
             }
             if phaseTime >= phaseDuration {
                 y = dockY
@@ -1536,23 +1539,24 @@ final class CatBrain {
         case .enteringBasket:
             let t = phaseTime
             switch t {
-            case ..<0.4: look.sprite = Frames.bat                         // Pfote tastet ins Körbchen
-            case ..<0.8: look.sprite = Frames.walkB                       // hineinsteigen
-            case ..<1.6:                                                  // im Kreis drehen
+            case ..<0.6: look.sprite = Frames.stand                       // schrumpft auf Körbchengröße
+            case ..<1.0: look.sprite = Frames.bat                         // Pfote tastet ins Körbchen
+            case ..<1.4: look.sprite = Frames.walkB                       // hineinsteigen
+            case ..<2.2:                                                  // im Kreis drehen
                 look.sprite = Int(t / 0.13) % 4 == 0 ? Frames.walkA : Frames.walkB
-                look.facingRight = Int((t - 0.8) / 0.27) % 2 == 0 ? facingRight : !facingRight
-            case ..<2.0: look.sprite = Frames.sit
-            case ..<2.3: look.sprite = Frames.lie
+                look.facingRight = Int((t - 1.4) / 0.27) % 2 == 0 ? facingRight : !facingRight
+            case ..<2.55: look.sprite = Frames.sit
+            case ..<2.85: look.sprite = Frames.lie
             default: look.sprite = Frames.sleepA
             }
         case .leavingBasket:
             let t = phaseTime
             switch t {
-            case ..<0.45: look.sprite = Frames.sleepA
-            case ..<0.7: look.sprite = Frames.lie
-            case ..<1.0: look.sprite = Frames.sit
-            case ..<1.3: look.sprite = Frames.stand
-            default: look.sprite = Frames.walkA
+            case ..<0.3: look.sprite = Frames.lie                         // klein im Körbchen aufwachen
+            case ..<0.55: look.sprite = Frames.sit
+            case ..<0.75: look.sprite = Frames.stand
+            case ..<1.2: look.sprite = Frames.walkA                       // hinaus aufs Dock hüpfen
+            default: look.sprite = Frames.stand                           // und dort wieder wachsen
             }
         case .reachingDown:
             look.sprite = Frames.bat         // Vorderpfote tastet nach unten
