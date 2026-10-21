@@ -176,7 +176,7 @@ final class CatBrain {
     var scale: CGFloat = 3
     /// Austauschbar, damit sich Tag und Nacht testen lassen.
     var clock: () -> Date = Date.init
-    /// Wie oft sie zu Kletterausflügen aufbricht (1 = normal; der Demo-Modus dreht auf)
+    /// Wie oft sie zu Nachbarfenstern springt (1 = normal; der Demo-Modus dreht auf)
     var adventurousness = 1.0
 
     var mode: Mode = .normal {
@@ -185,7 +185,13 @@ final class CatBrain {
     var ball: Ball?
     var bowl: Bowl?
     var climbingEnabled = false {
-        didSet { if !climbingEnabled { leaveWindows() } }
+        didSet {
+            if !climbingEnabled {
+                leaveWindows()
+            } else if !oldValue {
+                headForWindows()
+            }
+        }
     }
     private(set) var perches: [Perch] = []
 
@@ -441,10 +447,10 @@ final class CatBrain {
         } else if ball != nil {
             enter(.chasing)
         } else if mode == .focusBreak || walksBeforeNap > 0 {
-            // Auf dem Fenster öfter etwas unternehmen, damit sie nicht ewig oben bleibt
-            let adventure = min(0.9, (perchID == nil ? 0.35 : 0.5) * adventurousness)
-            if climbingEnabled, Double.random(in: 0..<1) < adventure, tryClimbingAdventure() { return }
+            if climbingEnabled, climbingStep() { return }
             startWalking()
+        } else if climbingEnabled, perchID == nil, climbOntoWindow() {
+            // Fürs Nickerchen lieber hinauf aufs Fenster
         } else {
             enter(.sittingDown, for: .random(in: 1.0...1.8))
         }
@@ -603,18 +609,29 @@ final class CatBrain {
         wall.wallOnRight ? perch.left : perch.right
     }
 
-    /// Hoch aufs Fenster, von Fenster zu Fenster oder wieder runter.
-    private func tryClimbingAdventure() -> Bool {
-        if let perch = currentPerch {
-            if Double.random(in: 0..<1) < 0.45, jumpToNeighbor(from: perch) { return true }
-            if Double.random(in: 0..<1) < 0.65 {
-                leaveWindows()
-                return true
-            }
-            return false
+    /// Im Kletter-Modus zieht es sie nach oben: Vom Dock klettert sie hinauf, sobald ein Fenster
+    /// erreichbar ist. Oben bleibt sie meist, springt mal zum Nachbarfenster und kommt nur selten herunter.
+    private func climbingStep() -> Bool {
+        guard let perch = currentPerch else { return climbOntoWindow() }
+        if Double.random(in: 0..<1) < min(0.9, 0.3 * adventurousness), jumpToNeighbor(from: perch) { return true }
+        if Double.random(in: 0..<1) < 0.06 {
+            leaveWindows()
+            return true
         }
-        return climbOntoWindow()
+        return false
     }
+
+    /// Kletter-Modus eingeschaltet: Ist sie wach und unten, macht sie sich gleich auf den Weg.
+    private func headForWindows() {
+        guard perchID == nil,
+              [.standing, .walking, .sittingDown, .grooming, .headWashing, .watching].contains(phase)
+        else { return }
+        goal = .wander
+        enter(.standing, for: 0.3)
+    }
+
+    /// Wie hoch sie an einer Fensterseite hinaufspringt, um sich festzukrallen.
+    private var wallReach: CGFloat { 220 * unit }
 
     /// Vom Dock aus: an einer Fensterseite hochklettern oder direkt hinaufspringen.
     private func climbOntoWindow() -> Bool {
@@ -622,7 +639,7 @@ final class CatBrain {
         let half = CGFloat(Layout.canvasWidth) / 2 * scale
         for perch in perches where perch.y - dockY > 40 * unit {
             // Die Fensterseite reicht bis (fast) aufs Dock: dort hochklettern
-            if perch.bottom - dockY <= 150 * unit {
+            if perch.bottom - dockY <= wallReach {
                 let standLeft = perch.left - 10 * scale - half
                 if perch.minX <= perch.left + 2, (minX...maxX).contains(standLeft) {
                     options.append { [unowned self] in
@@ -639,7 +656,7 @@ final class CatBrain {
                 }
             }
             // Niedriges Fenster: einfach hinaufspringen
-            if perch.y - dockY <= 170 * unit, perch.maxX - perch.minX > 30 * scale {
+            if perch.y - dockY <= 200 * unit, perch.maxX - perch.minX > 30 * scale {
                 let fromLeft = Bool.random()
                 let landing = fromLeft ? perch.minX + 13 * scale : perch.maxX - 13 * scale
                 let takeoff = landing + (fromLeft ? -55 : 55) * unit
@@ -707,7 +724,7 @@ final class CatBrain {
         }
         guard let perch = currentPerch else { return }
         let toLeft = center - perch.minX < perch.maxX - center
-        let canClimb = perch.bottom - dockY <= 150 * unit
+        let canClimb = perch.bottom - dockY <= wallReach
             && (toLeft ? perch.minX <= perch.left + 2 : perch.maxX >= perch.right - 2)
         if canClimb, Double.random(in: 0..<1) < 0.5 {
             let edge = toLeft ? perch.left + 10 * scale : perch.right - 10 * scale

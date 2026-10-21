@@ -13,8 +13,9 @@ Schwanzspitze.
 - **Pomodoro:** 25 Minuten Fokus, in denen die Katze tief schläft und sich nicht aufscheuchen
   lässt. Danach wacht sie auf, streckt sich und läuft 5 Minuten herum. Dann beginnt die
   nächste Runde. Die Restzeit steht neben dem Symbol in der Menüleiste.
-- **Klettern:** Im Kletter-Modus klettert sie an Fensterseiten hoch, balanciert oben entlang,
-  springt von Fenster zu Fenster und wieder herunter. Verschiebst du ein Fenster, fährt sie mit;
+- **Klettern:** Im Kletter-Modus zieht es sie nach oben: Sobald ein passendes Fenster offen ist,
+  klettert sie an der Seite hoch oder springt hinauf, balanciert oben entlang, springt von Fenster
+  zu Fenster und hält dort auch ihre Nickerchen. Nur selten kommt sie freiwillig herunter. Verschiebst du ein Fenster, fährt sie mit;
   schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
   Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
 - **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
