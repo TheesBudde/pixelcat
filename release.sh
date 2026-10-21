@@ -14,7 +14,7 @@ UNIVERSAL=1 ./build.sh
 
 ZIP="build/Pixelkatze-$VERSION.zip"
 rm -f "$ZIP"
-ditto -c -k --keepParent build/Pixelkatze.app "$ZIP"
+ditto -c -k --norsrc --noextattr --keepParent build/Pixelkatze.app "$ZIP"
 
 echo "✓ Release-Datei: $ZIP"
 lipo -archs build/Pixelkatze.app/Contents/MacOS/Pixelkatze
