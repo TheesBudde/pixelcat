@@ -246,7 +246,7 @@ struct SettingsView: View {
     private var aboutSection: some View {
         Section(t("Über", "About")) {
             Text("Pixelcat \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
-            hint("github.com/TheesBudde/pixelkatze")
+            hint("github.com/TheesBudde/pixelcat")
             hint(t("Katzenlaute: „Cat Purr & Meow“ von Kerzoven (opengameart.org, CC0)",
                    "Cat sounds: “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0)"))
         }
