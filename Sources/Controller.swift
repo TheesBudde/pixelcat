@@ -176,6 +176,13 @@ final class CatController {
     var isPlaying: Bool { ball != nil }
     var isInFocus: Bool { pomodoro?.stage == .focus }
 
+    /// Zum Vorführen: immer Nachmittag (aktive Katze) und viel Klettern.
+    func enableDemo() {
+        let afternoon = Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date()) ?? Date()
+        brain.clock = { afternoon }
+        brain.adventurousness = 2.2
+    }
+
     init(scale: CGFloat, coat: Coat) {
         self.scale = scale
         self.coat = coat

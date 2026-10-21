@@ -176,6 +176,8 @@ final class CatBrain {
     var scale: CGFloat = 3
     /// Austauschbar, damit sich Tag und Nacht testen lassen.
     var clock: () -> Date = Date.init
+    /// Wie oft sie zu Kletterausflügen aufbricht (1 = normal; der Demo-Modus dreht auf)
+    var adventurousness = 1.0
 
     var mode: Mode = .normal {
         didSet { if mode != oldValue { modeChanged(from: oldValue) } }
@@ -440,7 +442,7 @@ final class CatBrain {
             enter(.chasing)
         } else if mode == .focusBreak || walksBeforeNap > 0 {
             // Auf dem Fenster öfter etwas unternehmen, damit sie nicht ewig oben bleibt
-            let adventure = perchID == nil ? 0.35 : 0.5
+            let adventure = min(0.9, (perchID == nil ? 0.35 : 0.5) * adventurousness)
             if climbingEnabled, Double.random(in: 0..<1) < adventure, tryClimbingAdventure() { return }
             startWalking()
         } else {

@@ -110,6 +110,14 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
   drumherum lässt Klicks durch.
 - **Vorschau der Sprites:** `build/Pixelkatze.app/Contents/MacOS/Pixelkatze --export-preview vorschau.png`
 
+## Vorführen
+
+```bash
+open build/Pixelkatze.app --args --demo
+```
+
+Im Demo-Modus ist für die Katze immer Nachmittag (sie ist aktiv) und sie klettert deutlich öfter.
+
 ## Eigene Posen malen
 
 In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneut ausführen.

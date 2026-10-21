@@ -32,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cat.breakReminders = defaults.bool(forKey: "breakReminders")
         cat.sounds = defaults.bool(forKey: "sounds")
         cat.climbing = defaults.bool(forKey: "climbing")
+        // Start mit --demo: aktive Nachmittagskatze, die viel klettert
+        if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
         setUpStatusItem()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         cat.show()
