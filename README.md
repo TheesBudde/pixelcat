@@ -38,7 +38,7 @@ Schwanzspitze.
   manchmal auf den Rücken.
 - **Vollbild:** Läuft ein Programm im Vollbild (kein Dock), streckt sie die Vorderpfote aus und hopst an den
   unteren Bildschirmrand; zurück auf dem Schreibtisch springt sie wieder aufs Dock.
-- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein rundes, weiches Katzenbett im Dock. Im Streifzug schrumpft
+- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein rundes Katzenbett mit dicker Polsterrolle im Dock. Im Streifzug schrumpft
   sie auf dem Dock auf Körbchengröße, steigt mit den Pfoten hinein, dreht sich einmal im Kreis, legt sich hin – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
   Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie mit der Freigabe
   „Bedienungshilfen“ genau aus, sonst schätzt sie es aus den Dock-Einstellungen.

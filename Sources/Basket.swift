@@ -32,72 +32,77 @@ final class BasketTileView: NSView {
     }
 }
 
-/// Pixelbilder des Körbchens (einmal berechnet): ein rundes, weiches Katzenbett –
-/// ein ovaler Plüschrand mit Kissen in der Mulde. Hinterer Teil hinter, vorderer Teil vor der Katze.
+/// Pixelbilder des Körbchens (einmal berechnet): ein rundes, weiches Katzenbett mit dicker Polsterrolle
+/// als Rand und einem Kissen in der Mulde. Der hintere Teil liegt hinter, der vordere vor der Katze.
+/// Kompakt, damit die Katze es gut ausfüllt.
 @MainActor
 struct BasketArt {
     static let shared = BasketArt()
     static let colors = rgbPalette([
-        "K": 0x6B5446, // Umriss
-        "S": 0xE8D5BE, // Plüsch
-        "H": 0xF7EDE0, // Glanz
-        "s": 0xC9B094, // Schatten
-        "C": 0x9DB4D8, // Kissen
-        "c": 0x7F98C0, // Kissen, Falten
+        "K": 0x5E4440, // Umriss
+        "H": 0xF6D9D3, // Glanz oben auf der Rolle
+        "S": 0xE4B5AE, // Plüsch
+        "s": 0xC68F89, // Schatten
+        "d": 0xA26F6B, // tiefer Schatten (Innenwand, unten)
+        "C": 0xF7ECDD, // Kissen
+        "c": 0xE3D3BE, // Kissen, Falten
     ])
 
-    let width = 40
-    let height = 25
-    /// Hinterer Rand und Kissen (wird zuerst gezeichnet)
+    let width = 32
+    let height = 24
     let back: Sprite
-    /// Vorderer Rand – verdeckt den Bauch der Katze
     let front: Sprite
     let backY = 0
-    /// Unterkante der Katze (von unten gezählt)
-    let catY = 7
+    /// Unterkante der Katze (von unten gezählt) – ihr Bauch verschwindet hinter der vorderen Rolle
+    let catY = 6
 
     init() {
         let w = width, h = height
-        // Außen-Oval (Rand) und Mulde, die Mulde etwas nach hinten (oben) versetzt
-        let (ocx, ocy, orx, ory) = (19.5, 14.0, 19.6, 10.4)
-        let (icx, icy, irx, iry) = (19.5, 11.5, 12.6, 4.4)
-        func inOuter(_ x: Int, _ y: Int) -> Bool {
-            let dx = (Double(x) - ocx) / orx, dy = (Double(y) - ocy) / ory
-            return dx * dx + dy * dy <= 1
+        let (cx, ocy, orx, ory) = (15.5, 14.2, 15.7, 9.6)   // äußerer Rand
+        let (icy, irx, iry) = (11.2, 10.0, 4.4)             // Mulde, etwas nach hinten versetzt
+        func outer(_ x: Int, _ y: Int) -> Double {
+            let dx = (Double(x) - cx) / orx, dy = (Double(y) - ocy) / ory
+            return (dx * dx + dy * dy).squareRoot()
         }
-        func inInner(_ x: Int, _ y: Int) -> Bool {
-            let dx = (Double(x) - icx) / irx, dy = (Double(y) - icy) / iry
-            return dx * dx + dy * dy <= 1
+        func inner(_ x: Int, _ y: Int) -> Double {
+            let dx = (Double(x) - cx) / irx, dy = (Double(y) - icy) / iry
+            return (dx * dx + dy * dy).squareRoot()
         }
 
         var backGrid = [[Character]](repeating: [Character](repeating: ".", count: w), count: h)
         var frontGrid = backGrid
         for y in 0..<h {
-            for x in 0..<w where inOuter(x, y) {
-                if inInner(x, y) {
-                    // Kissen in der Mulde, mit ein paar weichen Falten
-                    backGrid[y][x] = (x * 3 + y * 5) % 11 == 0 ? "c" : "C"
-                    // Rand der Mulde: dunklerer Übergang zum Plüsch
-                    if !inInner(x, y - 1) || !inInner(x - 1, y) || !inInner(x + 1, y) { backGrid[y][x] = "s" }
+            for x in 0..<w where outer(x, y) <= 1 {
+                let i = inner(x, y)
+                if i <= 1 {
+                    // Kissen in der Mulde; zum Rand hin etwas dunkler, mit weichen Falten
+                    var c: Character = i > 0.8 ? "c" : "C"
+                    if (x * 5 + y * 3) % 13 == 0 { c = "c" }
+                    if inner(x, y - 1) > 1 { c = "s" } // hintere Kante der Mulde
+                    backGrid[y][x] = c
                     continue
                 }
-                // Plüsch wie ein Donut: oben Glanz, unten Schatten, Innenwand vorne etwas dunkler,
-                // dazwischen ein paar flauschige Tupfer
-                let topEdge = !inOuter(x, y - 1) || !inOuter(x, y - 2)
-                let bottomEdge = !inOuter(x, y + 1) || !inOuter(x, y + 2) || !inOuter(x, y + 3)
-                let innerWall = Double(y) > icy && (inInner(x, y - 1) || inInner(x, y - 2))
-                let frontCrest = Double(y) > icy && (inInner(x, y - 3) || inInner(x, y - 4)) && !innerWall
-                var c: Character = (x + 2 * y) % 7 == 0 ? "H" : "S"
-                if topEdge || frontCrest { c = "H" }
-                if bottomEdge || innerWall { c = "s" }
-                if y < Int(icy) { backGrid[y][x] = c } else { frontGrid[y][x] = c }
+                // Lage auf der Polsterrolle: 0 = Innenkante, 1 = Außenkante
+                let t = min(1, max(0, (i - 1) / max(0.01, i / max(outer(x, y), 0.01) - 1)))
+                let front = Double(y) > icy
+                var c: Character
+                switch t {
+                case ..<0.18: c = front ? "d" : "s"           // Innenwand
+                case ..<0.32: c = "S"
+                case ..<0.62: c = "H"                         // Glanz oben auf der Rolle
+                case ..<0.82: c = "S"
+                default: c = front ? "s" : "S"                // Außenseite
+                }
+                if front, outer(x, y + 1) > 1 || outer(x, y + 2) > 1 { c = "d" } // Unterkante
+                if c == "S", (x + 3 * y) % 9 == 0 { c = "H" }                   // Flausch-Tupfer
+                if front { frontGrid[y][x] = c } else { backGrid[y][x] = c }
             }
         }
-        // Umriss um das ganze Bett (auf beide Teile verteilt)
+        // Umriss ums ganze Bett
         for y in 0..<h {
-            for x in 0..<w where !inOuter(x, y) {
-                let near = [(0, 1), (0, -1), (1, 0), (-1, 0)].contains { inOuter(x + $0.0, y + $0.1) }
-                if near { if y < Int(icy) { backGrid[y][x] = "K" } else { frontGrid[y][x] = "K" } }
+            for x in 0..<w where outer(x, y) > 1 {
+                guard [(0, 1), (0, -1), (1, 0), (-1, 0)].contains(where: { outer(x + $0.0, y + $0.1) <= 1 }) else { continue }
+                if Double(y) > icy { frontGrid[y][x] = "K" } else { backGrid[y][x] = "K" }
             }
         }
         back = Sprite(backGrid.map { String($0) })
