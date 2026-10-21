@@ -98,3 +98,12 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
 ## Eigene Posen malen
 
 In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneut ausführen.
+
+## Neue Version veröffentlichen
+
+```bash
+./release.sh v4.1
+```
+
+Das baut die App für Apple Silicon und Intel und legt `build/Pixelkatze-v4.1.zip` an.
+Die Datei dann auf GitHub unter *Releases → Draft a new release* hochladen.
