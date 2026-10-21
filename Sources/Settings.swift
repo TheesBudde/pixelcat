@@ -101,7 +101,7 @@ final class SettingsWindow {
             window.center()
             self.window = window
         }
-        window?.title = L10n.s("Pixelkatze – Einstellungen", "Pixelkatze – Settings")
+        window?.title = L10n.s("Pixelcat – Einstellungen", "Pixelcat – Settings")
         focus.refresh()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
@@ -245,7 +245,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section(t("Über", "About")) {
-            Text("Pixelkatze \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+            Text("Pixelcat \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
             hint("github.com/TheesBudde/pixelkatze")
             hint(t("Katzenlaute: „Cat Purr & Meow“ von Kerzoven (opengameart.org, CC0)",
                    "Cat sounds: “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0)"))

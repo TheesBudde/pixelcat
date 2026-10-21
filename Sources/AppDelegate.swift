@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = Frames.menuBarIcon()
         statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.toolTip = "Pixelkatze"
+        statusItem.button?.toolTip = "Pixelcat"
         buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         cat.show()
@@ -110,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ","))
-        let quit = NSMenuItem(title: t("Pixelkatze beenden", "Quit Pixelkatze"),
+        let quit = NSMenuItem(title: t("Pixelcat beenden", "Quit Pixelcat"),
                               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)

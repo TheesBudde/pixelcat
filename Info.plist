@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>de</string>
 	<key>CFBundleDisplayName</key>
-	<string>Pixelkatze</string>
+	<string>Pixelcat</string>
 	<key>CFBundleExecutable</key>
-	<string>Pixelkatze</string>
+	<string>Pixelcat</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>local.pixelkatze</string>
 	<key>CFBundleName</key>
-	<string>Pixelkatze</string>
+	<string>Pixelcat</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSFocusStatusUsageDescription</key>
-	<string>Pixelkatze bleibt still und ruhig, solange ein Fokus aktiv ist. · Pixelkatze stays quiet and calm while a Focus is on.</string>
+	<string>Pixelcat bleibt still und ruhig, solange ein Fokus aktiv ist. · Pixelcat stays quiet and calm while a Focus is on.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

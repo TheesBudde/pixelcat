@@ -1,4 +1,4 @@
-# Pixelkatze 🐈
+# Pixelcat 🐈
 
 Eine kleine Pixel-Art-Katze (orange getigert, schwarz oder grau getigert), die auf der Oberkante deines Docks hin und her
 läuft, sich irgendwann hinlegt und schläft. Im Liegen bewegt sie ab und zu ruhig die
@@ -53,7 +53,7 @@ Schwanzspitze.
 
 ```bash
 ./build.sh
-open build/Pixelkatze.app
+open build/Pixelcat.app
 ```
 
 Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (Katzenkopf-Symbol).
@@ -68,7 +68,7 @@ Das Menü enthält nur, was man oft braucht:
 | Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
 | Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
 | Einstellungen … (⌘,) | Fenster mit allem Weiteren |
-| Pixelkatze beenden (⌘Q) | App beenden |
+| Pixelcat beenden (⌘Q) | App beenden |
 
 **Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
 - **Aussehen:** Fellfarbe, Größe
@@ -78,7 +78,7 @@ Das Menü enthält nur, was man oft braucht:
 - **Sprache:** wie macOS, Deutsch, English
 
 Startest du die App erneut, während sie ausgeblendet ist, kommt die Katze zurück.
-Wenn du sie dauerhaft haben willst, zieh `build/Pixelkatze.app` in den Ordner *Programme*
+Wenn du sie dauerhaft haben willst, zieh `build/Pixelcat.app` in den Ordner *Programme*
 und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu.
 
 ## Technische Skizze
@@ -146,12 +146,12 @@ Eine einseitige Übersicht der Architektur gibt es als PDF:
   das Fenster ist in SwiftUI gebaut. Texte stehen zweisprachig direkt im Code (`L10n.s("Deutsch", "English")`).
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche
   drumherum lässt Klicks durch.
-- **Vorschau der Sprites:** `build/Pixelkatze.app/Contents/MacOS/Pixelkatze --export-preview vorschau.png`
+- **Vorschau der Sprites:** `build/Pixelcat.app/Contents/MacOS/Pixelcat --export-preview vorschau.png`
 
 ## Vorführen
 
 ```bash
-open build/Pixelkatze.app --args --demo
+open build/Pixelcat.app --args --demo
 ```
 
 Im Demo-Modus ist für die Katze immer Nachmittag (sie ist aktiv) und sie klettert deutlich öfter.
@@ -167,5 +167,5 @@ In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneu
 ./release.sh v4.1
 ```
 
-Das baut die App für Apple Silicon und Intel und legt `build/Pixelkatze-v4.1.zip` an.
+Das baut die App für Apple Silicon und Intel und legt `build/Pixelcat-v4.1.zip` an.
 Die Datei dann auf GitHub unter *Releases → Draft a new release* hochladen.

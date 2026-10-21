@@ -12,9 +12,9 @@ NUMBER="${VERSION#v}"
 
 UNIVERSAL=1 ./build.sh
 
-ZIP="build/Pixelkatze-$VERSION.zip"
+ZIP="build/Pixelcat-$VERSION.zip"
 rm -f "$ZIP"
-ditto -c -k --norsrc --noextattr --keepParent build/Pixelkatze.app "$ZIP"
+ditto -c -k --norsrc --noextattr --keepParent build/Pixelcat.app "$ZIP"
 
 echo "✓ Release-Datei: $ZIP"
-lipo -archs build/Pixelkatze.app/Contents/MacOS/Pixelkatze
+lipo -archs build/Pixelcat.app/Contents/MacOS/Pixelcat
