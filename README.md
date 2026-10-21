@@ -39,7 +39,8 @@ Schwanzspitze.
 - **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.
 - **Mauszeiger jagen:** Ruht die Maus knapp über dem Dock, schleicht sie sich an, wackelt mit dem Hinterteil
   und springt (nicht im Streifzug).
-- **Feiertage:** Weihnachtsmütze am 24./25. Dezember, Partyhut an Silvester und Neujahr.
+- **Feiertage:** Kürbis an Halloween, Weihnachtsmütze am 24./25. Dezember, Partyhut an Silvester und Neujahr
+  (immer an).
 - **Mehrere Bildschirme:** Ist ein Bildschirm daneben angeschlossen, läuft sie ab und zu hinüber.
 - **Zweisprachig:** Deutsch und Englisch.
 - **Tageszeit:** Tagsüber (9–19 Uhr) ist sie unternehmungslustig und macht nur kurze
@@ -67,11 +68,12 @@ Das Menü enthält nur, was man oft braucht:
 | Einstellungen … (⌘,) | Fenster mit allem Weiteren |
 | Pixelkatze beenden (⌘Q) | App beenden |
 
-**Einstellungsfenster** (vier Reiter):
-- **Katze:** Fellfarbe, Größe, Verkleidung an Feiertagen, Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln
-- **Zeiten:** Pomodoro-Fokus und -Pause, Abstand der Pausen-Erinnerung (frühestens/spätestens), Länge einer Pause
-- **Ton & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
-- **Allgemein:** Sprache (wie macOS, Deutsch, English)
+**Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
+- **Aussehen:** Fellfarbe, Größe
+- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Streifzug
+- **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung mit frühestens/spätestens, Länge einer Pause
+- **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
+- **Sprache:** wie macOS, Deutsch, English
 
 Startest du die App erneut, während sie ausgeblendet ist, kommt die Katze zurück.
 Wenn du sie dauerhaft haben willst, zieh `build/Pixelkatze.app` in den Ordner *Programme*
@@ -151,7 +153,7 @@ open build/Pixelkatze.app --args --demo
 ```
 
 Im Demo-Modus ist für die Katze immer Nachmittag (sie ist aktiv) und sie klettert deutlich öfter.
-Mit `--outfit santa` oder `--outfit party` lassen sich die Feiertags-Verkleidungen vorführen.
+Mit `--outfit pumpkin`, `--outfit santa` oder `--outfit party` lassen sich die Feiertags-Verkleidungen vorführen.
 
 ## Eigene Posen malen
 

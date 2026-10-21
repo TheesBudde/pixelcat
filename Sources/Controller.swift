@@ -217,9 +217,6 @@ final class CatController {
         didSet { if !hideDuringCalls { setHidden(because: nil) } }
     }
     var respectFocus = true
-    var seasonalOutfits = true {
-        didSet { updateOutfit() }
-    }
     var focusMinutes = 25
     var breakMinutes = 5
     var reminderMinutes: ClosedRange<Double> = 45...55 {
@@ -243,7 +240,6 @@ final class CatController {
     func apply(_ settings: AppSettings) {
         coat = settings.coat
         scale = settings.scale
-        seasonalOutfits = settings.seasonalOutfits
         climbing = settings.climbing
         chaseCursor = settings.chaseCursor
         multiScreen = settings.multiScreen
@@ -282,8 +278,10 @@ final class CatController {
         brain.adventurousness = 2.2
     }
 
-    /// Zum Ausprobieren der Verkleidungen ohne auf Weihnachten zu warten (Start mit --outfit santa|party).
-    var outfitOverride: Sprite?
+    /// Zum Ausprobieren der Verkleidungen ohne auf den Feiertag zu warten (Start mit --outfit pumpkin|santa|party).
+    var outfitOverride: Sprite? {
+        didSet { updateOutfit() }
+    }
 
     init(scale: CGFloat, coat: Coat, focusMonitor: FocusMonitor) {
         self.scale = scale
@@ -586,18 +584,15 @@ final class CatController {
         brain.calm = focusActive
     }
 
-    /// Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1.
+    /// Verkleidung an Feiertagen: Kürbis an Halloween, Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1.
     private func updateOutfit() {
         if let outfitOverride {
             view.accessory = outfitOverride
             return
         }
-        guard seasonalOutfits else {
-            view.accessory = nil
-            return
-        }
         let day = Calendar.current.dateComponents([.month, .day], from: Date())
         switch (day.month, day.day) {
+        case (10, 31): view.accessory = Frames.pumpkinHat
         case (12, 24), (12, 25): view.accessory = Frames.santaHat
         case (12, 31), (1, 1): view.accessory = Frames.partyHat
         default: view.accessory = nil

@@ -516,7 +516,7 @@ enum Frames {
         "..KKK..",
     ])
 
-    // MARK: Verkleidungen
+    // MARK: Verkleidungen (an Feiertagen automatisch)
 
     /// Weihnachtsmütze (24./25. Dezember)
     static let santaHat = Sprite([
@@ -542,8 +542,22 @@ enum Frames {
         "KKKKKKK",
     ])
 
+    /// Geschnitzter Kürbis mit leuchtendem Gesicht (Halloween, 31. Oktober)
+    static let pumpkinHat = Sprite([
+        "....KKK....",
+        "....KTK....",
+        ".KKKKTKKKK.",
+        "KUuUUuUUuUK",
+        "KUYYUuUYYUK",
+        "KUuUUuUUuUK",
+        "KUYuYUYuYUK",
+        "KUuYUYUYuUK",
+        ".KKKKKKKKK.",
+    ])
+
     static let accessoryColors = rgbPalette([
         "K": 0x2B1D16, "R": 0xD7263D, "W": 0xFFFFFF, "B": 0x3E7BD6, "Y": 0xF5C542, "G": 0xFFF3B0,
+        "U": 0xF28C28, "u": 0xC2611B, "T": 0x4F8A3C,
     ])
 
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.

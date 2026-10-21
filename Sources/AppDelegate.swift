@@ -38,10 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
-        // Start mit --outfit santa|party: Verkleidung vorführen
+        // Start mit --outfit pumpkin|santa|party: Verkleidung vorführen
         if let i = CommandLine.arguments.firstIndex(of: "--outfit"), i + 1 < CommandLine.arguments.count {
-            cat.outfitOverride = CommandLine.arguments[i + 1] == "santa" ? Frames.santaHat : Frames.partyHat
-            cat.seasonalOutfits = true
+            switch CommandLine.arguments[i + 1] {
+            case "pumpkin": cat.outfitOverride = Frames.pumpkinHat
+            case "santa": cat.outfitOverride = Frames.santaHat
+            default: cat.outfitOverride = Frames.partyHat
+            }
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

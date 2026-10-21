@@ -7,7 +7,6 @@ final class AppSettings: ObservableObject {
     // Aussehen
     @Published var coat: Coat { didSet { changed() } }
     @Published var scale: Double { didSet { changed() } }
-    @Published var seasonalOutfits: Bool { didSet { changed() } }
     // Verhalten
     @Published var climbing: Bool { didSet { changed() } }
     @Published var chaseCursor: Bool { didSet { changed() } }
@@ -36,7 +35,7 @@ final class AppSettings: ObservableObject {
 
     init() {
         defaults.register(defaults: [
-            "coat": Coat.black.rawValue, "scale": 3.0, "seasonalOutfits": true,
+            "coat": Coat.black.rawValue, "scale": 3.0,
             "climbing": false, "chaseCursor": true, "multiScreen": true, "roaming": false, "breakReminders": false,
             "pomodoroFocus": 25, "pomodoroBreak": 5, "reminderMin": 45, "reminderMax": 55, "breakLength": 5,
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
@@ -44,7 +43,6 @@ final class AppSettings: ObservableObject {
         ])
         coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
         scale = defaults.double(forKey: "scale")
-        seasonalOutfits = defaults.bool(forKey: "seasonalOutfits")
         climbing = defaults.bool(forKey: "climbing")
         chaseCursor = defaults.bool(forKey: "chaseCursor")
         multiScreen = defaults.bool(forKey: "multiScreen")
@@ -67,7 +65,7 @@ final class AppSettings: ObservableObject {
     private func changed() {
         guard !loading else { return }
         let values: [String: Any] = [
-            "coat": coat.rawValue, "scale": scale, "seasonalOutfits": seasonalOutfits,
+            "coat": coat.rawValue, "scale": scale,
             "climbing": climbing, "chaseCursor": chaseCursor, "multiScreen": multiScreen,
             "roaming": roaming, "breakReminders": breakReminders,
             "pomodoroFocus": pomodoroFocus, "pomodoroBreak": pomodoroBreak,
@@ -95,9 +93,10 @@ final class SettingsWindow {
 
     func show() {
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
-                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 620),
+                                  styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 460, height: 360)
             window.contentView = NSHostingView(rootView: SettingsView(settings: settings, focus: focus))
             window.center()
             self.window = window
@@ -111,6 +110,7 @@ final class SettingsWindow {
 
 // MARK: - Inhalt
 
+/// Eine durchgehende Seite zum Durchscrollen – nur Schalter, Segmente und Schieberegler.
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var focus: FocusMonitor
@@ -118,98 +118,104 @@ struct SettingsView: View {
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
     var body: some View {
-        TabView {
-            catTab.tabItem { Label(t("Katze", "Cat"), systemImage: "pawprint") }
-            timesTab.tabItem { Label(t("Zeiten", "Times"), systemImage: "timer") }
-            considerateTab.tabItem { Label(t("Ton & Rücksicht", "Sound & Quiet"), systemImage: "speaker.wave.2") }
-            generalTab.tabItem { Label(t("Allgemein", "General"), systemImage: "gearshape") }
+        Form {
+            lookSection
+            behaviorSection
+            pomodoroSection
+            reminderSection
+            soundSection
+            considerateSection
+            languageSection
+            aboutSection
         }
-        .padding(12)
-        .frame(width: 480, height: 560)
+        .formStyle(.grouped)
+        .frame(minWidth: 460, minHeight: 360)
         // Bei Sprachwechsel alles neu aufbauen
         .id(settings.language)
     }
 
-    private var catTab: some View {
-        Form {
-            Section(t("Aussehen", "Look")) {
-                Picker(t("Fellfarbe", "Coat"), selection: $settings.coat) {
+    // MARK: Katze
+
+    private var lookSection: some View {
+        Section(t("Aussehen", "Look")) {
+            LabeledContent(t("Fellfarbe", "Coat")) {
+                Picker("", selection: $settings.coat) {
                     ForEach(Coat.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                Picker(t("Größe", "Size"), selection: $settings.scale) {
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            LabeledContent(t("Größe", "Size")) {
+                Picker("", selection: $settings.scale) {
                     Text(t("Klein", "Small")).tag(2.0)
                     Text(t("Mittel", "Medium")).tag(3.0)
                     Text(t("Groß", "Large")).tag(4.0)
                 }
-                .pickerStyle(.segmented)
-                Toggle(t("Verkleidung an Feiertagen", "Holiday outfits"), isOn: $settings.seasonalOutfits)
-                Text(t("Weihnachtsmütze am 24./25. Dezember, Partyhut an Silvester und Neujahr.",
-                       "Santa hat on Dec 24/25, party hat on New Year's Eve and New Year's Day."))
-                    .font(.caption).foregroundStyle(.secondary)
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
-            Section(t("Verhalten", "Behavior")) {
-                Toggle(t("Klettern auf Fenster", "Climb onto windows"), isOn: $settings.climbing)
-                Toggle(t("Mauszeiger jagen", "Chase the mouse pointer"), isOn: $settings.chaseCursor)
-                Toggle(t("Auf andere Bildschirme wechseln", "Wander to other displays"), isOn: $settings.multiScreen)
-                Text(t("Mauszeiger jagen: Ruht die Maus am unteren Rand, schleicht sie sich an und springt – nicht im Streifzug.",
-                       "Chase: when the pointer rests near the bottom, she sneaks up and pounces – not while roaming."))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            hint(t("An Feiertagen verkleidet sie sich: Kürbis an Halloween, Weihnachtsmütze am 24. und 25. Dezember, Partyhut an Silvester und Neujahr.",
+                   "On holidays she dresses up: a pumpkin on Halloween, a Santa hat on December 24 and 25, a party hat on New Year's Eve and Day."))
         }
-        .formStyle(.grouped)
     }
 
-    private var timesTab: some View {
-        Form {
-            Section("Pomodoro") {
-                Stepper(t("Fokus: \(settings.pomodoroFocus) Min.", "Focus: \(settings.pomodoroFocus) min"),
-                        value: $settings.pomodoroFocus, in: 5...120, step: 5)
-                Stepper(t("Pause: \(settings.pomodoroBreak) Min.", "Break: \(settings.pomodoroBreak) min"),
-                        value: $settings.pomodoroBreak, in: 1...30)
-            }
-            Section(t("Pausen-Erinnerung", "Break reminder")) {
-                Stepper(t("Frühestens nach \(settings.reminderMin) Min.", "No sooner than \(settings.reminderMin) min"),
-                        value: $settings.reminderMin, in: 10...180, step: 5)
-                Stepper(t("Spätestens nach \(settings.reminderMax) Min.", "No later than \(settings.reminderMax) min"),
-                        value: $settings.reminderMax, in: 10...180, step: 5)
-                Text(t("Der genaue Zeitpunkt ist zufällig dazwischen – das wirkt natürlicher.",
-                       "The exact moment is random in between – it feels more natural."))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section(t("Pausen", "Breaks")) {
-                Stepper(t("Länge einer Pause: \(settings.breakLength) Min.", "Length of a break: \(settings.breakLength) min"),
-                        value: $settings.breakLength, in: 1...30)
-                Text(t("Gilt für Pausen-Erinnerungen und für die Besuche im Streifzug.",
-                       "Used for break reminders and for visits while roaming."))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+    private var behaviorSection: some View {
+        Section(t("Verhalten", "Behavior")) {
+            Toggle(t("Klettern auf Fenster", "Climb onto windows"), isOn: $settings.climbing)
+            Toggle(t("Mauszeiger jagen", "Chase the mouse pointer"), isOn: $settings.chaseCursor)
+            hint(t("Ruht die Maus am unteren Rand, schleicht sie sich an und springt – nicht im Streifzug.",
+                   "When the pointer rests near the bottom, she sneaks up and pounces – not while roaming."))
+            Toggle(t("Auf andere Bildschirme wechseln", "Wander to other displays"), isOn: $settings.multiScreen)
+            Toggle(t("Streifzug", "Roaming"), isOn: $settings.roaming)
+            hint(t("Sie geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
+                   "She heads outside and only comes to the middle of the screen for breaks."))
         }
-        .formStyle(.grouped)
     }
 
-    private var considerateTab: some View {
-        Form {
-            Section(t("Töne", "Sounds")) {
-                Toggle(t("Miauen (Pausen, Timer, Erinnerung)", "Meow (breaks, timer, reminder)"), isOn: $settings.sounds)
-                Toggle(t("Schnurren beim Streicheln", "Purr while petting"), isOn: $settings.purring)
-            }
-            Section(t("Rücksicht", "Being considerate")) {
-                Toggle(t("Bei Videocall oder Bildschirmfreigabe verstecken", "Hide during video calls and screen sharing"),
-                       isOn: $settings.hideDuringCalls)
-                Text(t("Sind Kamera oder Mikrofon an oder wird der Bildschirm geteilt, geht sie automatisch auf Streifzug – und kommt danach zurück.",
-                       "While the camera or microphone is on or the screen is shared, she goes roaming – and comes back afterwards."))
-                    .font(.caption).foregroundStyle(.secondary)
-                Toggle(t("Fokus berücksichtigen", "Respect Focus"), isOn: $settings.respectFocus)
-                HStack {
-                    Text(focusStatusText).font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    if focus.access == .unknown {
-                        Button(t("Zugriff erlauben …", "Allow access …")) { focus.requestAccess() }
-                    }
+    // MARK: Zeiten
+
+    private var pomodoroSection: some View {
+        Section("Pomodoro") {
+            minutesSlider(t("Fokus", "Focus"), value: $settings.pomodoroFocus, range: 5...120, step: 5)
+            minutesSlider(t("Pause", "Break"), value: $settings.pomodoroBreak, range: 1...30, step: 1)
+        }
+    }
+
+    private var reminderSection: some View {
+        Section(t("Pausen", "Breaks")) {
+            Toggle(t("Pausen-Erinnerung", "Break reminder"), isOn: $settings.breakReminders)
+            minutesSlider(t("Frühestens nach", "No sooner than"), value: $settings.reminderMin, range: 10...180, step: 5)
+            minutesSlider(t("Spätestens nach", "No later than"), value: $settings.reminderMax, range: 10...180, step: 5)
+            hint(t("Der genaue Zeitpunkt ist zufällig dazwischen – das wirkt natürlicher.",
+                   "The exact moment is random in between – it feels more natural."))
+            minutesSlider(t("Länge einer Pause", "Length of a break"), value: $settings.breakLength, range: 1...30, step: 1)
+            hint(t("Gilt für Pausen-Erinnerungen und für die Besuche im Streifzug.",
+                   "Used for break reminders and for visits while roaming."))
+        }
+    }
+
+    // MARK: Ton & Rücksicht
+
+    private var soundSection: some View {
+        Section(t("Töne", "Sounds")) {
+            Toggle(t("Miauen (Pausen, Timer, Erinnerung)", "Meow (breaks, timer, reminder)"), isOn: $settings.sounds)
+            Toggle(t("Schnurren beim Streicheln", "Purr while petting"), isOn: $settings.purring)
+        }
+    }
+
+    private var considerateSection: some View {
+        Section(t("Rücksicht", "Being considerate")) {
+            Toggle(t("Bei Videocall oder Bildschirmfreigabe verstecken", "Hide during video calls and screen sharing"),
+                   isOn: $settings.hideDuringCalls)
+            hint(t("Sind Kamera oder Mikrofon an oder wird der Bildschirm geteilt, geht sie automatisch auf Streifzug – und kommt danach zurück.",
+                   "While the camera or microphone is on or the screen is shared, she goes roaming – and comes back afterwards."))
+            Toggle(t("Fokus berücksichtigen", "Respect Focus"), isOn: $settings.respectFocus)
+            HStack {
+                hint(focusStatusText)
+                Spacer()
+                if focus.access == .unknown {
+                    Button(t("Zugriff erlauben …", "Allow access …")) { focus.requestAccess() }
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private var focusStatusText: String {
@@ -228,21 +234,44 @@ struct SettingsView: View {
         }
     }
 
-    private var generalTab: some View {
-        Form {
-            Section(t("Sprache", "Language")) {
-                Picker(t("Sprache", "Language"), selection: $settings.language) {
-                    ForEach(Language.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
+    // MARK: Allgemein
+
+    private var languageSection: some View {
+        Section(t("Sprache", "Language")) {
+            Picker("", selection: $settings.language) {
+                ForEach(Language.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            Section(t("Über", "About")) {
-                Text("Pixelkatze \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
-                Text("github.com/TheesBudde/pixelkatze").foregroundStyle(.secondary)
-                Text(t("Katzenlaute: „Cat Purr & Meow“ von Kerzoven (opengameart.org, CC0)",
-                       "Cat sounds: “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0)"))
-                    .font(.caption).foregroundStyle(.secondary)
+            .pickerStyle(.segmented).labelsHidden()
+        }
+    }
+
+    private var aboutSection: some View {
+        Section(t("Über", "About")) {
+            Text("Pixelkatze \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+            hint("github.com/TheesBudde/pixelkatze")
+            hint(t("Katzenlaute: „Cat Purr & Meow“ von Kerzoven (opengameart.org, CC0)",
+                   "Cat sounds: “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0)"))
+        }
+    }
+
+    // MARK: Bausteine
+
+    private func hint(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary)
+    }
+
+    /// Schieberegler mit Minutenanzeige statt Plus/Minus-Pfeilen.
+    private func minutesSlider(_ title: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int) -> some View {
+        let double = Binding<Double>(get: { Double(value.wrappedValue) },
+                                     set: { value.wrappedValue = Int($0.rounded()) })
+        return LabeledContent(title) {
+            HStack(spacing: 10) {
+                Slider(value: double, in: Double(range.lowerBound)...Double(range.upperBound), step: Double(step))
+                    .frame(width: 170)
+                Text(t("\(value.wrappedValue) Min.", "\(value.wrappedValue) min"))
+                    .monospacedDigit()
+                    .frame(width: 52, alignment: .trailing)
             }
         }
-        .formStyle(.grouped)
     }
 }
