@@ -50,7 +50,7 @@ struct BasketArt {
         "f": 0xE8DCC6, // Kissen in der Mulde
     ])
 
-    let width = 32
+    let width = 26
     let height = 24
     let back: Sprite
     let front: Sprite
@@ -60,9 +60,9 @@ struct BasketArt {
 
     init() {
         let w = width, h = height
-        let (cx, rcy, rrx, rry) = (15.5, 9.6, 15.4, 6.0)    // Oberkante des Betts (Plüschrand außen)
-        let (hcy, hrx, hry) = (8.7, 11.2, 3.1)              // Mulde
-        let wallHeight = 6.0                                 // Cord-Wand unter dem vorderen Rand
+        let (cx, rcy, rrx, rry) = (12.5, 9.6, 12.4, 5.6)    // Oberkante des Betts (Plüschrand außen)
+        let (hcy, hrx, hry) = (8.8, 8.8, 2.9)              // Mulde
+        let wallHeight = 5.5                                 // Cord-Wand unter dem vorderen Rand
         func rim(_ x: Int, _ y: Int) -> Double {
             let dx = (Double(x) - cx) / rrx, dy = (Double(y) - rcy) / rry
             // leicht gewellt: flauschige Büschel am Rand
