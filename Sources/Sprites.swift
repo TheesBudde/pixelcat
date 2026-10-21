@@ -3,13 +3,13 @@ import AppKit
 /// Farbpalette: Jeder Buchstabe im Pixelraster steht für eine Farbe, "." ist durchsichtig.
 enum Palette {
     static let colors: [Character: CGColor] = [
-        "K": rgb(0x2B1D16), // Umriss
-        "O": rgb(0xF2A14B), // Fell
-        "o": rgb(0xC96F2E), // Streifen
-        "W": rgb(0xFFF4E2), // Brust, Pfoten, Schrift
-        "P": rgb(0xF49AAE), // Nase, Ohren
-        "E": rgb(0x2E5E2A), // Augen
-        "Y": rgb(0xFFD447), // Ausrufezeichen
+        "K": rgb(0x0B0A0F), // Umriss
+        "O": rgb(0x26232E), // Fell
+        "h": rgb(0x4B4659), // Glanz auf dem Fell (Licht von oben)
+        "E": rgb(0xF2C94C), // Augen
+        "c": rgb(0x6A6480), // geschlossene Augen
+        "P": rgb(0xC47A8E), // Nase, Ohren
+        "w": rgb(0x8E889C), // Schnurrhaare
     ]
 
     private static func rgb(_ hex: UInt32) -> CGColor {
@@ -62,31 +62,16 @@ final class Sprite {
     var withClosedEyes: Sprite {
         mapped { x, y, c in
             guard c == "E" else { return c }
-            return pixel(x, y + 1) == "E" ? "O" : "K"
+            return pixel(x, y + 1) == "E" ? "O" : "c"
         }
     }
 
-    /// Zieht einen dunklen Rand um alles Sichtbare (damit Einblendungen auf jedem Hintergrund lesbar sind).
-    var outlined: Sprite {
-        let w = width + 2, h = height + 2
-        var result = [Character](repeating: ".", count: w * h)
-        for y in 0..<h {
-            for x in 0..<w {
-                let c = pixel(x - 1, y - 1)
-                if c != "." {
-                    result[y * w + x] = c
-                    continue
-                }
-                var touches = false
-                for dy in -1...1 {
-                    for dx in -1...1 where pixel(x - 1 + dx, y - 1 + dy) != "." {
-                        touches = true
-                    }
-                }
-                if touches { result[y * w + x] = "K" }
-            }
+    /// Zufrieden zugekniffene Augen: Der Strich sitzt oben.
+    var withHappyEyes: Sprite {
+        mapped { x, y, c in
+            guard c == "E" else { return c }
+            return pixel(x, y + 1) == "E" ? "c" : "O"
         }
-        return Sprite(width: w, height: h, pixels: result)
     }
 
     /// Zeichnet das Bild; `x`/`y` sind die linke untere Ecke in Pixeleinheiten.
@@ -108,64 +93,72 @@ enum Frames {
     private static let upperBody = [
         "...............K....K...",
         "..............KPKKKKPK..",
-        ".KK...........KOOOOOOK..",
-        "KOK...........KOEOOEOK..",
-        "KOK...........KOEOOEOK..",
-        "KoK...........KOWPPWOK..",
-        "KOKKKKKKKKKKKKKWWWWWWK..",
-        ".KOOOoOOoOOoOOOKWWWWK...",
-        "..KOOoOOoOOoOOOOKKKK....",
+        ".KKK..........KhhhhhhK..",
+        "KhOK..........KOEOOEOK..",
+        "KhK...........KOEOOEOK..",
+        "KOK..........wKOOPPOOKw.",
+        "KOKKKKKKKKKKKKKOOOOOOKw.",
+        ".KOhhhhhhhhhhhhKOOOOK...",
+        "..KOOOOOOOOOOOOOKKKK....",
         "..KOOOOOOOOOOOOOOK......",
-        "..KOWWWWWWWWWWWOOK......",
+        "..KOOOOOOOOOOOOOOK......",
         "..KKKKKKKKKKKKKKKK......",
     ]
 
     static let stand = Sprite(upperBody + [
         "...KOK.KOK..KOK.KOK.....",
-        "...KWK.KWK..KWK.KWK.....",
+        "...KOK.KOK..KOK.KOK.....",
         "...KKK.KKK..KKK.KKK.....",
     ])
 
     static let walkA = Sprite(upperBody + [
         "..KOK...KOK.KOK...KOK...",
-        "..KWK...KWK.KWK...KWK...",
+        "..KOK...KOK.KOK...KOK...",
         "..KKK...KKK.KKK...KKK...",
     ])
 
     static let walkB = Sprite(upperBody + [
         "....KOKKOK....KOKKOK....",
-        "....KWKKWK....KWKKWK....",
+        "....KOKKOK....KOKKOK....",
         "....KKKKKK....KKKKKK....",
+    ])
+
+    /// Auf Zehenspitzen – drückt sich beim Streicheln gegen die Hand.
+    private static let standTall = Sprite(upperBody + [
+        "...KOK.KOK..KOK.KOK.....",
+        "...KOK.KOK..KOK.KOK.....",
+        "...KOK.KOK..KOK.KOK.....",
+        "...KKK.KKK..KKK.KKK.....",
     ])
 
     static let sit = Sprite([
         "...............K....K...",
         "..............KPKKKKPK..",
-        "..............KOOOOOOK..",
+        "..............KhhhhhhK..",
         "..............KOEOOEOK..",
         "..............KOEOOEOK..",
-        "..............KOWPPWOK..",
-        "...........KKKKWWWWWWK..",
-        "..........KOOoOKWWWWK...",
-        ".........KOOOoOOKKKK....",
-        "........KOOOOoOOWK......",
-        "........KOOOOOOOWK......",
-        "........KOOOOOOWWK......",
+        ".............wKOOPPOOKw.",
+        "...........KKKKOOOOOOKw.",
+        "..........KhhhOKOOOOK...",
+        ".........KhOOOOOKKKK....",
+        "........KhOOOOOOOK......",
+        "........KOOOOOOOOK......",
+        "........KOOOOOOOOK......",
         "........KOOOOOKOK.......",
-        ".KKKKKKKKOOOOOKWK.......",
-        "KOOOoOOOOOOOOOKWK.......",
+        ".KKKKKKKKOOOOOKOK.......",
+        "KhhhhhhhOOOOOOKOK.......",
         "KKKKKKKKKKKKKKKKK.......",
     ])
 
     static let lie = Sprite([
         "................K....K..",
         "...............KPKKKKPK.",
-        "...............KOOOOOOK.",
+        "...............KhhhhhhK.",
         "...............KOEOOEOK.",
         "..KKKKKKKKKKKKKKOEOOEOK.",
-        ".KOOoOOoOOoOOOOKOWPPWOK.",
-        "KOOOOOOOOOOOOOOKWWWWWWK.",
-        "KoooooooOOOOOOOOKWWKWWK.",
+        ".KhhhhhhhhhhhhhKOOPPOOKw",
+        "KhOOOOOOOOOOOOOKOOOOOOKw",
+        "KhhhhhhhOOOOOOOOKOOKOOK.",
         "KKKKKKKKKKKKKKKKKKKKKKK.",
     ])
 
@@ -173,31 +166,45 @@ enum Frames {
     private static let lieBreathIn = Sprite([
         "................K....K..",
         "...............KPKKKKPK.",
-        "...............KOOOOOOK.",
+        "...............KhhhhhhK.",
         "....KKKKKKKK...KOEOOEOK.",
-        "..KKOOOOOOOOKKKKOEOOEOK.",
-        ".KOOoOOoOOoOOOOKOWPPWOK.",
-        "KOOOOOOOOOOOOOOKWWWWWWK.",
-        "KoooooooOOOOOOOOKWWKWWK.",
+        "..KKhhhhhhhhKKKKOEOOEOK.",
+        ".KhhOOOOOOOOOOOKOOPPOOKw",
+        "KhOOOOOOOOOOOOOKOOOOOOKw",
+        "KhhhhhhhOOOOOOOOKOOKOOK.",
+        "KKKKKKKKKKKKKKKKKKKKKKK.",
+    ])
+
+    /// Liegen und den Kopf in die streichelnde Hand recken.
+    private static let lieNuzzle = Sprite([
+        "................K....K..",
+        "...............KPKKKKPK.",
+        "...............KhhhhhhK.",
+        "...............KOEOOEOK.",
+        "...............KOEOOEOK.",
+        "..KKKKKKKKKKKKKKOOPPOOKw",
+        ".KhhhhhhhhhhhhhKOOOOOOKw",
+        "KhOOOOOOOOOOOOOOKOOOOK..",
+        "KhhhhhhhOOOOOOOOKOOKOOK.",
         "KKKKKKKKKKKKKKKKKKKKKKK.",
     ])
 
     static let startled = Sprite([
         "..K............K....K...",
         ".KOK..........KPKKKKPK..",
-        "KOOOK.........KOOOOOOK..",
-        "KOoOK.........KOEOOEOK..",
+        "KOOOK.........KhhhhhhK..",
+        "KOhOK.........KOEOOEOK..",
         "KOOOK....KKK..KOEOOEOK..",
-        ".KoK...KKOOOKKKOWPPWOK..",
-        ".KOK.KKOOoOOOOKWWKKWWK..",
-        "..KKOOoOOoOOOOOKWWWWK...",
+        ".KOK...KKhhhKKKOOPPOOKw.",
+        ".KOK.KKhhOOOOOKOOKKOOK..",
+        "..KKhhOOOOOOOOOKOOOOK...",
         "..KOOOOOOOOOOOOOKKKK....",
         "..KOOOOOOOOOOOOOOK......",
         "..KKKKKKKKKKKKKKKK......",
         "..KOK.............KOK...",
         "..KOK.............KOK...",
         ".KOK...............KOK..",
-        ".KWK...............KWK..",
+        ".KOK...............KOK..",
         ".KKK...............KKK..",
     ])
 
@@ -206,46 +213,41 @@ enum Frames {
     static let lieBlink = lie.withClosedEyes
     static let sleepA = lie.withClosedEyes
     static let sleepB = lieBreathIn.withClosedEyes
+    static let petStand = stand.withHappyEyes
+    static let petStandTall = standTall.withHappyEyes
+    static let petLie = lie.withHappyEyes
+    static let petLieNuzzle = lieNuzzle.withHappyEyes
 
-    static let zGlyph = Sprite([
-        "WWWW",
-        "..W.",
-        ".W..",
-        "WWWW",
-    ]).outlined
-
-    static let bang = Sprite([
-        "YY",
-        "YY",
-        "YY",
-        "..",
-        "YY",
-    ]).outlined
+    /// Katzenkopf für die Menüleiste: nur die Umrisslinie, damit er dezent bleibt.
+    static let menuBarHead = Sprite([
+        ".K.........K.",
+        ".KK.......KK.",
+        ".K.K.....K.K.",
+        ".K..KKKKK..K.",
+        "K...........K",
+        "K...K...K...K",
+        "K...K...K...K",
+        "K.....K.....K",
+        ".K.........K.",
+        "..KKKKKKKKK..",
+    ])
 
     static let all: [(String, Sprite)] = [
         ("stand", stand), ("walkA", walkA), ("walkB", walkB), ("standBlink", standBlink),
         ("sit", sit), ("sitBlink", sitBlink), ("lie", lie), ("sleepA", sleepA),
-        ("sleepB", sleepB), ("startled", startled), ("z", zGlyph), ("!", bang),
+        ("sleepB", sleepB), ("startled", startled), ("petStand", petStand),
+        ("petStandTall", petStandTall), ("petLie", petLie), ("petLieNuzzle", petLieNuzzle),
+        ("menuBarHead", menuBarHead),
     ]
 
-    /// Katzenkopf als Vorlage für die Menüleiste (macOS färbt ihn passend zum hellen/dunklen Modus).
+    /// Vorlagenbild für die Menüleiste (macOS färbt es passend zum hellen/dunklen Modus).
     static func menuBarIcon() -> NSImage {
-        let head = Sprite([
-            "K.........K",
-            "KK.......KK",
-            "KKK.....KKK",
-            "KKKKKKKKKKK",
-            "KK.KKKKK.KK",
-            "KK.KKKKK.KK",
-            "KKKKK.KKKKK",
-            "KKKKKKKKKKK",
-            ".KKKKKKKKK.",
-        ])
-        let px: CGFloat = 2
+        let head = menuBarHead
+        let px: CGFloat = 1
         let image = NSImage(size: NSSize(width: CGFloat(head.width) * px,
                                          height: CGFloat(head.height) * px),
                             flipped: true) { _ in
-            NSColor.black.setFill()
+            NSColor.black.withAlphaComponent(0.85).setFill()
             for y in 0..<head.height {
                 for x in 0..<head.width where head.pixel(x, y) != "." {
                     NSRect(x: CGFloat(x) * px, y: CGFloat(y) * px, width: px, height: px).fill()

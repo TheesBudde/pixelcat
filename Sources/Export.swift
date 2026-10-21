@@ -24,7 +24,7 @@ enum Exporter {
         let width = columns * cell * Int(scale)
         let height = rows * cell * Int(scale)
         let data = try png(width: width, height: height) { ctx, _ in
-            ctx.setFillColor(CGColor(gray: 0.82, alpha: 1))
+            ctx.setFillColor(CGColor(gray: 0.45, alpha: 1))
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
             for (i, (_, sprite)) in Frames.all.enumerated() {
                 let cx = CGFloat((i % columns) * cell + 2)

@@ -1,10 +1,10 @@
 import AppKit
 
-/// Maße der Zeichenfläche in Katzenpixeln. Links und rechts bleibt Platz für "Zzz" und "!".
+/// Maße der Zeichenfläche in Katzenpixeln. Links und rechts bleibt etwas Luft.
 enum Layout {
-    static let canvasWidth = 40
-    static let canvasHeight = 36
-    static let margin = 8
+    static let canvasWidth = 32
+    static let canvasHeight = 22
+    static let margin = 4
 }
 
 /// Was gerade zu sehen ist.
@@ -12,22 +12,48 @@ struct CatLook: Equatable {
     var sprite: Sprite
     var facingRight: Bool
     var hop = 0
-    var zCount = 0
-    var showBang = false
 
     static func == (a: CatLook, b: CatLook) -> Bool {
         a.sprite === b.sprite && a.facingRight == b.facingRight && a.hop == b.hop
-            && a.zCount == b.zCount && a.showBang == b.showBang
+    }
+}
+
+// MARK: - Tageszeit
+
+/// Wie aktiv die Katze ist – hängt von der Uhrzeit ab.
+struct Temperament {
+    /// Wie viele Runden sie dreht, bevor sie sich hinlegt
+    var walks: ClosedRange<Int>
+    /// Wie lange sie schläft, bevor sie von selbst aufsteht (Sekunden)
+    var sleep: ClosedRange<Double>
+    var walkSpeed: ClosedRange<CGFloat>
+    var fleeDistance: ClosedRange<CGFloat>
+    var fleeSpeed: CGFloat
+    /// Wie viele Runden sie nach dem Aufscheuchen noch dreht
+    var walksAfterFleeing: ClosedRange<Int>
+
+    static func at(_ date: Date) -> Temperament {
+        switch Calendar.current.component(.hour, from: date) {
+        case 9..<19: // Tag: unternehmungslustig, kurze Nickerchen
+            return Temperament(walks: 3...6, sleep: 15...50, walkSpeed: 32...50,
+                               fleeDistance: 140...320, fleeSpeed: 190, walksAfterFleeing: 1...3)
+        case 6..<9, 19..<23: // Morgen und Abend: gemütlich
+            return Temperament(walks: 2...4, sleep: 40...120, walkSpeed: 26...42,
+                               fleeDistance: 100...220, fleeSpeed: 160, walksAfterFleeing: 1...2)
+        default: // Nacht: schläft lange und legt sich nach dem Aufscheuchen sofort wieder hin
+            return Temperament(walks: 0...1, sleep: 300...900, walkSpeed: 20...30,
+                               fleeDistance: 30...80, fleeSpeed: 110, walksAfterFleeing: 0...0)
+        }
     }
 }
 
 // MARK: - Verhalten
 
 /// Zustandsautomat: herumlaufen → hinsetzen → hinlegen → schlafen → aufwachen → …
-/// Ein Klick unterbricht alles: erschrecken → wegrennen → wieder beruhigen.
+/// Klick: erschrecken → ein Stück weglaufen. Streicheln: genießen und anschmiegen.
 @MainActor
 final class CatBrain {
-    enum Phase { case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled }
+    enum Phase { case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled, petted }
 
     private(set) var phase: Phase = .standing
     private var phaseTime = 0.0
@@ -40,15 +66,21 @@ final class CatBrain {
     var maxX: CGFloat = 800
     /// Punkte pro Katzenpixel; das Tempo wächst mit, damit es bei jeder Größe gleich wirkt.
     var scale: CGFloat = 3
+    /// Austauschbar, damit sich Tag und Nacht testen lassen.
+    var clock: () -> Date = Date.init
 
     private var targetX: CGFloat = 0
     private var speed: CGFloat = 40
     private var facingRight = Bool.random()
-    private var walksBeforeNap = Int.random(in: 2...4)
+    private lazy var walksBeforeNap = temperament.walks.randomElement() ?? 1
     private var blinkCountdown = 3.0
     private var blinkLeft = 0.0
+    private var timeSinceStroke = 0.0
+    private var pettedWhileLying = false
 
     private var unit: CGFloat { scale / 3 }
+    private var temperament: Temperament { .at(clock()) }
+    var isBeingPetted: Bool { phase == .petted }
 
     func update(dt: Double) {
         phaseTime += dt
@@ -65,6 +97,9 @@ final class CatBrain {
             } else {
                 x += targetX > x ? step : -step
             }
+        case .petted:
+            timeSinceStroke += dt
+            if timeSinceStroke > 1.2 { pettingStopped() }
         default:
             if phaseTime >= phaseDuration { phaseFinished() }
         }
@@ -72,13 +107,21 @@ final class CatBrain {
 
     func startle() {
         guard phase != .startled, phase != .fleeing else { return }
-        enter(.startled, for: 0.75)
+        enter(.startled, for: 0.45)
     }
 
     func goToSleep() {
         guard phase != .sleeping, phase != .lyingDown, phase != .sittingDown else { return }
         walksBeforeNap = 0
         enter(.sittingDown, for: 1.0)
+    }
+
+    /// Wird aufgerufen, solange die Maus über die Katze streicht.
+    func stroke() {
+        timeSinceStroke = 0
+        guard phase != .petted, phase != .startled, phase != .fleeing else { return }
+        pettedWhileLying = [.sittingDown, .lyingDown, .sleeping, .wakingUp].contains(phase)
+        enter(.petted)
     }
 
     private func enter(_ newPhase: Phase, for duration: Double = 0) {
@@ -99,28 +142,37 @@ final class CatBrain {
         case .sittingDown:
             enter(.lyingDown, for: .random(in: 2.5...4.5))
         case .lyingDown:
-            enter(.sleeping, for: .random(in: 45...150))
+            enter(.sleeping, for: .random(in: temperament.sleep))
         case .sleeping:
             enter(.wakingUp, for: 1.6)
         case .wakingUp:
-            walksBeforeNap = .random(in: 1...3)
+            walksBeforeNap = temperament.walks.randomElement() ?? 1
             enter(.standing, for: .random(in: 0.5...1.2))
         case .startled:
             startFleeing()
-        case .walking, .fleeing:
+        case .walking, .fleeing, .petted:
             break
         }
     }
 
     private func arrived() {
         if phase == .fleeing {
-            // Erst mal verschnaufen, dann noch ein bisschen bummeln und wieder hinlegen
-            walksBeforeNap = .random(in: 1...2)
-            enter(.standing, for: .random(in: 1.0...2.0))
+            walksBeforeNap = temperament.walksAfterFleeing.randomElement() ?? 0
+            // Nachts direkt wieder hinsetzen, tagsüber erst kurz verschnaufen
+            enter(.standing, for: walksBeforeNap > 0 ? .random(in: 1.0...2.0) : .random(in: 0.3...0.6))
             return
         }
         walksBeforeNap -= 1
         enter(.standing, for: walksBeforeNap > 0 ? .random(in: 0.4...2.5) : .random(in: 0.3...0.8))
+    }
+
+    private func pettingStopped() {
+        if pettedWhileLying {
+            // Zufrieden wieder einkuscheln
+            enter(.lyingDown, for: .random(in: 3...6))
+        } else {
+            enter(.standing, for: .random(in: 0.8...1.6))
+        }
     }
 
     private func startWalking() {
@@ -132,7 +184,7 @@ final class CatBrain {
         }
         let maxDistance = 450 * unit
         targetX = min(max(target, x - maxDistance), x + maxDistance)
-        speed = .random(in: 28...48) * unit
+        speed = .random(in: temperament.walkSpeed) * unit
         facingRight = targetX >= x
         enter(.walking)
     }
@@ -145,9 +197,9 @@ final class CatBrain {
         if Double.random(in: 0..<1) < 0.25 { right.toggle() }
         if (right ? roomRight : roomLeft) < 40 * unit { right.toggle() }
 
-        let distance = CGFloat.random(in: 180...420) * unit
+        let distance = CGFloat.random(in: temperament.fleeDistance) * unit
         targetX = right ? min(x + distance, maxX) : max(x - distance, minX)
-        speed = 230 * unit
+        speed = temperament.fleeSpeed * unit
         facingRight = right
         enter(.fleeing)
     }
@@ -175,7 +227,7 @@ final class CatBrain {
             let cycle = [Frames.walkA, Frames.stand, Frames.walkB, Frames.stand]
             look.sprite = cycle[Int(animTime / 0.14) % cycle.count]
         case .fleeing:
-            look.sprite = Int(animTime / 0.07) % 2 == 0 ? Frames.walkA : Frames.walkB
+            look.sprite = Int(animTime / 0.08) % 2 == 0 ? Frames.walkA : Frames.walkB
         case .sittingDown:
             look.sprite = blinking ? Frames.sitBlink : Frames.sit
         case .lyingDown:
@@ -184,7 +236,6 @@ final class CatBrain {
             look.sprite = blinking || sleepy ? Frames.lieBlink : Frames.lie
         case .sleeping:
             look.sprite = Int(animTime / 1.1) % 2 == 0 ? Frames.sleepA : Frames.sleepB
-            look.zCount = Int(animTime.truncatingRemainder(dividingBy: 3.2) / 0.8)
         case .wakingUp:
             if phaseTime < 0.7 {
                 look.sprite = Frames.lie
@@ -192,10 +243,18 @@ final class CatBrain {
                 look.sprite = blinking ? Frames.sitBlink : Frames.sit
             }
         case .startled:
+            // Kurz zusammenzucken: Buckel und ein kleiner Hüpfer
             look.sprite = Frames.startled
-            let t = min(phaseTime / 0.45, 1)
-            look.hop = Int((sin(t * .pi) * 7).rounded())
-            look.showBang = true
+            let t = min(phaseTime / 0.3, 1)
+            look.hop = Int((sin(t * .pi) * 3).rounded())
+        case .petted:
+            // Schmiegt sich im Takt gegen die Hand
+            let up = Int(animTime / 0.4) % 2 == 1
+            if pettedWhileLying {
+                look.sprite = up ? Frames.petLieNuzzle : Frames.petLie
+            } else {
+                look.sprite = up ? Frames.petStandTall : Frames.petStand
+            }
         }
         return look
     }
@@ -227,8 +286,8 @@ final class CatView: NSView {
         return isCat(at: p) ? self : nil
     }
 
-    private func isCat(at point: NSPoint) -> Bool {
-        guard let look else { return false }
+    func isCat(at point: NSPoint) -> Bool {
+        guard let look, bounds.contains(point) else { return false }
         var px = Int(floor(point.x / scale))
         if !look.facingRight { px = Layout.canvasWidth - 1 - px }
         let sx = px - Layout.margin
@@ -246,29 +305,11 @@ final class CatView: NSView {
         guard let look, let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
         ctx.setShouldAntialias(false)
-
-        ctx.saveGState()
         if !look.facingRight {
             ctx.translateBy(x: bounds.width, y: 0)
             ctx.scaleBy(x: -1, y: 1)
         }
         look.sprite.draw(in: ctx, x: CGFloat(Layout.margin), y: CGFloat(look.hop), scale: scale)
-        ctx.restoreGState()
-
-        // Einblendungen werden nicht gespiegelt – nur ihre Position wandert mit dem Kopf
-        let zPositions = [(20, 9), (23, 14), (26, 19)]
-        for (zx, zy) in zPositions.prefix(look.zCount) {
-            drawOverlay(Frames.zGlyph, catX: zx, y: zy, look: look, in: ctx)
-        }
-        if look.showBang {
-            drawOverlay(Frames.bang, catX: 16, y: look.sprite.height + look.hop + 1, look: look, in: ctx)
-        }
-    }
-
-    private func drawOverlay(_ glyph: Sprite, catX: Int, y: Int, look: CatLook, in ctx: CGContext) {
-        var x = Layout.margin + catX
-        if !look.facingRight { x = Layout.canvasWidth - x - glyph.width }
-        glyph.draw(in: ctx, x: CGFloat(x), y: CGFloat(y), scale: scale)
     }
 }
 
@@ -283,6 +324,9 @@ final class CatController {
     private var timer: Timer?
     private var lastTick = CACurrentMediaTime()
     private var placed = false
+    private var lastMouse = NSEvent.mouseLocation
+    /// Wie weit die Maus schon über die Katze gestrichen ist
+    private var strokeDistance: CGFloat = 0
     private(set) var isVisible = false
 
     var scale: CGFloat {
@@ -357,12 +401,32 @@ final class CatController {
         brain.maxX = frame.maxX - CGFloat(Layout.canvasWidth - Layout.margin) * scale
     }
 
+    /// Streicheln: Die Maus bewegt sich über der Katze, ohne zu klicken.
+    /// Die Mausposition wird einfach abgefragt – dafür braucht es keine Sonderrechte.
+    private func checkStroking() {
+        let mouse = NSEvent.mouseLocation
+        defer { lastMouse = mouse }
+        let origin = panel.frame.origin
+        let local = NSPoint(x: mouse.x - origin.x, y: mouse.y - origin.y)
+        guard NSEvent.pressedMouseButtons == 0, view.isCat(at: local) else {
+            strokeDistance = 0
+            return
+        }
+        let moved = hypot(mouse.x - lastMouse.x, mouse.y - lastMouse.y)
+        guard moved > 0.5 else { return }
+        strokeDistance += moved
+        if strokeDistance > 25 * scale / 3 || brain.isBeingPetted {
+            brain.stroke()
+        }
+    }
+
     private func tick() {
         let now = CACurrentMediaTime()
         let dt = min(now - lastTick, 0.1)
         lastTick = now
 
         updateBounds()
+        checkStroking()
         brain.update(dt: dt)
 
         // visibleFrame endet unten an der Oberkante des Docks – genau da läuft die Katze

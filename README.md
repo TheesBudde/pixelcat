@@ -1,8 +1,14 @@
 # Pixelkatze 🐈
 
-Eine kleine Pixel-Art-Katze, die auf der Oberkante deines Docks hin und her läuft,
-sich irgendwann hinlegt und schläft. Klickst du sie an, erschrickt sie, springt hoch
-und rennt davon. Danach beruhigt sie sich und legt sich wieder hin.
+Eine kleine schwarze Pixel-Art-Katze, die auf der Oberkante deines Docks hin und her
+läuft, sich irgendwann hinlegt und schläft.
+
+- **Streicheln:** Fährst du mit der Maus über sie, ohne zu klicken, wacht sie auf,
+  kneift zufrieden die Augen zu und schmiegt sich an. Danach kuschelt sie sich wieder ein.
+- **Aufscheuchen:** Ein Klick lässt sie kurz zusammenzucken und ein Stück weglaufen.
+- **Tageszeit:** Tagsüber (9–19 Uhr) ist sie unternehmungslustig und macht nur kurze
+  Nickerchen. Morgens und abends ist sie gemütlich. Nachts (23–6 Uhr) schläft sie lange und
+  legt sich nach dem Aufscheuchen sofort wieder hin.
 
 ## Starten
 
@@ -47,16 +53,21 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
   `.nonactivatingPanel` sorgt dafür, dass ein Klick auf die Katze dem gerade aktiven
   Programm nicht den Fokus wegnimmt.
 - **Grafik (`Sprites.swift`):** Jede Pose ist ein Textraster, ein Buchstabe pro Pixel und
-  Farbe (`K` Umriss, `O` Fell, `o` Streifen, `W` weiß, `P` rosa, `E` Augen). Gezeichnet
+  Farbe (`K` Umriss, `O` Fell, `h` Glanz, `E` Augen, `P` rosa, `w` Schnurrhaare). Gezeichnet
   wird Pixel für Pixel als Quadrat, also bewusst „blockig“. Nach links wird gespiegelt.
-  Augen-zu-Varianten und die Umrisse von „Z“ und „!“ werden automatisch erzeugt.
+  Die Varianten mit geschlossenen und zufriedenen Augen werden automatisch erzeugt.
 - **Verhalten (`Cat.swift` → `CatBrain`):** ein Zustandsautomat:
 
   ```
-  stehen ⇄ laufen (1–3×) → hinsetzen → hinlegen → schlafen (Zzz, 45–150 s) → aufwachen → stehen …
-            Klick ──► erschrecken (Sprung + „!“) → wegrennen → verschnaufen → laufen → hinlegen …
+  stehen ⇄ laufen → hinsetzen → hinlegen → schlafen → aufwachen → stehen …
+     Klick ──► zusammenzucken → weglaufen → verschnaufen → (laufen) → hinlegen …
+     Maus streicht drüber ──► genießen & anschmiegen → wieder einkuscheln / weiterlaufen
   ```
-  Dazu blinzelt sie zwischendurch und atmet im Schlaf.
+  Wie viele Runden sie läuft, wie lange sie schläft und wie weit sie wegrennt, hängt
+  von der Uhrzeit ab (`Temperament`). Dazu blinzelt sie zwischendurch und atmet im Schlaf.
+- **Streicheln:** 30-mal pro Sekunde wird die Mausposition abgefragt. Bewegt sich die
+  Maus über den Katzenpixeln, ohne dass eine Taste gedrückt ist, zählt das als Streicheln.
+  Dafür braucht die App keine besonderen Rechte.
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche
   drumherum lässt Klicks durch.
 - **Vorschau der Sprites:** `build/Pixelkatze.app/Contents/MacOS/Pixelkatze --export-preview vorschau.png`
