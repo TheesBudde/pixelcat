@@ -220,8 +220,11 @@ enum Frames {
         i == 8 ? "..KOWWWWWWWWWWOKOWKKWOKw" : row // kauen
     })
 
-    /// Vorne runter, Po hoch: ausgiebiges Strecken.
-    static let stretch = Sprite([
+    // Strecken in mehreren Bildern: vorne absenken → tief strecken (wippen, Schwanz pendelt)
+    // → aufrichten → Hinterbein nach hinten. Augen genüsslich zu.
+
+    /// Tief gestreckt: vorne runter, Po hoch, Pfoten weit nach vorn.
+    private static let bowRows = [
         ".KKK....................",
         "KhOK....................",
         "KhK.....................",
@@ -236,6 +239,38 @@ enum Frames {
         "...KOK.KOK.KKKKKKKKKKKKK",
         "...KWK.KWK.KOOOOOOOOWWWK",
         "...KKK.KKK.KKKKKKKKKKKKK",
+    ]
+    static let stretchBowA = Sprite(bowRows).withClosedEyes
+    /// Dieselbe Pose, Schwanz aufgerichtet und ein Stückchen tiefer – im Wechsel wippt sie.
+    static let stretchBowB = Sprite(["....................", "..K....................."]
+        + ["KhK.....................", "KhK.....................", "KsKKKKK................."]
+        + Array(bowRows[4...])).withClosedEyes
+
+    /// Halb abgesenkt: Übergang zwischen Stehen und tiefem Strecken.
+    static let stretchHalf = Sprite([
+        ".KKK....................",
+        "KhOK....................",
+        "KhK............K....K...",
+        "KsK...........KPKKKKPK..",
+        "KOKKKKKKKK....KhhhhhhK..",
+        ".KOhhhhhhhKKKKKOEOOEOK..",
+        "..KOOsOOsOOhhhKOEOOEOK..",
+        "..KOOsOOsOOOOOKOWPPWOKw.",
+        "..KOOOOOOOOOOOKWWWWWWKw.",
+        "..KOWWWWWWWWOOOKWWWWK...",
+        "..KKKKKKKKKKKOOOKKKK....",
+        "...KOK.KOK..KOOK........",
+        "...KOK.KOK..KOOOK.......",
+        "...KWK.KWK...KWWWK......",
+        "...KKK.KKK...KKKKK......",
+    ]).withClosedEyes
+
+    /// Zum Schluss ein Hinterbein genüsslich nach hinten ausstrecken.
+    static let stretchHind = Sprite(Array(upperBody[0...10]) + [
+        "KKKKKKKKKKKKKKKKKK......",
+        "KWOK...KOK..KOK.KOK.....",
+        "KKK....KWK..KWK.KWK.....",
+        ".......KKK..KKK.KKK.....",
     ]).withClosedEyes
 
     private static let sitRows = [
@@ -416,7 +451,7 @@ enum Frames {
     static let climbDownB = walkB.rotatedClockwise
 
     static let all: [Sprite] = [
-        stand, walkA, walkB, sit, yawn, stretch,
+        stand, walkA, walkB, sit, yawn, stretchHalf, stretchBowA, stretchBowB, stretchHind,
         groomA, groomB, headWashA, headWashB, lie, lieTailUp,
         sleepB, rollA, rollB, eatA, eatB, bat,
         startled, petStandTall, petLieNuzzle,

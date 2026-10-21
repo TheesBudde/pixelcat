@@ -121,6 +121,10 @@ final class CatBrain {
     enum Phase {
         case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled, petted
         case stretching, yawning, grooming, headWashing, backRolling, eating, chasing, batting, watching
+        /// Sitzen und mit langsamem Blinzeln anschauen
+        case slowBlinking
+        /// Hinlegen, auf den Rücken rollen, mit den Pfoten zappeln, wieder aufstehen
+        case wriggling
         case climbingUp, climbingDown, jumping, falling
         /// Auf Streifzug: außerhalb des Bildschirms
         case away
@@ -238,6 +242,11 @@ final class CatBrain {
     private var breakRoutine = false
     private var chaseMoving = false
     private var batsUntilRest = Int.random(in: 6...12)
+    /// Schritt in der Aufmerksamkeits-Schleife (strecken → blinzeln → rekeln → blinzeln → …)
+    private var attentionStep = 0
+
+    /// Dauer des Streck-Ablaufs – überall gleich
+    private static let stretchLength = 2.8
 
     /// Auf welchem Fenster sie steht – nil heißt: auf dem Dock
     private var perchID: Int?
@@ -383,7 +392,7 @@ final class CatBrain {
         timeSinceStroke = 0
         guard !isAirborne, phase != .away, phase != .petted, phase != .startled, phase != .fleeing else { return }
         pettedWhileLying = mode == .focus
-            || [.sittingDown, .lyingDown, .sleeping, .wakingUp, .backRolling].contains(phase)
+            || [.sittingDown, .lyingDown, .sleeping, .wakingUp, .backRolling, .wriggling].contains(phase)
         goal = .wander
         enter(.petted)
     }
@@ -392,10 +401,10 @@ final class CatBrain {
     func noticeSomething() {
         guard mode != .focus else { return }
         switch phase {
-        case .sleeping, .lyingDown, .backRolling:
+        case .sleeping, .lyingDown, .backRolling, .wriggling:
             enter(.wakingUp, for: 1.2)
         case .standing, .walking, .sittingDown, .grooming, .headWashing, .watching,
-             .yawning, .stretching, .chasing, .batting:
+             .yawning, .stretching, .chasing, .batting, .slowBlinking:
             goal = .wander
             enter(.standing, for: 0.3)
         default:
@@ -459,7 +468,7 @@ final class CatBrain {
             walksBeforeNap = temperament.walks.randomElement() ?? 1
             if !reminderPending, mode == .focusBreak || Double.random(in: 0..<1) < 0.7 {
                 // (soll sie in die Mitte, streckt sie sich erst dort)
-                enter(.stretching, for: 1.8)
+                enter(.stretching, for: Self.stretchLength)
             } else {
                 enter(.standing, for: .random(in: 0.5...1.2))
             }
@@ -476,7 +485,7 @@ final class CatBrain {
             } else {
                 enter(.standing, for: .random(in: 0.4...1.0))
             }
-        case .grooming, .headWashing, .watching:
+        case .grooming, .headWashing, .watching, .slowBlinking, .wriggling:
             enter(.standing, for: .random(in: 0.3...0.8))
         case .eating:
             enter(.grooming, for: .random(in: 3...5))
@@ -554,7 +563,7 @@ final class CatBrain {
         case .center:
             offscreenAllowed = false
             breakRoutine = true
-            enter(.stretching, for: 2.2)
+            enter(.stretching, for: Self.stretchLength)
         case .exit:
             enter(.away, for: .infinity)
         case .comeBack:
@@ -578,7 +587,10 @@ final class CatBrain {
     }
 
     private func pettingStopped() {
-        if pettedWhileLying {
+        if isOutAndAbout {
+            // Streifzug: nach dem Streicheln wieder hinaus statt einzuschlafen
+            enter(.standing, for: .random(in: 0.5...1.0))
+        } else if pettedWhileLying {
             // Zufrieden wieder einkuscheln
             enter(.lyingDown, for: .random(in: 3...6))
         } else {
@@ -698,7 +710,8 @@ final class CatBrain {
         enter(.fleeing)
     }
 
-    /// Wartet in der Bildschirmmitte auf Streicheln: sitzt, putzt sich, gähnt, räkelt sich.
+    /// Wartet in der Bildschirmmitte auf Streicheln und sucht dabei dezent Aufmerksamkeit:
+    /// strecken → anschauen und langsam blinzeln → auf dem Rücken rekeln → blinzeln → …
     private func waitAtCenter() {
         let middle = (minX + maxX) / 2
         if abs(x - middle) > 40 * unit {
@@ -706,11 +719,15 @@ final class CatBrain {
             walk(to: middle, speed: 50 * unit)
             return
         }
-        switch Double.random(in: 0..<1) {
-        case ..<0.55: enter(.watching, for: .random(in: 4...8))
-        case ..<0.75: enter(Bool.random() ? .grooming : .headWashing, for: .random(in: 3...5))
-        case ..<0.9: enter(.yawning, for: 1.3)
-        default: enter(.stretching, for: 2.0)
+        attentionStep += 1
+        switch attentionStep % 4 {
+        case 1:
+            if Double.random(in: 0..<1) < 0.4 { facingRight.toggle() } // mal in die andere Richtung
+            enter(.stretching, for: Self.stretchLength)
+        case 3:
+            enter(.wriggling, for: .random(in: 4...5.5))
+        default:
+            enter(.slowBlinking, for: .random(in: 3...4.5))
         }
     }
 
@@ -737,7 +754,7 @@ final class CatBrain {
             return
         }
         switch phase {
-        case .sleeping, .lyingDown, .backRolling:
+        case .sleeping, .lyingDown, .backRolling, .wriggling:
             enter(.wakingUp, for: 1.0)
             return
         case .startled, .fleeing:
@@ -1131,6 +1148,18 @@ final class CatBrain {
 
     // MARK: Aussehen
 
+    /// Streck-Ablauf: vorne absenken → tief strecken und wippen → aufrichten → Hinterbein nach hinten.
+    private func stretchFrame() -> Sprite {
+        let t = phaseTime, end = phaseDuration
+        switch t {
+        case ..<0.35: return Frames.stretchHalf
+        case ..<(end - 0.8):
+            return Int((t - 0.35) / 0.42) % 2 == 0 ? Frames.stretchBowA : Frames.stretchBowB
+        case ..<(end - 0.5): return Frames.stretchHalf
+        default: return Frames.stretchHind
+        }
+    }
+
     var look: CatLook {
         var look = CatLook(sprite: Frames.stand, facingRight: facingRight)
         let blinking = blinkLeft > 0
@@ -1194,7 +1223,18 @@ final class CatBrain {
                 look.sprite = alternate(Frames.petStand, Frames.petStandTall, every: 0.4)
             }
         case .stretching:
-            look.sprite = Frames.stretch
+            look.sprite = stretchFrame()
+        case .slowBlinking:
+            // Langes, langsames Blinzeln in der Mitte – Katzensprache für „ich mag dich“
+            let t = phaseTime / phaseDuration
+            look.sprite = t > 0.35 && t < 0.62 ? Frames.sitBlink : Frames.sit
+        case .wriggling:
+            // Hinlegen, rekeln (auf dem Rücken, Pfoten zappeln), wieder auf den Bauch
+            if phaseTime < 0.5 || phaseTime > phaseDuration - 0.5 {
+                look.sprite = Frames.lieBlink
+            } else {
+                look.sprite = alternate(Frames.rollA, Frames.rollB, every: 0.3)
+            }
         case .yawning:
             look.sprite = phaseTime < 0.25 || phaseTime > phaseDuration - 0.25 ? Frames.sitBlink : Frames.yawn
         case .grooming:

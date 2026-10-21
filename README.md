@@ -26,12 +26,14 @@ Schwanzspitze.
   bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
 - **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
   oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
-  Bildschirmmitte, streckt sich, miaut und wartet dort, bis du sie streichelst oder anklickst.
+  Bildschirmmitte, streckt sich, miaut und sucht dort dezent Aufmerksamkeit – strecken, dich
+  mit langsamem Blinzeln anschauen, auf dem Rücken rekeln –, bis du sie streichelst oder anklickst.
   Erst dann ist der Timer vorbei (im Streifzug geht sie danach wieder hinaus). Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
   währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
-  Aufwachen und rollt sich manchmal auf den Rücken.
+  Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
+  manchmal auf den Rücken.
 - **Tageszeit:** Tagsüber (9–19 Uhr) ist sie unternehmungslustig und macht nur kurze
   Nickerchen. Morgens und abends ist sie gemütlich. Nachts (23–6 Uhr) schläft sie lange und
   legt sich nach dem Aufscheuchen sofort wieder hin.
