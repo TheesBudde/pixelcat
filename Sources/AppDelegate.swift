@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         cat = CatController(scale: settings.scale, coat: settings.coat, focusMonitor: focusMonitor)
-        if settings.roaming { cat.startRoamingOutside() }
+        if settings.awayMode { cat.startRoamingOutside() }
         cat.apply(settings)
         settings.onChange = { [weak self] in
             guard let self else { return }
@@ -95,9 +95,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(infoItem)
         reminderItem = item(t("Pausen-Erinnerung", "Break reminder"), #selector(toggleReminders))
         menu.addItem(reminderItem)
-        roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming))
-        roamItem.toolTip = t("Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
-                             "The cat heads outside and only comes to the middle of the screen for breaks.")
+        // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
+        if settings.basketInDock {
+            roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming))
+            roamItem.toolTip = t("Die Katze schläft im Korb im Dock und kommt nur zu Pausen heraus.",
+                                 "The cat sleeps in the bed in the Dock and only comes out for breaks.")
+        } else {
+            roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming))
+            roamItem.toolTip = t("Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
+                                 "The cat heads outside and only comes to the middle of the screen for breaks.")
+        }
         menu.addItem(roamItem)
         menu.addItem(.separator())
 
@@ -199,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         reminderItem.state = settings.breakReminders ? .on : .off
         reminderItem.isEnabled = cat.pomodoro == nil
-        roamItem.state = settings.roaming ? .on : .off
+        roamItem.state = settings.awayMode ? .on : .off
 
         // Schläft sie fest oder ist sie draußen, gibt es nichts zu füttern oder zu spielen
         let awake = !cat.isInFocus && !cat.isOutAndAbout
@@ -277,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleRoaming() {
         cat.show()
-        settings.roaming.toggle()
+        settings.awayMode.toggle()
     }
 
     @objc private func feed() {

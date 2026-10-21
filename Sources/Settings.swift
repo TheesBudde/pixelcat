@@ -11,8 +11,11 @@ final class AppSettings: ObservableObject {
     @Published var climbing: Bool { didSet { changed() } }
     @Published var chaseCursor: Bool { didSet { changed() } }
     @Published var multiScreen: Bool { didSet { changed() } }
+    /// Streifzug (ohne Körbchen): Sie geht aus dem Bild und kommt nur zu Pausen vorbei.
     @Published var roaming: Bool { didSet { changed() } }
     @Published var basketInDock: Bool { didSet { changed() } }
+    /// Katzenkorb (mit Körbchen): Sie schläft im Körbchen im Dock und kommt nur zu Pausen heraus.
+    @Published var basketNap: Bool { didSet { changed() } }
     @Published var breakReminders: Bool { didSet { changed() } }
     // Zeiten (Minuten)
     @Published var pomodoroFocus: Int { didSet { changed() } }
@@ -27,6 +30,12 @@ final class AppSettings: ObservableObject {
     @Published var respectFocus: Bool { didSet { changed() } }
     // Allgemein
     @Published var language: Language { didSet { L10n.language = language; changed() } }
+
+    /// Ist die Katze weg – im Körbchen oder auf Streifzug, je nachdem, ob es das Körbchen gibt?
+    var awayMode: Bool {
+        get { basketInDock ? basketNap : roaming }
+        set { if basketInDock { basketNap = newValue } else { roaming = newValue } }
+    }
 
     /// Wird nach jeder Änderung aufgerufen
     var onChange: (() -> Void)?
@@ -50,6 +59,9 @@ final class AppSettings: ObservableObject {
         multiScreen = defaults.bool(forKey: "multiScreen")
         roaming = defaults.bool(forKey: "roaming")
         basketInDock = defaults.bool(forKey: "basketInDock")
+        // Früher gab es nur den Streifzug – der galt auch fürs Körbchen
+        basketNap = defaults.object(forKey: "basketNap") as? Bool
+            ?? (defaults.bool(forKey: "basketInDock") && defaults.bool(forKey: "roaming"))
         breakReminders = defaults.bool(forKey: "breakReminders")
         pomodoroFocus = defaults.integer(forKey: "pomodoroFocus")
         pomodoroBreak = defaults.integer(forKey: "pomodoroBreak")
@@ -70,7 +82,7 @@ final class AppSettings: ObservableObject {
         let values: [String: Any] = [
             "coat": coat.rawValue, "scale": scale,
             "climbing": climbing, "chaseCursor": chaseCursor, "multiScreen": multiScreen,
-            "roaming": roaming, "basketInDock": basketInDock, "breakReminders": breakReminders,
+            "roaming": roaming, "basketInDock": basketInDock, "basketNap": basketNap, "breakReminders": breakReminders,
             "pomodoroFocus": pomodoroFocus, "pomodoroBreak": pomodoroBreak,
             "reminderMin": reminderMin, "reminderMax": reminderMax, "breakLength": breakLength,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
@@ -165,18 +177,24 @@ struct SettingsView: View {
             hint(t("Ruht die Maus am unteren Rand, schleicht sie sich an und springt – nicht im Streifzug.",
                    "When the pointer rests near the bottom, she sneaks up and pounces – not while roaming."))
             Toggle(t("Auf andere Bildschirme wechseln", "Wander to other displays"), isOn: $settings.multiScreen)
-            Toggle(t("Streifzug", "Roaming"), isOn: $settings.roaming)
-            hint(t("Sie geht weg und kommt nur zu Pausen in die Bildschirmmitte.",
-                   "She goes away and only comes to the middle of the screen for breaks."))
-            Toggle(t("Körbchen im Dock", "Basket in the Dock"), isOn: $settings.basketInDock)
-            hint(t("Zeigt ein Katzenkörbchen im Dock. Im Streifzug hüpft sie dann hinein und schläft dort, statt aus dem Bild zu laufen – zu Pausen klettert sie heraus.",
-                   "Shows a cat basket in the Dock. While roaming she hops in and sleeps there instead of leaving the screen – for breaks she climbs out."))
+            Toggle(t("Katzenkorb im Dock", "Cat bed in the Dock"), isOn: $settings.basketInDock)
+            hint(t("Zeigt einen Katzenkorb im Dock. Im Menü gibt es dann „Katzenkorb“ statt „Streifzug“.",
+                   "Shows a cat bed in the Dock. The menu then offers “Cat Bed” instead of “Roaming”."))
+            if settings.basketInDock {
+                Toggle(t("Katzenkorb", "Cat Bed"), isOn: $settings.basketNap)
+                hint(t("Sie legt sich in den Korb und schläft dort – zu Pausen und wenn der Timer abläuft, klettert sie heraus.",
+                       "She curls up in the bed and sleeps there – she climbs out for breaks and when the timer runs out."))
+            } else {
+                Toggle(t("Streifzug", "Roaming"), isOn: $settings.roaming)
+                hint(t("Sie geht weg und kommt nur zu Pausen in die Bildschirmmitte.",
+                       "She goes away and only comes to the middle of the screen for breaks."))
+            }
             if settings.basketInDock {
                 HStack {
                     hint(DockLocator.isTrusted
-                         ? t("Sie findet das Körbchen genau.", "She finds the basket exactly.")
-                         : t("Ohne Bedienungshilfen schätzt sie, wo das Körbchen im Dock sitzt.",
-                             "Without Accessibility access she estimates where the basket sits in the Dock."))
+                         ? t("Sie findet den Korb genau.", "She finds the bed exactly.")
+                         : t("Ohne Bedienungshilfen schätzt sie, wo der Korb im Dock sitzt.",
+                             "Without Accessibility access she estimates where the bed sits in the Dock."))
                     Spacer()
                     if !DockLocator.isTrusted {
                         Button(t("Genau finden …", "Find exactly …")) { DockLocator.requestTrust() }

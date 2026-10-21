@@ -38,7 +38,8 @@ Schwanzspitze.
   manchmal auf den Rücken.
 - **Vollbild:** Läuft ein Programm im Vollbild (kein Dock), streckt sie die Vorderpfote aus und hopst an den
   unteren Bildschirmrand; zurück auf dem Schreibtisch springt sie wieder aufs Dock.
-- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein rundes Katzenbett mit dicker Polsterrolle im Dock. Im Streifzug schrumpft
+- **Katzenkorb im Dock (Einstellung):** Pixelcat zeigt ein ovales Plüschbett im Dock, und im Menü steht
+  **Katzenkorb** statt **Streifzug**. Ist der Katzenkorb an, schrumpft
   sie auf dem Dock auf Körbchengröße, steigt mit den Pfoten hinein, dreht sich einmal im Kreis, legt sich hin – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
   Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie mit der Freigabe
   „Bedienungshilfen“ genau aus, sonst schätzt sie es aus den Dock-Einstellungen.
@@ -72,13 +73,14 @@ Das Menü enthält nur, was man oft braucht:
 | Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen (Haken = läuft, nochmal klicken beendet) |
 | Pausen-Erinnerung | regelmäßige Pausen (an/aus) |
 | Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
+| Katzenkorb | statt Streifzug, wenn der Katzenkorb im Dock eingeschaltet ist: Katze schläft im Korb und kommt nur zu Pausen heraus (an/aus) |
 | Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
 | Einstellungen … (⌘,) | Fenster mit allem Weiteren |
 | Pixelcat beenden (⌘Q) | App beenden |
 
 **Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
 - **Aussehen:** Fellfarbe, Größe
-- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Streifzug, Körbchen im Dock
+- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Katzenkorb im Dock, dazu Streifzug bzw. Katzenkorb
 - **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung mit frühestens/spätestens, Länge einer Pause
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English

@@ -267,7 +267,7 @@ final class CatController {
         breakMinutes = settings.pomodoroBreak
         reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
         breakLength = TimeInterval(settings.breakLength * 60)
-        if settings.roaming != userRoaming { roaming = settings.roaming }
+        if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
     }
 
