@@ -38,8 +38,8 @@ Schwanzspitze.
   manchmal auf den Rücken.
 - **Vollbild:** Läuft ein Programm im Vollbild (kein Dock), streckt sie die Vorderpfote aus und hopst an den
   unteren Bildschirmrand; zurück auf dem Schreibtisch springt sie wieder aufs Dock.
-- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein Katzenkörbchen im Dock. Im Streifzug hüpft sie dann
-  hinein und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
+- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein Katzenkörbchen im Dock. Im Streifzug steigt sie dann
+  vor dem Dock hinein, dreht sich einmal im Kreis, legt sich hin und schrumpft auf Körbchengröße – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
   Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie mit der Freigabe
   „Bedienungshilfen“ genau aus, sonst schätzt sie es aus den Dock-Einstellungen.
 - **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe geht sie automatisch
@@ -135,6 +135,10 @@ Eine einseitige Übersicht der Architektur gibt es als PDF:
   Maus über den Katzenpixeln, ohne dass eine Taste gedrückt ist, zählt das als Streicheln.
   Dafür braucht die App keine besonderen Rechte.
 - **Menüleisten-Symbol:** als Vektorgrafik gezeichnet, damit es auf jedem Bildschirm scharf ist.
+- **Stage Manager:** Die Vorschaubilder am Rand meldet macOS als winzige Fenster der jeweiligen App; zu jedem
+  gibt es ein gleich großes „WindowManager“-Fenster. Daran erkennt Pixelcat sie und klettert nicht darauf.
+- **Vollbild:** gilt, wenn ein Fenster die volle Breite hat, bis unten reicht und oben höchstens den
+  Notch-Streifen frei lässt.
 - **Fenster zum Klettern:** `CGWindowListCopyWindowInfo` liefert fünfmal pro Sekunde die Positionen
   aller Fenster – ohne Sonderrechte, da keine Fenstertitel gelesen werden. Von jeder Oberkante wird
   abgezogen, was Fenster weiter vorne verdecken (`CatController.perches`). Ein Fenster in voller

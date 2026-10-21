@@ -136,6 +136,10 @@ final class CatBrain {
         case reachingDown
         /// Boden steigt (zurück vom Vollbild): ducken, dann aufs Dock hinaufspringen
         case reachingUp
+        /// Ins Körbchen im Dock steigen, im Kreis drehen, hinlegen – und auf Körbchengröße schrumpfen
+        case enteringBasket
+        /// Umgekehrt: wachsen, aufstehen, aufs Dock hinaufspringen
+        case leavingBasket
         /// Auf Streifzug: außerhalb des Bildschirms
         case away
     }
@@ -291,7 +295,7 @@ final class CatBrain {
     /// Braucht gerade flüssige 30 Bilder pro Sekunde (sonst darf der Takt sparen)
     var needsSmoothMotion: Bool {
         [.walking, .fleeing, .chasing, .jumping, .falling, .climbingUp, .climbingDown, .stalking, .startled, .batting,
-         .reachingDown, .reachingUp]
+         .reachingDown, .reachingUp, .enteringBasket, .leavingBasket]
             .contains(phase)
     }
 
@@ -315,6 +319,18 @@ final class CatBrain {
     /// Körbchen-Modus: Statt hinauszulaufen, hüpft sie ins Körbchen im Dock (Bildschirm-x der Körbchenmitte).
     var basketX: CGFloat?
     var useBasket = false
+    /// Wo die Pfoten im Körbchen stehen (innerhalb des Docks)
+    var basketFloorY: CGFloat?
+    /// Steht gerade vor dem Dock (beim Hinein- und Heraussteigen)
+    var isAboveDock: Bool { phase == .enteringBasket || phase == .leavingBasket }
+    /// Wie weit sie auf Körbchengröße geschrumpft ist (0 = normal, 1 = so klein wie im Dock-Symbol)
+    var basketShrink: CGFloat {
+        switch phase {
+        case .enteringBasket: return CGFloat(min(1, max(0, (phaseTime - 2.4) / 0.6)))
+        case .leavingBasket: return CGFloat(min(1, max(0, 1 - phaseTime / 0.6)))
+        default: return 0
+        }
+    }
     /// Höhe des Bodens beim letzten Takt – ändert sie sich (Vollbild), steigt sie hinunter bzw. hinauf
     private var lastDockY: CGFloat?
     /// Was nach dem Heraushüpfen aus dem Körbchen passieren soll
@@ -322,7 +338,8 @@ final class CatBrain {
     private var center: CGFloat { x + CGFloat(Layout.canvasWidth) / 2 * scale }
     private var currentPerch: Perch? { perchID.flatMap(perch) }
     private var isAirborne: Bool {
-        [.climbingUp, .climbingDown, .jumping, .falling, .reachingDown, .reachingUp].contains(phase)
+        [.climbingUp, .climbingDown, .jumping, .falling, .reachingDown, .reachingUp, .enteringBasket, .leavingBasket]
+            .contains(phase)
     }
     var isBeingPetted: Bool { phase == .petted }
 
@@ -379,6 +396,8 @@ final class CatBrain {
             updateJump()
         case .stalking:
             updateStalk(dt)
+        case .enteringBasket, .leavingBasket:
+            updateBasketMove()
         case .falling:
             updateFall(dt)
         case .petted:
@@ -583,7 +602,8 @@ final class CatBrain {
             let dir: CGFloat = facingRight ? 1 : -1
             startJump(toX: clampX(x + dir * 14 * unit), toY: dockY, landing: .dock,
                       arc: phase == .reachingDown ? 8 * unit : nil)
-        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away, .stalking:
+        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away, .stalking,
+             .enteringBasket, .leavingBasket:
             break
         }
     }
@@ -651,8 +671,8 @@ final class CatBrain {
         case .exit:
             enter(.away, for: .infinity)
         case .intoBasket:
-            // hinter dem Dock verschwinden – ab ins Körbchen
-            startJump(toX: x, toY: dockY - 30 * scale, landing: .basket, arc: 14 * unit)
+            // ins Körbchen steigen und es sich gemütlich machen
+            enter(.enteringBasket, for: 3.0)
         case .otherScreen(let left):
             enter(.away, for: .infinity)
             screenSwitchRequest = left
@@ -919,9 +939,45 @@ final class CatBrain {
         x = clampX(basketX - half)
         y = dockY - 30 * scale
         lastDockY = dockY
+        y = basketFloorY ?? dockY - 20 * unit
         afterHop = next
         facingRight = basketX < (minX + maxX) / 2 + half
-        startJump(toX: clampX(x + (facingRight ? 18 : -18) * unit), toY: dockY, landing: .dock)
+        enter(.leavingBasket, for: 1.9)
+    }
+
+    /// Hinein: Pfote ausstrecken, hineinsteigen, einmal im Kreis drehen, setzen, hinlegen, schrumpfen.
+    /// Heraus: wachsen, aufsetzen, aufstehen, aufs Dock hinaufspringen.
+    private func updateBasketMove() {
+        let floor = basketFloorY ?? dockY - 20 * unit
+        let t = phaseTime
+        if phase == .enteringBasket {
+            switch t {
+            case ..<0.4:
+                y = dockY
+            case ..<0.8:
+                let u = CGFloat((t - 0.4) / 0.4)
+                y = dockY + (floor - dockY) * u + 10 * unit * 4 * u * (1 - u)
+            default:
+                y = floor
+            }
+            if phaseTime >= phaseDuration {
+                enter(.away, for: .infinity)
+            }
+        } else {
+            if t >= 1.3 {
+                let u = CGFloat(min(1, (t - 1.3) / 0.5))
+                y = floor + (dockY - floor) * u + 14 * unit * 4 * u * (1 - u)
+                x = clampX(x + (facingRight ? 1 : -1) * 40 * unit / 15)
+            } else {
+                y = floor
+            }
+            if phaseTime >= phaseDuration {
+                y = dockY
+                let next = afterHop
+                afterHop = nil
+                if let next { next() } else { enter(.standing, for: 0.5) }
+            }
+        }
     }
 
     /// Der Boden ist woanders (Vollbild an/aus): erst Pfote ausstrecken bzw. ducken, dann hinüber.
@@ -1477,6 +1533,27 @@ final class CatBrain {
             look.sprite = alternate(Frames.climbDownA, Frames.climbDownB, every: 0.16)
             look.facingRight = !(wall?.wallOnRight ?? false)
             look.drawX = Layout.climbX
+        case .enteringBasket:
+            let t = phaseTime
+            switch t {
+            case ..<0.4: look.sprite = Frames.bat                         // Pfote tastet ins Körbchen
+            case ..<0.8: look.sprite = Frames.walkB                       // hineinsteigen
+            case ..<1.6:                                                  // im Kreis drehen
+                look.sprite = Int(t / 0.13) % 4 == 0 ? Frames.walkA : Frames.walkB
+                look.facingRight = Int((t - 0.8) / 0.27) % 2 == 0 ? facingRight : !facingRight
+            case ..<2.0: look.sprite = Frames.sit
+            case ..<2.3: look.sprite = Frames.lie
+            default: look.sprite = Frames.sleepA
+            }
+        case .leavingBasket:
+            let t = phaseTime
+            switch t {
+            case ..<0.45: look.sprite = Frames.sleepA
+            case ..<0.7: look.sprite = Frames.lie
+            case ..<1.0: look.sprite = Frames.sit
+            case ..<1.3: look.sprite = Frames.stand
+            default: look.sprite = Frames.walkA
+            }
         case .reachingDown:
             look.sprite = Frames.bat         // Vorderpfote tastet nach unten
         case .reachingUp:

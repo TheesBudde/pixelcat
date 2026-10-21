@@ -527,6 +527,23 @@ final class CatController {
         }
     }
 
+    /// Fensterebene knapp über dem Dock – damit sie sichtbar ins Körbchen steigen kann.
+    private static let aboveDockLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
+
+    /// So groß ist ein Katzenpixel im Dock-Symbol (Symbolgröße aus den Dock-Einstellungen).
+    private var basketCatScale: CGFloat {
+        let tile = UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 0
+        return CGFloat(tile > 0 ? tile : 48) * 0.94 / CGFloat(BasketArt.shared.width)
+    }
+
+    private func resizeCatWindow(to drawScale: CGFloat) {
+        let size = NSSize(width: CGFloat(Layout.canvasWidth) * drawScale,
+                          height: CGFloat(Layout.canvasHeight) * drawScale)
+        panel.setContentSize(size)
+        view.frame = NSRect(origin: .zero, size: size)
+        view.scale = drawScale
+    }
+
     private func applyScale() {
         let size = NSSize(width: CGFloat(Layout.canvasWidth) * scale,
                           height: CGFloat(Layout.canvasHeight) * scale)
@@ -660,32 +677,60 @@ final class CatController {
 
     // MARK: Fensterkanten
 
-    /// Sichtbare Oberkanten der offenen Fenster auf ihrem Bildschirm.
-    /// Die Fensterpositionen liefert macOS ohne Sonderrechte (nur Titel wären geschützt).
-    /// Ist ein Fenster im Vollbild oder in Split View, gibt es nichts zum Klettern.
-    private func findPerches() -> [Perch] {
-        guard let screen, let primary = primaryScreen,
+    /// Normale Fenster (Ebene 0) in Bildschirmkoordinaten, von vorne nach hinten –
+    /// ohne die eigenen und ohne die Vorschaubilder vom Stage Manager. Die meldet macOS als
+    /// winzige Fenster der jeweiligen App; zu jedem gibt es ein gleich großes „WindowManager“-Fenster.
+    private func visibleWindows() -> [(id: Int, rect: CGRect)] {
+        guard let primary = primaryScreen,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                     kCGNullWindowID) as? [[String: Any]]
         else { return [] }
-        let frame = screen.frame
         let ownPID = ProcessInfo.processInfo.processIdentifier
-
-        // von vorne nach hinten, in Bildschirmkoordinaten (y von unten, bezogen auf den Hauptbildschirm)
         var windows: [(id: Int, rect: CGRect)] = []
+        var thumbnails: [CGRect] = []
         for info in list {
             guard (info[kCGWindowLayer as String] as? Int) == 0,
-                  (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
-                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.1,
                   let id = info[kCGWindowNumber as String] as? Int,
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsInfo)
             else { continue }
             let rect = CGRect(x: bounds.minX, y: primary.frame.maxY - bounds.maxY,
                               width: bounds.width, height: bounds.height)
-            guard rect.width >= 120, rect.height >= 80, rect.intersects(frame) else { continue }
-            if rect.height >= frame.height - 2 { return [] } // Vollbild oder Split View
+            if (info[kCGWindowOwnerName as String] as? String) == "WindowManager" {
+                thumbnails.append(rect)
+                continue
+            }
+            guard (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
+                  (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.1
+            else { continue }
             windows.append((id, rect))
+        }
+        return windows.filter { window in
+            !thumbnails.contains { abs($0.minX - window.rect.minX) < 1.5 && abs($0.minY - window.rect.minY) < 1.5
+                && abs($0.width - window.rect.width) < 1.5 && abs($0.height - window.rect.height) < 1.5 }
+        }
+    }
+
+    /// Vollbild: volle Breite, reicht bis ganz unten und oben bis an den Rand
+    /// (bei Macs mit Notch bleibt oben der Streifen neben der Notch frei).
+    private func coversScreen(_ rect: CGRect, _ screen: NSScreen) -> Bool {
+        let frame = screen.frame
+        let topGap = max(screen.safeAreaInsets.top, 0) + 2
+        return abs(rect.minX - frame.minX) < 2 && abs(rect.width - frame.width) < 2
+            && abs(rect.minY - frame.minY) < 2 && rect.maxY >= frame.maxY - topGap
+    }
+
+    /// Sichtbare Oberkanten der offenen Fenster auf ihrem Bildschirm.
+    /// Die Fensterpositionen liefert macOS ohne Sonderrechte (nur Titel wären geschützt).
+    /// Ist ein Fenster im Vollbild oder in Split View, gibt es nichts zum Klettern.
+    private func findPerches() -> [Perch] {
+        guard let screen else { return [] }
+        let frame = screen.frame
+        var windows: [(id: Int, rect: CGRect)] = []
+        for window in visibleWindows() {
+            guard window.rect.width >= 120, window.rect.height >= 80, window.rect.intersects(frame) else { continue }
+            if coversScreen(window.rect, screen) || window.rect.height >= frame.height - 2 { return [] }
+            windows.append(window)
         }
         return Self.perches(on: windows, frame: frame, visible: screen.visibleFrame, scale: scale)
     }
@@ -750,25 +795,8 @@ final class CatController {
 
     /// Bedeckt ein Fenster den ganzen Bildschirm, läuft ein Programm im Vollbild (dann ist das Dock weg).
     private func detectFullscreen() -> Bool {
-        guard let screen, let primary = primaryScreen,
-              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
-                                                    kCGNullWindowID) as? [[String: Any]]
-        else { return false }
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        for info in list {
-            guard (info[kCGWindowLayer as String] as? Int) == 0,
-                  (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
-                  let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsInfo)
-            else { continue }
-            let rect = CGRect(x: bounds.minX, y: primary.frame.maxY - bounds.maxY,
-                              width: bounds.width, height: bounds.height)
-            if abs(rect.minX - screen.frame.minX) < 2, abs(rect.minY - screen.frame.minY) < 2,
-               abs(rect.width - screen.frame.width) < 2, abs(rect.height - screen.frame.height) < 2 {
-                return true
-            }
-        }
-        return false
+        guard let screen else { return false }
+        return visibleWindows().contains { coversScreen($0.rect, screen) }
     }
 
     /// Dock-Symbol ein- oder ausblenden.
@@ -793,7 +821,10 @@ final class CatController {
         }
         let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Pixelcat"
         brain.basketX = DockLocator.basketCenterX(appName: name, screen: primary)
-        brain.useBasket = brain.basketX != nil && (screen == primary)
+        // Ins Körbchen steigen geht nur, wenn das Dock unten zu sehen ist
+        let dockHeight = primary.visibleFrame.minY - primary.frame.minY
+        brain.basketFloorY = primary.frame.minY + dockHeight * 0.22
+        brain.useBasket = brain.basketX != nil && (screen == primary) && dockHeight > 20 && !isFullscreen
     }
 
     /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
@@ -954,7 +985,14 @@ final class CatController {
         if !panel.isVisible { panel.orderFrontRegardless() }
 
         // visibleFrame endet unten an der Oberkante des Docks – genau da läuft die Katze
-        panel.setFrameOrigin(NSPoint(x: brain.x.rounded(), y: brain.y.rounded()))
+        // Beim Hinein- und Heraussteigen steht sie vor dem Dock und schrumpft bzw. wächst
+        // zwischen normaler Größe und der Größe im Dock-Symbol
+        let drawScale = brain.isAboveDock ? scale + (basketCatScale - scale) * brain.basketShrink : scale
+        if view.scale != drawScale { resizeCatWindow(to: drawScale) }
+        let level: NSWindow.Level = brain.isAboveDock ? Self.aboveDockLevel : .floating
+        if panel.level != level { panel.level = level }
+        let half = CGFloat(Layout.canvasWidth) / 2
+        panel.setFrameOrigin(NSPoint(x: (brain.x + half * scale - half * drawScale).rounded(), y: brain.y.rounded()))
         let look = brain.look
         if look != view.look { view.look = look }
 
