@@ -1,6 +1,6 @@
 import AppKit
 
-/// Menüleisten-App: Katzensymbol oben rechts mit Menü zum Ein-/Ausschalten.
+/// Menüleisten-App: Katzensymbol oben rechts mit Menü für alles Weitere.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let sizes: [(name: String, scale: CGFloat)] = [
@@ -10,15 +10,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var cat: CatController!
     private var toggleItem: NSMenuItem!
+    private var pomodoroItem: NSMenuItem!
+    private var pomodoroInfoItem: NSMenuItem!
+    private var reminderItem: NSMenuItem!
+    private var feedItem: NSMenuItem!
+    private var playItem: NSMenuItem!
+    private var startleItem: NSMenuItem!
+    private var sleepItem: NSMenuItem!
     private var sizeItems: [NSMenuItem] = []
     private var coatItems: [NSMenuItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let defaults = UserDefaults.standard
-        defaults.register(defaults: ["scale": 3.0, "coat": Coat.black.rawValue])
+        defaults.register(defaults: ["scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false])
         let coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
         cat = CatController(scale: defaults.double(forKey: "scale"), coat: coat)
+        cat.breakReminders = defaults.bool(forKey: "breakReminders")
         setUpStatusItem()
+        cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         cat.show()
     }
 
@@ -31,16 +40,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = Frames.menuBarIcon()
+        statusItem.button?.imagePosition = .imageLeft
         statusItem.button?.toolTip = "Pixelkatze"
 
         let menu = NSMenu()
         menu.delegate = self
+        menu.autoenablesItems = false
 
         toggleItem = item("Katze ausblenden", #selector(toggleCat), key: "k")
         menu.addItem(toggleItem)
         menu.addItem(.separator())
-        menu.addItem(item("Aufscheuchen", #selector(startle)))
-        menu.addItem(item("Schlafen legen", #selector(goToSleep)))
+
+        pomodoroItem = item("Pomodoro starten", #selector(togglePomodoro))
+        menu.addItem(pomodoroItem)
+        pomodoroInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        pomodoroInfoItem.isEnabled = false
+        menu.addItem(pomodoroInfoItem)
+        reminderItem = item("Pausen-Erinnerung", #selector(toggleReminders))
+        menu.addItem(reminderItem)
+        menu.addItem(.separator())
+
+        feedItem = item("Füttern", #selector(feed))
+        menu.addItem(feedItem)
+        playItem = item("Mit Wollknäuel spielen", #selector(togglePlaying))
+        menu.addItem(playItem)
+        startleItem = item("Aufscheuchen", #selector(startle))
+        menu.addItem(startleItem)
+        sleepItem = item("Schlafen legen", #selector(goToSleep))
+        menu.addItem(sleepItem)
         menu.addItem(.separator())
 
         let coatMenu = NSMenu()
@@ -80,8 +107,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    /// Restzeit des Pomodoro neben dem Katzenkopf in der Menüleiste.
+    private func showStatus(_ text: String?) {
+        guard let button = statusItem.button else { return }
+        guard let text else {
+            button.attributedTitle = NSAttributedString()
+            return
+        }
+        button.attributedTitle = NSAttributedString(string: " " + text, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular),
+        ])
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         toggleItem.title = cat.isVisible ? "Katze ausblenden" : "Katze einblenden"
+
+        if let pomodoro = cat.pomodoro {
+            pomodoroItem.title = "Pomodoro beenden"
+            pomodoroItem.state = .on
+            let minutes = max(1, Int((pomodoro.ends.timeIntervalSinceNow / 60).rounded(.up)))
+            pomodoroInfoItem.title = pomodoro.stage == .focus
+                ? "Fokus: noch \(minutes) Min. – die Katze schläft"
+                : "Pause: noch \(minutes) Min. – Zeit zum Strecken"
+            pomodoroInfoItem.isHidden = false
+        } else {
+            pomodoroItem.title = "Pomodoro starten"
+            pomodoroItem.state = .off
+            pomodoroInfoItem.isHidden = true
+        }
+        reminderItem.state = cat.breakReminders ? .on : .off
+        reminderItem.isEnabled = cat.pomodoro == nil
+
+        // Während der Fokuszeit schläft die Katze – dann gibt es nichts zu füttern oder zu spielen
+        let awake = !cat.isInFocus
+        feedItem.isEnabled = awake
+        playItem.isEnabled = awake
+        playItem.state = cat.isPlaying ? .on : .off
+        startleItem.isEnabled = awake
+        sleepItem.isEnabled = awake
+
         for item in sizeItems {
             item.state = Self.sizes[item.tag].scale == cat.scale ? .on : .off
         }
@@ -90,13 +154,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc private func changeCoat(_ sender: NSMenuItem) {
-        cat.coat = Coat.allCases[sender.tag]
-        UserDefaults.standard.set(cat.coat.rawValue, forKey: "coat")
-    }
-
     @objc private func toggleCat() {
         cat.isVisible ? cat.hide() : cat.show()
+    }
+
+    @objc private func togglePomodoro() {
+        cat.show()
+        cat.pomodoro == nil ? cat.startPomodoro() : cat.stopPomodoro()
+    }
+
+    @objc private func toggleReminders() {
+        cat.breakReminders.toggle()
+        UserDefaults.standard.set(cat.breakReminders, forKey: "breakReminders")
+    }
+
+    @objc private func feed() {
+        cat.show()
+        cat.feed()
+    }
+
+    @objc private func togglePlaying() {
+        cat.show()
+        cat.setPlaying(!cat.isPlaying)
     }
 
     @objc private func startle() {
@@ -107,6 +186,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func goToSleep() {
         cat.show()
         cat.goToSleep()
+    }
+
+    @objc private func changeCoat(_ sender: NSMenuItem) {
+        cat.coat = Coat.allCases[sender.tag]
+        UserDefaults.standard.set(cat.coat.rawValue, forKey: "coat")
     }
 
     @objc private func changeSize(_ sender: NSMenuItem) {

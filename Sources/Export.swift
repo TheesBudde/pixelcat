@@ -16,39 +16,26 @@ enum Exporter {
         }
     }
 
-    /// Alle Posen in allen Fellfarben (eine Zeile pro Farbe) plus das Menüleisten-Symbol.
-    static func exportPreview(to path: String) throws {
-        let scale: CGFloat = 5
+    /// Alle Posen in einer Fellfarbe (7 pro Zeile), darunter Napf und Wollknäuel.
+    static func exportPreview(to path: String, coat: Coat) throws {
+        let scale: CGFloat = 6
         let cell = 28
+        let columns = 7
         let frames = Frames.all
-        let width = (frames.count * cell + 2) * Int(scale)
-        let height = (Coat.allCases.count * cell + 24) * Int(scale)
+        let rows = (frames.count + columns - 1) / columns + 1
+        let width = columns * cell * Int(scale)
+        let height = rows * cell * Int(scale)
         let data = try png(width: width, height: height) { ctx in
             ctx.setFillColor(CGColor(gray: 0.45, alpha: 1))
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            for (row, coat) in Coat.allCases.reversed().enumerated() {
-                for (col, sprite) in frames.enumerated() {
-                    sprite.draw(in: ctx, x: CGFloat(col * cell + 2), y: CGFloat(row * cell + 24 + 2),
-                                scale: scale, coat: coat)
-                }
+            for (i, sprite) in frames.enumerated() {
+                let x = CGFloat((i % columns) * cell + 2)
+                let y = CGFloat((rows - 1 - i / columns) * cell + 2)
+                sprite.draw(in: ctx, x: x, y: y, scale: scale, colors: coat.colors)
             }
-            // Menüleisten-Symbol in 1×, 2× und groß, auf hellem und dunklem Grund
-            let icon = Frames.menuBarIcon()
-            for (i, (factor, dark)) in [(1.0, false), (2.0, false), (6.0, false), (1.0, true), (2.0, true), (6.0, true)].enumerated() {
-                let box = CGRect(x: 10 + CGFloat(i) * 150 * scale / 5, y: 10, width: 20 * factor + 16, height: 16 * factor + 16)
-                ctx.setFillColor(dark ? CGColor(gray: 0.15, alpha: 1) : CGColor(gray: 0.93, alpha: 1))
-                ctx.fill(box)
-                let tinted = NSImage(size: icon.size, flipped: false) { rect in
-                    icon.draw(in: rect)
-                    (dark ? NSColor.white : NSColor.black).set()
-                    rect.fill(using: .sourceAtop)
-                    return true
-                }
-                var rect = CGRect(x: box.minX + 8, y: box.minY + 8, width: 20 * factor, height: 16 * factor)
-                if let cg = tinted.cgImage(forProposedRect: &rect, context: nil, hints: nil) {
-                    ctx.interpolationQuality = .high
-                    ctx.draw(cg, in: CGRect(x: box.minX + 8, y: box.minY + 8, width: 20 * factor, height: 16 * factor))
-                }
+            let props = [Frames.bowlFull, Frames.bowlHalf, Frames.bowlEmpty, Frames.yarnA, Frames.yarnB]
+            for (i, sprite) in props.enumerated() {
+                sprite.draw(in: ctx, x: CGFloat(i * cell + 2), y: 2, scale: scale, colors: PropColors.colors)
             }
         }
         try data.write(to: URL(fileURLWithPath: path))
@@ -79,7 +66,7 @@ enum Exporter {
         if scale >= 2 { scale = scale.rounded(.down) }
         let originX = (size - CGFloat(sprite.width) * scale) / 2 / scale
         let originY = (rect.minY + groundHeight) / scale
-        sprite.draw(in: ctx, x: originX, y: originY, scale: scale, coat: .black)
+        sprite.draw(in: ctx, x: originX, y: originY, scale: scale, colors: Coat.black.colors)
     }
 
     private static func png(width: Int, height: Int, draw: (CGContext) -> Void) throws -> Data {

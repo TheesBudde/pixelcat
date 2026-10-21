@@ -8,7 +8,8 @@ if let i = arguments.firstIndex(of: "--export-icon"), i + 1 < arguments.count {
     exit(0)
 }
 if let i = arguments.firstIndex(of: "--export-preview"), i + 1 < arguments.count {
-    try Exporter.exportPreview(to: arguments[i + 1])
+    let coat = i + 2 < arguments.count ? Coat(rawValue: arguments[i + 2]) ?? .orange : .orange
+    try Exporter.exportPreview(to: arguments[i + 1], coat: coat)
     exit(0)
 }
 

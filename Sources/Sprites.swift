@@ -22,28 +22,41 @@ enum Coat: String, CaseIterable {
         }
     }
 
-    private static let orangeColors = palette([
+    private static let orangeColors = rgbPalette([
         "K": 0x2B1D16, "O": 0xF2A14B, "h": 0xF6B263, "s": 0xC96F2E, "W": 0xFFF4E2,
         "E": 0x2E5E2A, "c": 0x2B1D16, "P": 0xF49AAE,
     ])
 
-    private static let blackColors = palette([
+    private static let blackColors = rgbPalette([
         "K": 0x0B0A0F, "O": 0x26232E, "h": 0x4B4659, "s": 0x26232E, "W": 0x26232E,
         "E": 0x7BC95A, "c": 0x6A6480, "P": 0x7A7584, "w": 0x8E889C,
     ])
 
-    private static let grayColors = palette([
+    private static let grayColors = rgbPalette([
         "K": 0x1E1F25, "O": 0x8D9099, "h": 0xA8ABB3, "s": 0x6A6D76, "W": 0xEDEEF1,
         "E": 0xE3AE45, "c": 0x3E4048, "P": 0xD9A0AD, "w": 0xEDEEF1,
     ])
+}
 
-    private static func palette(_ hex: [Character: UInt32]) -> [Character: CGColor] {
-        hex.mapValues { value in
-            CGColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
-                    green: CGFloat((value >> 8) & 0xFF) / 255,
-                    blue: CGFloat(value & 0xFF) / 255,
-                    alpha: 1)
-        }
+/// Farben für Napf und Wollknäuel – unabhängig von der Fellfarbe.
+enum PropColors {
+    static let colors = rgbPalette([
+        "K": 0x2B1D16, // Umriss
+        "B": 0xD9534F, // Napf
+        "b": 0xA83A37, // Napf, Schatten
+        "F": 0xA8733F, // Futter
+        "f": 0x6E4826, // Futter, dunkel
+        "R": 0xE7698F, // Wolle
+        "r": 0xB23C68, // Wolle, Fäden
+    ])
+}
+
+func rgbPalette(_ hex: [Character: UInt32]) -> [Character: CGColor] {
+    hex.mapValues { value in
+        CGColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
+                green: CGFloat((value >> 8) & 0xFF) / 255,
+                blue: CGFloat(value & 0xFF) / 255,
+                alpha: 1)
     }
 }
 
@@ -102,8 +115,7 @@ final class Sprite {
     }
 
     /// Zeichnet das Bild; `x`/`y` sind die linke untere Ecke in Pixeleinheiten.
-    func draw(in ctx: CGContext, x: CGFloat, y: CGFloat, scale: CGFloat, coat: Coat) {
-        let colors = coat.colors
+    func draw(in ctx: CGContext, x: CGFloat, y: CGFloat, scale: CGFloat, colors: [Character: CGColor]) {
         for row in 0..<height {
             for col in 0..<width {
                 guard let color = colors[pixel(col, row)] else { continue }
@@ -159,7 +171,56 @@ enum Frames {
         "...KKK.KKK..KKK.KKK.....",
     ])
 
-    static let sit = Sprite([
+    /// Tatze nach vorn – schlägt nach dem Wollknäuel.
+    static let bat = Sprite(Array(upperBody[0...8]) + [
+        "..KOOsOOsOOsOOOOOKKKKK..",
+        "..KOWWWWWWWWWWWOOOOWWK..",
+        "..KKKKKKKKKKKKKKKKKKKK..",
+        "...KOK.KOK..KOK.........",
+        "...KWK.KWK..KWK.........",
+        "...KKK.KKK..KKK.........",
+    ])
+
+    /// Kopf unten im Napf, Augen zu.
+    private static let eatRows = [
+        ".KKK....................",
+        "KhOK....................",
+        "KhK.....................",
+        "KsK.....................",
+        "KOKKKKKKKKKKKKK.K....K..",
+        ".KOhhhhhhhhhhhhKPKKKKPK.",
+        "..KOOsOOsOOsOOOKhhhhhhK.",
+        "..KOOsOOsOOsOOOKOcOOcOK.",
+        "..KOWWWWWWWWWWOKOWPPWOKw",
+        "..KKKKKKKKKKKKKKWWWWWWK.",
+        "...KOK.KOK..KOK.KOKKKKK.",
+        "...KWK.KWK..KWK.KWK.....",
+        "...KKK.KKK..KKK.KKK.....",
+    ]
+    static let eatA = Sprite(eatRows)
+    static let eatB = Sprite(eatRows.enumerated().map { i, row in
+        i == 8 ? "..KOWWWWWWWWWWOKOWKKWOKw" : row // kauen
+    })
+
+    /// Vorne runter, Po hoch: ausgiebiges Strecken.
+    static let stretch = Sprite([
+        ".KKK....................",
+        "KhOK....................",
+        "KhK.....................",
+        "KsKKKKK.................",
+        "KOKhhhhKKK.....K....K...",
+        ".KOOOOOOhhKKKKKPKKKKPK..",
+        "..KOOsOOsOOhhhKhhhhhhK..",
+        "..KOOOOOOOOOOOKOEOOEOK..",
+        "..KOWWWWWWWWOOKOEOOEOK..",
+        "..KKKKKKKKKOOOKOWPPWOKw.",
+        "...KOK.KOKKOOOKWWWWWWKw.",
+        "...KOK.KOK.KKKKKKKKKKKKK",
+        "...KWK.KWK.KOOOOOOOOWWWK",
+        "...KKK.KKK.KKKKKKKKKKKKK",
+    ]).withClosedEyes
+
+    private static let sitRows = [
         "...............K....K...",
         "..............KPKKKKPK..",
         "..............KhhhhhhK..",
@@ -176,7 +237,47 @@ enum Frames {
         ".KKKKKKKKOOOOOKWK.......",
         "KhhhsOOOOOOOOOKWK.......",
         "KKKKKKKKKKKKKKKKK.......",
-    ])
+    ]
+    static let sit = Sprite(sitRows)
+
+    /// Ersetzt einzelne Zeilen der Sitzpose.
+    private static func sitVariant(_ rows: [Int: String]) -> Sprite {
+        Sprite(sitRows.enumerated().map { i, row in rows[i] ?? row })
+    }
+
+    static let yawn = sitVariant([
+        5: ".............wKOWKKWOKw.",
+        6: "...........KKKKWKPPKWKw.",
+        7: "..........KhhhOKWKKWK...",
+    ]).withClosedEyes
+
+    /// Pfote zum Maul heben und ablecken.
+    private static let groomPaw = [
+        7: "..........KhhhOKWKWKK...",
+        8: ".........KhOOsOOKKWK....",
+        9: "........KhOOOsOOKOK.....",
+    ]
+    static let groomA = sitVariant(groomPaw.merging([6: "...........KKKKWWKPKWKw."]) { $1 }).withClosedEyes
+    static let groomB = sitVariant(groomPaw.merging([6: "...........KKKKWWKWKWKw."]) { $1 }).withClosedEyes
+
+    /// Pfote über Gesicht und Ohr streichen.
+    private static let headWashPaw = [
+        2: "..............KhhhhhhKWK",
+        3: "..............KOEOOEOKWK",
+        4: "..............KOEOOEOKWK",
+        5: ".............wKOWPPWOKWK",
+        6: "...........KKKKWWWWWWKWK",
+        7: "..........KhhhOKWWWWKWK.",
+        8: ".........KhOOsOOKKKKWK..",
+        9: "........KhOOOsOOWKWK....",
+    ]
+    static let headWashA = sitVariant(headWashPaw.merging([
+        0: "...............K....KKKK",
+        1: "..............KPKKKKPKWK",
+    ]) { $1 }).withClosedEyes
+    static let headWashB = sitVariant(headWashPaw.merging([
+        1: "..............KPKKKKPKKK",
+    ]) { $1 }).withClosedEyes
 
     // Im Liegen liegt der Schwanz hinten auf dem Boden (unten links).
     static let lie = Sprite([
@@ -220,6 +321,25 @@ enum Frames {
         "KhshOOOOOOOOOOOOKWWKWWK.",
         "KKKKKKKKKKKKKKKKKKKKKKK.",
     ])
+
+    /// Auf dem Rücken, Pfoten in der Luft, Kopf verkehrt herum.
+    private static let backRoll = Sprite([
+        "..KKK.KKK.KKKKKK........",
+        "..KWK.KWK.KWKKWK.KKKKKK.",
+        "..KOK.KOK.KOKKOKKWWWWWWK",
+        ".KKKKKKKKKKKKKKKKOWPPWOK",
+        "KWWWWWWWWWWWWWWOKOEOOEOK",
+        "KOOOOOOOOOOOOOOOKOEOOEOK",
+        "KOOsOOsOOsOOOOOOKhhhhhhK",
+        ".KOOOOOOOOOOOOOOKPKKKKPK",
+        "..KKKKKKKKKKKKKK.K....K.",
+    ])
+    static let rollA = backRoll.withHappyEyes
+    /// Vorderpfoten eingeknickt: Die Pfoten rutschen eine Zeile tiefer.
+    static let rollB = rollA.mapped { x, y, c in
+        guard (10...15).contains(x), y <= 2 else { return c }
+        return y == 0 ? "." : rollA.pixel(x, y - 1)
+    }
 
     /// Schwanzspitze leicht angehoben (ersetzt die unteren linken 4×4 Pixel einer Liegepose).
     private static let tailUpPatch = [
@@ -271,9 +391,54 @@ enum Frames {
     static let petLieNuzzle = lieNuzzle.withHappyEyes
 
     static let all: [Sprite] = [
-        stand, walkA, walkB, standBlink, sit, lie, lieTailUp, sleepA, sleepBTailUp,
-        startled, petStandTall, petLie, petLieNuzzle,
+        stand, walkA, walkB, sit, yawn, stretch,
+        groomA, groomB, headWashA, headWashB, lie, lieTailUp,
+        sleepB, rollA, rollB, eatA, eatB, bat,
+        startled, petStandTall, petLieNuzzle,
     ]
+
+    // MARK: Napf und Wollknäuel
+
+    static let bowlFull = Sprite([
+        "...fFFfFF...",
+        ".KFFfFFfFFK.",
+        "KBBBBBBBBBBK",
+        ".KBBBBBBbbK.",
+        "..KKKKKKKK..",
+    ])
+    static let bowlHalf = Sprite([
+        "............",
+        ".KKKfFFfKKK.",
+        "KBBBBBBBBBBK",
+        ".KBBBBBBbbK.",
+        "..KKKKKKKK..",
+    ])
+    static let bowlEmpty = Sprite([
+        "............",
+        ".KKKKKKKKKK.",
+        "KBBBBBBBBBBK",
+        ".KBBBBBBbbK.",
+        "..KKKKKKKK..",
+    ])
+
+    static let yarnA = Sprite([
+        "..KKK..",
+        ".KRrRK.",
+        "KRRrRRK",
+        "KrRRRrK",
+        "KRRrRRK",
+        ".KRrRK.",
+        "..KKK..",
+    ])
+    static let yarnB = Sprite([
+        "..KKK..",
+        ".KrRRK.",
+        "KRrRRrK",
+        "KRRrRRK",
+        "KrRRrRK",
+        ".KRRrK.",
+        "..KKK..",
+    ])
 
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.
     /// Als Vorlagenbild färbt macOS ihn passend zum hellen/dunklen Modus.
