@@ -18,6 +18,10 @@ Schwanzspitze.
   zu Fenster und hält dort auch ihre Nickerchen. Nur selten kommt sie freiwillig herunter. Verschiebst du ein Fenster, fährt sie mit;
   schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
   Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
+- **Streifzug:** Die Katze geht nach draußen und ist nicht mehr zu sehen. Nur wenn Pause ist
+  (Pomodoro-Pause oder Pausen-Erinnerung), kommt sie herein, läuft in die Bildschirmmitte, streckt
+  sich, miaut und bummelt dort 5 Minuten herum. Danach geht sie wieder. Ohne Streifzug ist sie
+  wie gewohnt die ganze Zeit da.
 - **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
   bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
@@ -43,6 +47,7 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 | Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
 | Miauen | Katzenlaute bei Pomodoro und Pausen-Erinnerung (an/aus) |
 | Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |
+| Streifzug – kommt nur zur Pause | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
 | Füttern | Napf hinstellen |
 | Mit Wollknäuel spielen | Knäuel an/aus – mit der Maus greifen und werfen |
 | Aufscheuchen | Wie ein Klick auf die Katze |

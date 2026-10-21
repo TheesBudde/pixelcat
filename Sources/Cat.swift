@@ -122,6 +122,8 @@ final class CatBrain {
         case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled, petted
         case stretching, yawning, grooming, headWashing, backRolling, eating, chasing, batting, watching
         case climbingUp, climbingDown, jumping, falling
+        /// Auf Streifzug: außerhalb des Bildschirms
+        case away
     }
 
     enum Mode {
@@ -154,6 +156,8 @@ final class CatBrain {
 
     private enum Goal {
         case wander, bowl, center
+        /// Streifzug: aus dem Bild hinaus bzw. zurück aufs Dock
+        case exit, comeBack
         case climbUp(Wall)
         case climbDown(Wall)
         /// Am Ziel abspringen – die Landestelle steht als Mitte der Katze (Bildschirm-x) drin
@@ -188,12 +192,34 @@ final class CatBrain {
         didSet {
             if !climbingEnabled {
                 leaveWindows()
-            } else if !oldValue {
+            } else if !oldValue, !roaming {
                 headForWindows()
             }
         }
     }
     private(set) var perches: [Perch] = []
+
+    /// Streifzug: Die Katze ist draußen unterwegs und schaut nur zu Pausen vorbei.
+    var roaming = false {
+        didSet {
+            guard roaming != oldValue else { return }
+            if roaming {
+                visitTimeLeft = 0
+                leaveScreen()
+            } else {
+                returnToScreen()
+            }
+        }
+    }
+    /// Restzeit eines Pausenbesuchs (unendlich: bis die Pomodoro-Pause vorbei ist)
+    private var visitTimeLeft = 0.0
+    private var isVisiting: Bool { visitTimeLeft > 0 }
+    /// Läuft gerade aus dem Bild hinaus oder herein – dann gelten die Bildschirmgrenzen nicht
+    private var offscreenAllowed = false
+    var isAway: Bool { phase == .away }
+    /// Im Streifzug und gerade kein Pausenbesuch
+    var isOutAndAbout: Bool { roaming && !isVisiting }
+    private var mayClimb: Bool { climbingEnabled && !roaming }
 
     private var goal: Goal = .wander
     private var targetX: CGFloat = 0
@@ -236,6 +262,10 @@ final class CatBrain {
         animTime += dt
         updateBlink(dt)
         updateTail(dt)
+        if isVisiting {
+            visitTimeLeft -= dt
+            if visitTimeLeft <= 0 { leaveScreen() }
+        }
         if !isAirborne {
             if let perch = currentPerch {
                 y = perch.y
@@ -303,7 +333,7 @@ final class CatBrain {
     }
 
     func startle() {
-        guard mode != .focus, phase != .startled, phase != .fleeing, phase != .jumping, phase != .falling else {
+        guard mode != .focus, phase != .away, phase != .startled, phase != .fleeing, phase != .jumping, phase != .falling else {
             return
         }
         if phase == .climbingUp || phase == .climbingDown {
@@ -315,7 +345,7 @@ final class CatBrain {
     }
 
     func goToSleep() {
-        guard !isAirborne, ![.sleeping, .lyingDown, .sittingDown, .backRolling].contains(phase) else { return }
+        guard !isAirborne, phase != .away, ![.sleeping, .lyingDown, .sittingDown, .backRolling].contains(phase) else { return }
         walksBeforeNap = 0
         goal = .wander
         enter(.sittingDown, for: 1.0)
@@ -324,7 +354,7 @@ final class CatBrain {
     /// Wird aufgerufen, solange die Maus über die Katze streicht.
     func stroke() {
         timeSinceStroke = 0
-        guard !isAirborne, phase != .petted, phase != .startled, phase != .fleeing else { return }
+        guard !isAirborne, phase != .away, phase != .petted, phase != .startled, phase != .fleeing else { return }
         pettedWhileLying = mode == .focus
             || [.sittingDown, .lyingDown, .sleeping, .wakingUp, .backRolling].contains(phase)
         goal = .wander
@@ -349,6 +379,10 @@ final class CatBrain {
     /// Pausen-Erinnerung: zur Bildschirmmitte laufen und sich strecken.
     func remindToTakeBreak() {
         guard mode == .normal else { return }
+        if roaming {
+            startVisit(for: 5 * 60)
+            return
+        }
         reminderPending = true
         noticeSomething()
     }
@@ -426,17 +460,21 @@ final class CatBrain {
             } else {
                 startFleeing()
             }
-        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling:
+        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away:
             break
         }
     }
 
     /// Was als Nächstes? Wird aus dem Stehen heraus entschieden.
     private func decideNext() {
+        if isOutAndAbout {
+            leaveScreen()
+            return
+        }
         let needsDock = (bowl?.food ?? 0) > 0 || reminderPending || ball != nil
         if mode == .focus {
             enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
-        } else if perchID != nil, needsDock || !climbingEnabled {
+        } else if perchID != nil, needsDock || !mayClimb {
             leaveWindows()
         } else if let bowl, bowl.food > 0 {
             walk(mouthTo: bowl.x, goal: .bowl, speed: 70 * unit)
@@ -446,10 +484,10 @@ final class CatBrain {
             walk(to: (minX + maxX) / 2, speed: 60 * unit)
         } else if ball != nil {
             enter(.chasing)
-        } else if mode == .focusBreak || walksBeforeNap > 0 {
-            if climbingEnabled, climbingStep() { return }
+        } else if mode == .focusBreak || isVisiting || walksBeforeNap > 0 {
+            if mayClimb, climbingStep() { return }
             startWalking()
-        } else if climbingEnabled, perchID == nil, climbOntoWindow() {
+        } else if mayClimb, perchID == nil, climbOntoWindow() {
             // Fürs Nickerchen lieber hinauf aufs Fenster
         } else {
             enter(.sittingDown, for: .random(in: 1.0...1.8))
@@ -474,8 +512,14 @@ final class CatBrain {
                 enter(.standing, for: 0.5)
             }
         case .center:
+            offscreenAllowed = false
             breakRoutine = true
             enter(.stretching, for: 2.2)
+        case .exit:
+            enter(.away, for: .infinity)
+        case .comeBack:
+            offscreenAllowed = false
+            enter(.standing, for: .random(in: 0.5...1.2))
         case .wander:
             walksBeforeNap -= 1
             if Double.random(in: 0..<1) < 0.2 {
@@ -503,6 +547,16 @@ final class CatBrain {
     }
 
     private func modeChanged(from oldMode: Mode) {
+        if roaming {
+            // Im Streifzug: Pause = Besuch in der Bildschirmmitte, sonst draußen
+            if mode == .focusBreak {
+                startVisit(for: .infinity)
+            } else if mode == .focus || visitTimeLeft.isInfinite {
+                visitTimeLeft = 0
+                leaveScreen()
+            }
+            return
+        }
         switch mode {
         case .focus:
             goal = .wander
@@ -547,7 +601,8 @@ final class CatBrain {
     }
 
     private func clampX(_ value: CGFloat) -> CGFloat {
-        min(max(value, walkRange.lowerBound), walkRange.upperBound)
+        guard !offscreenAllowed else { return value }
+        return min(max(value, walkRange.lowerBound), walkRange.upperBound)
     }
 
     private func walk(to windowX: CGFloat, speed: CGFloat) {
@@ -566,7 +621,12 @@ final class CatBrain {
     }
 
     private func startWalking() {
-        let range = walkRange
+        var range = walkRange
+        if isVisiting {
+            // Beim Pausenbesuch bleibt sie in der Bildschirmmitte
+            let middle = (minX + maxX) / 2, span = (maxX - minX) * 0.2
+            range = max(range.lowerBound, middle - span)...min(range.upperBound, middle + span)
+        }
         guard range.upperBound > range.lowerBound + 10 else {
             enter(.standing, for: 1)
             walksBeforeNap -= 1
@@ -596,6 +656,66 @@ final class CatBrain {
         speed = temperament.fleeSpeed * unit
         facingRight = right
         enter(.fleeing)
+    }
+
+    // MARK: Streifzug
+
+    /// Linke Fensterkante, bei der die Katze ganz außerhalb des Bildes ist.
+    private func offscreenX(left: Bool) -> CGFloat {
+        left ? minX - 26 * scale : maxX + 26 * scale
+    }
+
+    /// Beim Programmstart im Streifzug: gleich draußen sein.
+    func startOutside() {
+        offscreenAllowed = true
+        x = offscreenX(left: true)
+        enter(.away, for: .infinity)
+    }
+
+    /// Zum nächsten Bildschirmrand hinauslaufen.
+    private func leaveScreen() {
+        guard phase != .away, !isAirborne else { return } // in der Luft: nach der Landung
+        if case .exit = goal, phase == .walking { return }
+        if perchID != nil {
+            leaveWindows()
+            return
+        }
+        switch phase {
+        case .sleeping, .lyingDown, .backRolling:
+            enter(.wakingUp, for: 1.0)
+            return
+        case .startled, .fleeing:
+            return // erst zu Ende rennen
+        default:
+            break
+        }
+        let toLeft = x < (minX + maxX) / 2
+        offscreenAllowed = true
+        goal = .exit
+        walk(to: offscreenX(left: toLeft), speed: 70 * unit)
+    }
+
+    /// Streifzug beendet: von der Seite zurück aufs Dock.
+    private func returnToScreen() {
+        visitTimeLeft = 0
+        var isLeaving = phase == .away
+        if case .exit = goal { isLeaving = true }
+        guard isLeaving else { return }
+        if phase == .away { x = offscreenX(left: Bool.random()) }
+        walksBeforeNap = temperament.walks.randomElement() ?? 1
+        goal = .comeBack
+        walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
+    }
+
+    /// Pausenbesuch: von der Seite herein, in die Mitte, strecken und gähnen – und eine Weile bleiben.
+    private func startVisit(for duration: Double) {
+        visitTimeLeft = duration
+        reminderPending = false
+        guard !isAirborne, perchID == nil else { return }
+        if phase == .away { x = offscreenX(left: Bool.random()) }
+        offscreenAllowed = true
+        goal = .center
+        walk(to: (minX + maxX) / 2, speed: 65 * unit)
     }
 
     // MARK: Klettern
@@ -1041,7 +1161,7 @@ final class CatBrain {
             look.sprite = alternate(Frames.climbDownA, Frames.climbDownB, every: 0.16)
             look.facingRight = !(wall?.wallOnRight ?? false)
             look.drawX = Layout.climbX
-        case .jumping, .falling:
+        case .jumping, .falling, .away:
             look.sprite = Frames.walkA
         }
         return look

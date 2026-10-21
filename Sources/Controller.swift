@@ -174,6 +174,21 @@ final class CatController {
     var sounds = true
 
     var isPlaying: Bool { ball != nil }
+
+    /// Streifzug: Die Katze ist draußen und kommt nur zu Pausen vorbei.
+    var roaming: Bool {
+        get { brain.roaming }
+        set { brain.roaming = newValue }
+    }
+    /// Im Streifzug unterwegs (kein Pausenbesuch) – dann gibt es nichts zu füttern oder zu spielen
+    var isOutAndAbout: Bool { brain.isOutAndAbout }
+
+    /// Beim Start im Streifzug gleich draußen sein, statt erst hinauszulaufen.
+    func startRoamingOutside() {
+        brain.roaming = true
+        updateBounds()
+        brain.startOutside()
+    }
     var isInFocus: Bool { pomodoro?.stage == .focus }
 
     /// Zum Vorführen: immer Nachmittag (aktive Katze) und viel Klettern.
@@ -210,7 +225,7 @@ final class CatController {
         }
         tick()
         bowlWindow?.panel.orderFrontRegardless()
-        panel.orderFrontRegardless()
+        if !brain.isAway { panel.orderFrontRegardless() }
         ballWindow?.panel.orderFrontRegardless()
     }
 
@@ -228,7 +243,7 @@ final class CatController {
     func goToSleep() { brain.goToSleep() }
 
     func feed() {
-        guard let frame = screen?.frame, !isInFocus else { return }
+        guard let frame = screen?.frame, !isInFocus, !brain.isAway else { return }
         if let bowl, bowl.food > 0 { return }
         // Irgendwo ins mittlere Drittel bis Fünftel, nicht direkt unter die Katze
         var x = frame.minX
@@ -251,7 +266,7 @@ final class CatController {
 
     func setPlaying(_ playing: Bool) {
         if playing {
-            guard ball == nil, !isInFocus, let frame = screen?.frame else { return }
+            guard ball == nil, !isInFocus, !brain.isAway, let frame = screen?.frame else { return }
             // Das Knäuel kommt von oben hereingefallen, ein Stück neben der Katze
             let side: CGFloat = catCenter < frame.midX ? 1 : -1
             let ball = Ball(x: min(max(catCenter + side * 160 * scale / 3, frame.minX + 40), frame.maxX - 40))
@@ -491,7 +506,16 @@ final class CatController {
             if bowl.emptyFor > 12 { removeBowl() }
         }
 
+        // Draußen auf Streifzug: Fenster weg (sonst tauchte es auf einem Nachbarbildschirm auf),
+        // liegengebliebenes Spielzeug wird weggeräumt
+        if brain.isAway {
+            if ball != nil { setPlaying(false) }
+            if bowl != nil { removeBowl() }
+            if panel.isVisible { panel.orderOut(nil) }
+            return
+        }
         guard isVisible else { return }
+        if !panel.isVisible { panel.orderFrontRegardless() }
 
         // visibleFrame endet unten an der Oberkante des Docks – genau da läuft die Katze
         panel.setFrameOrigin(NSPoint(x: brain.x.rounded(), y: brain.y.rounded()))

@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var reminderItem: NSMenuItem!
     private var soundItem: NSMenuItem!
     private var climbItem: NSMenuItem!
+    private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
     private var startleItem: NSMenuItem!
@@ -25,13 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let defaults = UserDefaults.standard
         defaults.register(defaults: [
-            "scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false, "sounds": true, "climbing": false,
+            "scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false, "sounds": true, "climbing": false, "roaming": false,
         ])
         let coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
         cat = CatController(scale: defaults.double(forKey: "scale"), coat: coat)
         cat.breakReminders = defaults.bool(forKey: "breakReminders")
         cat.sounds = defaults.bool(forKey: "sounds")
         cat.climbing = defaults.bool(forKey: "climbing")
+        if defaults.bool(forKey: "roaming") { cat.startRoamingOutside() }
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
         setUpStatusItem()
@@ -72,6 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(soundItem)
         climbItem = item("Klettern", #selector(toggleClimbing))
         menu.addItem(climbItem)
+        roamItem = item("Streifzug – kommt nur zur Pause", #selector(toggleRoaming))
+        roamItem.toolTip = "Die Katze geht nach draußen und kommt nur zu Pomodoro-Pausen und Pausen-Erinnerungen in die Bildschirmmitte."
+        menu.addItem(roamItem)
 
         feedItem = item("Füttern", #selector(feed))
         menu.addItem(feedItem)
@@ -151,10 +156,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reminderItem.state = cat.breakReminders ? .on : .off
         soundItem.state = cat.sounds ? .on : .off
         climbItem.state = cat.climbing ? .on : .off
+        roamItem.state = cat.roaming ? .on : .off
         reminderItem.isEnabled = cat.pomodoro == nil
 
         // Während der Fokuszeit schläft die Katze – dann gibt es nichts zu füttern oder zu spielen
-        let awake = !cat.isInFocus
+        let awake = !cat.isInFocus && !cat.isOutAndAbout
         feedItem.isEnabled = awake
         playItem.isEnabled = awake
         playItem.state = cat.isPlaying ? .on : .off
@@ -183,6 +189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         UserDefaults.standard.set(cat.sounds, forKey: "sounds")
         // Zum Probehören
         if cat.sounds { Meow.play(.breakStarts) }
+    }
+
+    @objc private func toggleRoaming() {
+        cat.show()
+        cat.roaming.toggle()
+        UserDefaults.standard.set(cat.roaming, forKey: "roaming")
     }
 
     @objc private func toggleClimbing() {
