@@ -132,6 +132,10 @@ final class CatBrain {
         case climbingUp, climbingDown, jumping, falling
         /// Anschleichen an den Mauszeiger, Hinterteil wackeln – dann Sprung
         case stalking
+        /// Boden fällt weg (Vollbild): Vorderpfote ausstrecken, dann hinunterhopsen
+        case reachingDown
+        /// Boden steigt (zurück vom Vollbild): ducken, dann aufs Dock hinaufspringen
+        case reachingUp
         /// Auf Streifzug: außerhalb des Bildschirms
         case away
     }
@@ -155,6 +159,8 @@ final class CatBrain {
         case dock
         case perch(Int)
         case wall(Wall)
+        /// hinter dem Dock verschwinden – sie liegt jetzt im Körbchen
+        case basket
     }
 
     private struct Jump {
@@ -170,6 +176,8 @@ final class CatBrain {
         case exit, comeBack
         /// Zum Nachbarbildschirm hinüberlaufen (true = links)
         case otherScreen(Bool)
+        /// zum Körbchen im Dock laufen und hineinhüpfen
+        case intoBasket
         case climbUp(Wall)
         case climbDown(Wall)
         /// Am Ziel abspringen – die Landestelle steht als Mitte der Katze (Bildschirm-x) drin
@@ -282,7 +290,8 @@ final class CatBrain {
     var screenSwitchRequest: Bool?
     /// Braucht gerade flüssige 30 Bilder pro Sekunde (sonst darf der Takt sparen)
     var needsSmoothMotion: Bool {
-        [.walking, .fleeing, .chasing, .jumping, .falling, .climbingUp, .climbingDown, .stalking, .startled, .batting]
+        [.walking, .fleeing, .chasing, .jumping, .falling, .climbingUp, .climbingDown, .stalking, .startled, .batting,
+         .reachingDown, .reachingUp]
             .contains(phase)
     }
 
@@ -302,9 +311,19 @@ final class CatBrain {
 
     private var stalkWiggle = 0.0
     private var pounceFollowUp = false
+
+    /// Körbchen-Modus: Statt hinauszulaufen, hüpft sie ins Körbchen im Dock (Bildschirm-x der Körbchenmitte).
+    var basketX: CGFloat?
+    var useBasket = false
+    /// Höhe des Bodens beim letzten Takt – ändert sie sich (Vollbild), steigt sie hinunter bzw. hinauf
+    private var lastDockY: CGFloat?
+    /// Was nach dem Heraushüpfen aus dem Körbchen passieren soll
+    private var afterHop: (() -> Void)?
     private var center: CGFloat { x + CGFloat(Layout.canvasWidth) / 2 * scale }
     private var currentPerch: Perch? { perchID.flatMap(perch) }
-    private var isAirborne: Bool { [.climbingUp, .climbingDown, .jumping, .falling].contains(phase) }
+    private var isAirborne: Bool {
+        [.climbingUp, .climbingDown, .jumping, .falling, .reachingDown, .reachingUp].contains(phase)
+    }
     var isBeingPetted: Bool { phase == .petted }
 
     /// Abgelaufener Timer: Sie wartet in der Mitte, bis man sie streichelt oder anklickt.
@@ -328,6 +347,11 @@ final class CatBrain {
             visitTimeLeft -= dt
             if visitTimeLeft <= 0 { leaveScreen() }
         }
+        // Boden hat sich verschoben (Vollbild an/aus): nicht springen lassen, sondern hinunter-/hinaufsteigen
+        if let last = lastDockY, abs(dockY - last) > 3 * unit, perchID == nil, !isAirborne, phase != .away {
+            beginGroundChange(from: last)
+        }
+        lastDockY = dockY
         if !isAirborne {
             if let perch = currentPerch {
                 y = perch.y
@@ -555,6 +579,10 @@ final class CatBrain {
             } else {
                 startFleeing()
             }
+        case .reachingDown, .reachingUp:
+            let dir: CGFloat = facingRight ? 1 : -1
+            startJump(toX: clampX(x + dir * 14 * unit), toY: dockY, landing: .dock,
+                      arc: phase == .reachingDown ? 8 * unit : nil)
         case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away, .stalking:
             break
         }
@@ -622,6 +650,9 @@ final class CatBrain {
             enter(.stretching, for: Self.stretchLength)
         case .exit:
             enter(.away, for: .infinity)
+        case .intoBasket:
+            // hinter dem Dock verschwinden – ab ins Körbchen
+            startJump(toX: x, toY: dockY - 30 * scale, landing: .basket, arc: 14 * unit)
         case .otherScreen(let left):
             enter(.away, for: .infinity)
             screenSwitchRequest = left
@@ -821,6 +852,12 @@ final class CatBrain {
         default:
             break
         }
+        if useBasket, let basketX {
+            if case .intoBasket = goal, phase == .walking { return }
+            goal = .intoBasket
+            walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
+            return
+        }
         var toLeft = x < (minX + maxX) / 2
         // Lieber zu einer Seite ohne Nachbarbildschirm – sonst sähe man sie dort auftauchen
         if toLeft, neighborLeft, !neighborRight { toLeft = false }
@@ -835,11 +872,21 @@ final class CatBrain {
         visitTimeLeft = 0
         var isLeaving = phase == .away
         if case .exit = goal { isLeaving = true }
+        if case .intoBasket = goal { isLeaving = true }
         guard isLeaving else { return }
-        if phase == .away { x = offscreenX(left: entrySideIsLeft()) }
         walksBeforeNap = temperament.walks.randomElement() ?? 1
-        goal = .comeBack
-        walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
+        let wander = { [unowned self] in
+            goal = .comeBack
+            walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
+        }
+        if phase == .away {
+            if useBasket, basketX != nil {
+                emergeFromBasket(then: wander)
+                return
+            }
+            x = offscreenX(left: entrySideIsLeft())
+        }
+        wander()
     }
 
     /// Pausenbesuch: von der Seite herein, in die Mitte, strecken und gähnen – und eine Weile bleiben.
@@ -848,10 +895,40 @@ final class CatBrain {
         visitTimeLeft = duration
         reminderPending = false
         guard !isAirborne, perchID == nil else { return }
-        if phase == .away { x = offscreenX(left: entrySideIsLeft()) }
-        offscreenAllowed = true
-        goal = .center
-        walk(to: (minX + maxX) / 2, speed: 65 * unit)
+        let toCenter = { [unowned self] in
+            offscreenAllowed = true
+            goal = .center
+            walk(to: (minX + maxX) / 2, speed: 65 * unit)
+        }
+        if phase == .away {
+            if useBasket, basketX != nil {
+                emergeFromBasket(then: toCenter)
+                return
+            }
+            x = offscreenX(left: entrySideIsLeft())
+        }
+        toCenter()
+    }
+
+    /// Aus dem Körbchen klettern: von hinter dem Dock hinaufspringen, dann weiter.
+    private func emergeFromBasket(then next: @escaping () -> Void) {
+        guard let basketX else { return next() }
+        let half = CGFloat(Layout.canvasWidth) / 2 * scale
+        perchID = nil
+        offscreenAllowed = false
+        x = clampX(basketX - half)
+        y = dockY - 30 * scale
+        lastDockY = dockY
+        afterHop = next
+        facingRight = basketX < (minX + maxX) / 2 + half
+        startJump(toX: clampX(x + (facingRight ? 18 : -18) * unit), toY: dockY, landing: .dock)
+    }
+
+    /// Der Boden ist woanders (Vollbild an/aus): erst Pfote ausstrecken bzw. ducken, dann hinüber.
+    private func beginGroundChange(from oldGround: CGFloat) {
+        y = oldGround
+        goal = .wander
+        enter(dockY < oldGround ? .reachingDown : .reachingUp, for: dockY < oldGround ? 0.55 : 0.35)
     }
 
     /// Von welcher Seite sie hereinkommt: wenn möglich von einer Seite ohne Nachbarbildschirm.
@@ -873,6 +950,7 @@ final class CatBrain {
     /// Nach dem Bildschirmwechsel: von der Seite (des neuen Bildschirms) hereinlaufen.
     func arriveFromSide(left: Bool) {
         perchID = nil
+        lastDockY = nil // anderer Bildschirm, anderer Boden – kein Hinuntersteigen
         offscreenAllowed = true
         x = offscreenX(left: left)
         y = dockY
@@ -1164,9 +1242,15 @@ final class CatBrain {
         guard t >= 1 else { return }
         self.jump = nil
         switch jump.landing {
+        case .basket:
+            enter(.away, for: .infinity)
         case .dock:
             y = dockY
-            if pounceFollowUp {
+            if let next = afterHop {
+                // aus dem Körbchen heraus: weiter mit dem, was anstand
+                afterHop = nil
+                next()
+            } else if pounceFollowUp {
                 // gelandet auf dem Mauszeiger: mit der Tatze draufhauen
                 pounceFollowUp = false
                 enter(.batting, for: 0.4)
@@ -1393,6 +1477,10 @@ final class CatBrain {
             look.sprite = alternate(Frames.climbDownA, Frames.climbDownB, every: 0.16)
             look.facingRight = !(wall?.wallOnRight ?? false)
             look.drawX = Layout.climbX
+        case .reachingDown:
+            look.sprite = Frames.bat         // Vorderpfote tastet nach unten
+        case .reachingUp:
+            look.sprite = Frames.crouch      // ducken, gleich geht's hinauf
         case .stalking:
             look.sprite = Frames.crouch
             // vor dem Sprung wackelt das Hinterteil

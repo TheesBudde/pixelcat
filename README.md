@@ -36,6 +36,12 @@ Schwanzspitze.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
   manchmal auf den Rücken.
+- **Vollbild:** Läuft ein Programm im Vollbild (kein Dock), streckt sie die Vorderpfote aus und hopst an den
+  unteren Bildschirmrand; zurück auf dem Schreibtisch springt sie wieder aufs Dock.
+- **Körbchen im Dock (Einstellung):** Pixelcat zeigt ein Katzenkörbchen im Dock. Im Streifzug hüpft sie dann
+  hinein und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
+  Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie mit der Freigabe
+  „Bedienungshilfen“ genau aus, sonst schätzt sie es aus den Dock-Einstellungen.
 - **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe geht sie automatisch
   auf Streifzug und kommt danach zurück. Ist ein macOS-Fokus aktiv, ist sie still und schläft mehr.
 - **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.
@@ -72,7 +78,7 @@ Das Menü enthält nur, was man oft braucht:
 
 **Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
 - **Aussehen:** Fellfarbe, Größe
-- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Streifzug
+- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Streifzug, Körbchen im Dock
 - **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung mit frühestens/spätestens, Länge einer Pause
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English

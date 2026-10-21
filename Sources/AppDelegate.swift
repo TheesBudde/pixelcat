@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             cat.apply(settings)
             buildMenu() // Sprache könnte sich geändert haben
+            buildMainMenu()
         }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
@@ -47,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
+        buildMainMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = Frames.menuBarIcon()
         statusItem.button?.imagePosition = .imageLeft
@@ -116,6 +118,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quit)
 
         statusItem.menu = menu
+    }
+
+    /// Menüleiste, wenn die App mit Körbchen im Dock aktiv ist: nur Einstellungen und Beenden.
+    private func buildMainMenu() {
+        func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
+        let appMenu = NSMenu()
+        appMenu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ","))
+        appMenu.addItem(.separator())
+        let quit = NSMenuItem(title: t("Pixelcat beenden", "Quit Pixelcat"),
+                              action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApp
+        appMenu.addItem(quit)
+        let appItem = NSMenuItem()
+        appItem.submenu = appMenu
+        let main = NSMenu()
+        main.addItem(appItem)
+        NSApp.mainMenu = main
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {

@@ -189,6 +189,14 @@ final class CatController {
     /// Gedankenblase „Pause“ über der Katze, solange sie an eine Pause erinnert
     private var bubble: ThoughtBubble?
 
+    /// Ein Programm im Vollbild: Dann ist kein Dock da, und sie läuft am unteren Bildschirmrand
+    private(set) var isFullscreen = false
+    private var fullscreenRefresh = 0.0
+    /// Körbchen im Dock: Dock-Symbol, in dem sie schläft, solange sie auf Streifzug ist
+    private let basketTile = BasketTileView(frame: NSRect(x: 0, y: 0, width: 128, height: 128))
+    private var basketRefresh = 0.0
+    private var tileClock = 0.0
+
     // MARK: Einstellungen
 
     var scale: CGFloat {
@@ -220,6 +228,9 @@ final class CatController {
         didSet { if !hideDuringCalls { setHidden(because: nil) } }
     }
     var respectFocus = true
+    var basketInDock = false {
+        didSet { if basketInDock != oldValue { updateDockPresence() } }
+    }
     var focusMinutes = 25
     var breakMinutes = 5
     var reminderMinutes: ClosedRange<Double> = 45...55 {
@@ -251,6 +262,7 @@ final class CatController {
         purring = settings.purring
         hideDuringCalls = settings.hideDuringCalls
         respectFocus = settings.respectFocus
+        basketInDock = settings.basketInDock
         focusMinutes = settings.pomodoroFocus
         breakMinutes = settings.pomodoroBreak
         reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
@@ -498,7 +510,11 @@ final class CatController {
         if let screenID, let current = NSScreen.screens.first(where: { $0.displayID == screenID }) { return current }
         return primaryScreen
     }
-    private var ground: CGFloat { screen?.visibleFrame.minY ?? 0 }
+    /// Wo die Pfoten stehen: auf der Dock-Oberkante – im Vollbild am unteren Bildschirmrand.
+    private var ground: CGFloat {
+        guard let screen else { return 0 }
+        return isFullscreen ? screen.frame.minY : screen.visibleFrame.minY
+    }
     private var catCenter: CGFloat { brain.x + CGFloat(Layout.canvasWidth) / 2 * scale }
 
     /// Angrenzender Bildschirm links bzw. rechts (nur wenn angeschlossen und erlaubt).
@@ -730,6 +746,73 @@ final class CatController {
         }
     }
 
+    // MARK: Vollbild und Körbchen
+
+    /// Bedeckt ein Fenster den ganzen Bildschirm, läuft ein Programm im Vollbild (dann ist das Dock weg).
+    private func detectFullscreen() -> Bool {
+        guard let screen, let primary = primaryScreen,
+              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                    kCGNullWindowID) as? [[String: Any]]
+        else { return false }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        for info in list {
+            guard (info[kCGWindowLayer as String] as? Int) == 0,
+                  (info[kCGWindowOwnerPID as String] as? pid_t) != ownPID,
+                  let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsInfo)
+            else { continue }
+            let rect = CGRect(x: bounds.minX, y: primary.frame.maxY - bounds.maxY,
+                              width: bounds.width, height: bounds.height)
+            if abs(rect.minX - screen.frame.minX) < 2, abs(rect.minY - screen.frame.minY) < 2,
+               abs(rect.width - screen.frame.width) < 2, abs(rect.height - screen.frame.height) < 2 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Dock-Symbol ein- oder ausblenden.
+    private func updateDockPresence() {
+        if basketInDock {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.dockTile.contentView = basketTile
+        } else {
+            NSApp.dockTile.contentView = nil
+            NSApp.setActivationPolicy(.accessory)
+        }
+        NSApp.dockTile.display()
+        basketRefresh = 0
+    }
+
+    /// Wo das Körbchen im Dock sitzt – nur dann hüpft sie hinein (statt hinauszulaufen).
+    private func updateBasketPosition() {
+        guard basketInDock, let primary = primaryScreen else {
+            brain.useBasket = false
+            brain.basketX = nil
+            return
+        }
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Pixelcat"
+        brain.basketX = DockLocator.basketCenterX(appName: name, screen: primary)
+        brain.useBasket = brain.basketX != nil && (screen == primary)
+    }
+
+    /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
+    private func updateBasketTile(dt: Double) {
+        guard basketInDock else { return }
+        tileClock += dt
+        let inside = brain.isAway
+        let breathIn = Int(tileClock / 1.1) % 2 == 1
+        let tailUp = tileClock.truncatingRemainder(dividingBy: 6.5) > 5.4
+        if basketTile.catInside != inside || basketTile.breathIn != breathIn || basketTile.tailUp != tailUp
+            || basketTile.coat != coat {
+            basketTile.catInside = inside
+            basketTile.breathIn = breathIn
+            basketTile.tailUp = tailUp
+            basketTile.coat = coat
+            NSApp.dockTile.display()
+        }
+    }
+
     // MARK: Gedankenblase
 
     /// Blase „Pause“ über der Katze zeigen, bis die Pause vorbei ist (eine eventuelle alte verschwindet).
@@ -797,6 +880,18 @@ final class CatController {
         let date = Date()
 
         if screenID != nil, screen?.displayID != screenID { screenID = nil } // Bildschirm abgesteckt
+        // Wer im Körbchen liegt, kommt beim Hauptbildschirm (mit dem Dock) wieder heraus
+        if basketInDock, brain.isAway, screenID != nil { screenID = nil }
+        fullscreenRefresh -= dt
+        if fullscreenRefresh <= 0 {
+            fullscreenRefresh = 0.5
+            isFullscreen = detectFullscreen()
+        }
+        basketRefresh -= dt
+        if basketRefresh <= 0 {
+            basketRefresh = 1
+            updateBasketPosition()
+        }
         updateBounds()
         brain.dockY = ground
         perchRefresh -= dt
@@ -843,6 +938,7 @@ final class CatController {
         }
         defer {
             updateBubble(dt: dt, now: date)
+            updateBasketTile(dt: dt)
             adjustTickRate()
         }
 

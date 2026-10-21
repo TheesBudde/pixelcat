@@ -12,6 +12,7 @@ final class AppSettings: ObservableObject {
     @Published var chaseCursor: Bool { didSet { changed() } }
     @Published var multiScreen: Bool { didSet { changed() } }
     @Published var roaming: Bool { didSet { changed() } }
+    @Published var basketInDock: Bool { didSet { changed() } }
     @Published var breakReminders: Bool { didSet { changed() } }
     // Zeiten (Minuten)
     @Published var pomodoroFocus: Int { didSet { changed() } }
@@ -36,7 +37,8 @@ final class AppSettings: ObservableObject {
     init() {
         defaults.register(defaults: [
             "coat": Coat.black.rawValue, "scale": 3.0,
-            "climbing": false, "chaseCursor": true, "multiScreen": true, "roaming": false, "breakReminders": false,
+            "climbing": false, "chaseCursor": true, "multiScreen": true, "roaming": false, "basketInDock": false,
+            "breakReminders": false,
             "pomodoroFocus": 25, "pomodoroBreak": 5, "reminderMin": 45, "reminderMax": 55, "breakLength": 5,
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
@@ -47,6 +49,7 @@ final class AppSettings: ObservableObject {
         chaseCursor = defaults.bool(forKey: "chaseCursor")
         multiScreen = defaults.bool(forKey: "multiScreen")
         roaming = defaults.bool(forKey: "roaming")
+        basketInDock = defaults.bool(forKey: "basketInDock")
         breakReminders = defaults.bool(forKey: "breakReminders")
         pomodoroFocus = defaults.integer(forKey: "pomodoroFocus")
         pomodoroBreak = defaults.integer(forKey: "pomodoroBreak")
@@ -67,7 +70,7 @@ final class AppSettings: ObservableObject {
         let values: [String: Any] = [
             "coat": coat.rawValue, "scale": scale,
             "climbing": climbing, "chaseCursor": chaseCursor, "multiScreen": multiScreen,
-            "roaming": roaming, "breakReminders": breakReminders,
+            "roaming": roaming, "basketInDock": basketInDock, "breakReminders": breakReminders,
             "pomodoroFocus": pomodoroFocus, "pomodoroBreak": pomodoroBreak,
             "reminderMin": reminderMin, "reminderMax": reminderMax, "breakLength": breakLength,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
@@ -163,8 +166,23 @@ struct SettingsView: View {
                    "When the pointer rests near the bottom, she sneaks up and pounces – not while roaming."))
             Toggle(t("Auf andere Bildschirme wechseln", "Wander to other displays"), isOn: $settings.multiScreen)
             Toggle(t("Streifzug", "Roaming"), isOn: $settings.roaming)
-            hint(t("Sie geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
-                   "She heads outside and only comes to the middle of the screen for breaks."))
+            hint(t("Sie geht weg und kommt nur zu Pausen in die Bildschirmmitte.",
+                   "She goes away and only comes to the middle of the screen for breaks."))
+            Toggle(t("Körbchen im Dock", "Basket in the Dock"), isOn: $settings.basketInDock)
+            hint(t("Zeigt ein Katzenkörbchen im Dock. Im Streifzug hüpft sie dann hinein und schläft dort, statt aus dem Bild zu laufen – zu Pausen klettert sie heraus.",
+                   "Shows a cat basket in the Dock. While roaming she hops in and sleeps there instead of leaving the screen – for breaks she climbs out."))
+            if settings.basketInDock {
+                HStack {
+                    hint(DockLocator.isTrusted
+                         ? t("Sie findet das Körbchen genau.", "She finds the basket exactly.")
+                         : t("Ohne Bedienungshilfen schätzt sie, wo das Körbchen im Dock sitzt.",
+                             "Without Accessibility access she estimates where the basket sits in the Dock."))
+                    Spacer()
+                    if !DockLocator.isTrusted {
+                        Button(t("Genau finden …", "Find exactly …")) { DockLocator.requestTrust() }
+                    }
+                }
+            }
         }
     }
 
