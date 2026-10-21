@@ -30,3 +30,28 @@ enum Meow {
         return sound
     }
 }
+
+/// Schnurren beim Streicheln: läuft in Schleife, blendet sanft ein und aus.
+@MainActor
+final class Purr {
+    private var sound: NSSound?
+    private var volume: Float = 0
+    private static let fullVolume: Float = 0.45
+
+    func update(dt: Double, active: Bool) {
+        let target: Float = active ? Self.fullVolume : 0
+        let step = Float(dt) * (active ? 0.9 : 0.6)
+        volume = volume < target ? min(target, volume + step) : max(target, volume - step)
+
+        if volume > 0 {
+            if sound == nil, let url = Bundle.main.url(forResource: "schnurren", withExtension: "wav") {
+                sound = NSSound(contentsOf: url, byReference: false)
+                sound?.loops = true
+            }
+            sound?.volume = volume
+            if sound?.isPlaying == false { sound?.play() }
+        } else if sound?.isPlaying == true {
+            sound?.stop()
+        }
+    }
+}

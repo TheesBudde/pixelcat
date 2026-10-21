@@ -24,6 +24,8 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSFocusStatusUsageDescription</key>
+	<string>Pixelkatze bleibt still und ruhig, solange ein Fokus aktiv ist. · Pixelkatze stays quiet and calm while a Focus is on.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

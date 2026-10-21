@@ -8,9 +8,9 @@ enum Coat: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .orange: return "Orange getigert"
-        case .black: return "Schwarz"
-        case .gray: return "Grau getigert"
+        case .orange: return L10n.s("Orange getigert", "Orange tabby")
+        case .black: return L10n.s("Schwarz", "Black")
+        case .gray: return L10n.s("Grau getigert", "Gray tabby")
         }
     }
 
@@ -132,6 +132,18 @@ final class Sprite {
         return Sprite(width: height, height: width, pixels: result)
     }
 
+    /// Wo der Kopf oben ist: Mitte zwischen den Ohren (Spalte) und Zeile der Ohren.
+    /// nil, wenn der Kopf nicht aufrecht ist (Klettern, auf dem Rücken).
+    lazy var earAnchor: (center: Int, row: Int)? = {
+        for row in 0..<height {
+            let ears = (0..<width).filter { pixel($0, row) == "P" }
+            guard !ears.isEmpty else { continue }
+            guard ears.count == 2, ears[1] - ears[0] == 5, pixel(ears[0], row + 1) == "h" else { return nil }
+            return ((ears[0] + ears[1] + 1) / 2, row)
+        }
+        return nil
+    }()
+
     /// Zeichnet das Bild; `x`/`y` sind die linke untere Ecke in Pixeleinheiten.
     func draw(in ctx: CGContext, x: CGFloat, y: CGFloat, scale: CGFloat, colors: [Character: CGColor]) {
         for row in 0..<height {
@@ -246,8 +258,8 @@ enum Frames {
         + ["KhK.....................", "KhK.....................", "KsKKKKK................."]
         + Array(bowRows[4...])).withClosedEyes
 
-    /// Halb abgesenkt: Übergang zwischen Stehen und tiefem Strecken.
-    static let stretchHalf = Sprite([
+    /// Halb abgesenkt: Übergang zwischen Stehen und tiefem Strecken – mit offenen Augen die Lauerstellung.
+    private static let halfRows = [
         ".KKK....................",
         "KhOK....................",
         "KhK............K....K...",
@@ -263,7 +275,10 @@ enum Frames {
         "...KOK.KOK..KOOOK.......",
         "...KWK.KWK...KWWWK......",
         "...KKK.KKK...KKKKK......",
-    ]).withClosedEyes
+    ]
+    static let stretchHalf = Sprite(halfRows).withClosedEyes
+    /// Lauern: vorne geduckt, Blick nach vorn – vor dem Sprung auf den Mauszeiger
+    static let crouch = Sprite(halfRows)
 
     /// Zum Schluss ein Hinterbein genüsslich nach hinten ausstrecken.
     static let stretchHind = Sprite(Array(upperBody[0...10]) + [
@@ -499,6 +514,36 @@ enum Frames {
         "KrRRrRK",
         ".KRRrK.",
         "..KKK..",
+    ])
+
+    // MARK: Verkleidungen
+
+    /// Weihnachtsmütze (24./25. Dezember)
+    static let santaHat = Sprite([
+        "....KKK.....",
+        "...KRRRK.KK.",
+        "..KRRRRRKWWK",
+        "..KRRRRRRKK.",
+        ".KWWWWWWWWK.",
+        ".KWWWWWWWWK.",
+        "..KKKKKKKK..",
+    ])
+
+    /// Partyhut (31. Dezember und 1. Januar)
+    static let partyHat = Sprite([
+        "...Y...",
+        "..YGY..",
+        "...K...",
+        "..KBK..",
+        "..KYK..",
+        ".KBYBK.",
+        ".KYBYK.",
+        "KBYBYBK",
+        "KKKKKKK",
+    ])
+
+    static let accessoryColors = rgbPalette([
+        "K": 0x2B1D16, "R": 0xD7263D, "W": 0xFFFFFF, "B": 0x3E7BD6, "Y": 0xF5C542, "G": 0xFFF3B0,
     ])
 
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.

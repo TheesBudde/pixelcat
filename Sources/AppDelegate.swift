@@ -1,46 +1,54 @@
 import AppKit
 
-/// Menüleisten-App: Katzensymbol oben rechts mit Menü für alles Weitere.
+/// Menüleisten-App: Katzensymbol oben rechts mit einem kurzen Menü für den Alltag –
+/// alles Weitere steht im Einstellungsfenster.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private static let sizes: [(name: String, scale: CGFloat)] = [
-        ("Klein", 2), ("Mittel", 3), ("Groß", 4),
-    ]
     private static let timerPresets = [5, 10, 15, 20, 30, 45, 60]
+
+    private let settings = AppSettings()
+    private let focusMonitor = FocusMonitor()
+    private lazy var settingsWindow = SettingsWindow(settings: settings, focus: focusMonitor)
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
+
     private var toggleItem: NSMenuItem!
     private var pomodoroItem: NSMenuItem!
     private var timerItem: NSMenuItem!
     private var timerMenu: NSMenu!
-    /// Restzeit von Pomodoro oder Timer
+    /// Restzeit von Pomodoro oder Timer bzw. warum die Katze gerade versteckt ist
     private var infoItem: NSMenuItem!
     private var reminderItem: NSMenuItem!
-    private var soundItem: NSMenuItem!
-    private var climbItem: NSMenuItem!
     private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
     private var startleItem: NSMenuItem!
     private var sleepItem: NSMenuItem!
-    private var sizeItems: [NSMenuItem] = []
-    private var coatItems: [NSMenuItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let defaults = UserDefaults.standard
-        defaults.register(defaults: [
-            "scale": 3.0, "coat": Coat.black.rawValue, "breakReminders": false, "sounds": true, "climbing": false, "roaming": false,
-        ])
-        let coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
-        cat = CatController(scale: defaults.double(forKey: "scale"), coat: coat)
-        cat.breakReminders = defaults.bool(forKey: "breakReminders")
-        cat.sounds = defaults.bool(forKey: "sounds")
-        cat.climbing = defaults.bool(forKey: "climbing")
-        if defaults.bool(forKey: "roaming") { cat.startRoamingOutside() }
+        cat = CatController(scale: settings.scale, coat: settings.coat, focusMonitor: focusMonitor)
+        if settings.roaming { cat.startRoamingOutside() }
+        cat.apply(settings)
+        settings.onChange = { [weak self] in
+            guard let self else { return }
+            cat.apply(settings)
+            buildMenu() // Sprache könnte sich geändert haben
+        }
+
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
-        setUpStatusItem()
+        // Start mit --outfit santa|party: Verkleidung vorführen
+        if let i = CommandLine.arguments.firstIndex(of: "--outfit"), i + 1 < CommandLine.arguments.count {
+            cat.outfitOverride = CommandLine.arguments[i + 1] == "santa" ? Frames.santaHat : Frames.partyHat
+            cat.seasonalOutfits = true
+        }
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.image = Frames.menuBarIcon()
+        statusItem.button?.imagePosition = .imageLeft
+        statusItem.button?.toolTip = "Pixelkatze"
+        buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         cat.show()
     }
@@ -51,86 +59,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
-    private func setUpStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = Frames.menuBarIcon()
-        statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.toolTip = "Pixelkatze"
+    // MARK: Menü
 
+    private func buildMenu() {
+        func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
 
-        toggleItem = item("Katze ausblenden", #selector(toggleCat), key: "k")
+        toggleItem = item("", #selector(toggleCat), key: "k")
         menu.addItem(toggleItem)
         menu.addItem(.separator())
 
         pomodoroItem = item("Pomodoro", #selector(togglePomodoro))
         menu.addItem(pomodoroItem)
-
         timerMenu = NSMenu()
         for minutes in Self.timerPresets {
-            let preset = item("\(minutes) Min.", #selector(startPresetTimer(_:)))
+            let preset = item(t("\(minutes) Min.", "\(minutes) min"), #selector(startPresetTimer(_:)))
             preset.tag = minutes
             timerMenu.addItem(preset)
         }
         timerMenu.addItem(.separator())
-        timerMenu.addItem(item("Eigene Zeit …", #selector(askForTimer)))
+        timerMenu.addItem(item(t("Eigene Zeit …", "Custom time …"), #selector(askForTimer)))
         timerItem = NSMenuItem(title: "Timer", action: nil, keyEquivalent: "")
         timerItem.target = self
         timerItem.submenu = timerMenu
         menu.addItem(timerItem)
-
         infoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         infoItem.isEnabled = false
         menu.addItem(infoItem)
-        reminderItem = item("Pausen-Erinnerung", #selector(toggleReminders))
+        reminderItem = item(t("Pausen-Erinnerung", "Break reminder"), #selector(toggleReminders))
         menu.addItem(reminderItem)
+        roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming))
+        roamItem.toolTip = t("Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
+                             "The cat heads outside and only comes to the middle of the screen for breaks.")
+        menu.addItem(roamItem)
         menu.addItem(.separator())
 
-        soundItem = item("Miauen", #selector(toggleSounds))
-        menu.addItem(soundItem)
-        climbItem = item("Klettern", #selector(toggleClimbing))
-        menu.addItem(climbItem)
-        roamItem = item("Streifzug", #selector(toggleRoaming))
-        roamItem.toolTip = "Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte: "
-            + "Pomodoro-Pause, Pausen-Erinnerung oder wenn der Timer abläuft."
-        menu.addItem(roamItem)
-
-        feedItem = item("Füttern", #selector(feed))
+        feedItem = item(t("Füttern", "Feed"), #selector(feed))
         menu.addItem(feedItem)
-        playItem = item("Mit Wollknäuel spielen", #selector(togglePlaying))
+        playItem = item(t("Mit Wollknäuel spielen", "Play with yarn"), #selector(togglePlaying))
         menu.addItem(playItem)
-        startleItem = item("Aufscheuchen", #selector(startle))
+        startleItem = item(t("Aufscheuchen", "Startle"), #selector(startle))
         menu.addItem(startleItem)
-        sleepItem = item("Schlafen legen", #selector(goToSleep))
+        sleepItem = item(t("Schlafen legen", "Put to sleep"), #selector(goToSleep))
         menu.addItem(sleepItem)
         menu.addItem(.separator())
 
-        let coatMenu = NSMenu()
-        for (index, coat) in Coat.allCases.enumerated() {
-            let coatItem = item(coat.title, #selector(changeCoat(_:)))
-            coatItem.tag = index
-            coatMenu.addItem(coatItem)
-            coatItems.append(coatItem)
-        }
-        let coatParent = NSMenuItem(title: "Farbe", action: nil, keyEquivalent: "")
-        coatParent.submenu = coatMenu
-        menu.addItem(coatParent)
-
-        let sizeMenu = NSMenu()
-        for (index, size) in Self.sizes.enumerated() {
-            let sizeItem = item(size.name, #selector(changeSize(_:)))
-            sizeItem.tag = index
-            sizeMenu.addItem(sizeItem)
-            sizeItems.append(sizeItem)
-        }
-        let sizeParent = NSMenuItem(title: "Größe", action: nil, keyEquivalent: "")
-        sizeParent.submenu = sizeMenu
-        menu.addItem(sizeParent)
-        menu.addItem(.separator())
-
-        let quit = NSMenuItem(title: "Pixelkatze beenden",
+        menu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ","))
+        let quit = NSMenuItem(title: t("Pixelkatze beenden", "Quit Pixelkatze"),
                               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
@@ -144,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    /// Restzeit des Pomodoro neben dem Katzenkopf in der Menüleiste.
+    /// Restzeit von Pomodoro oder Timer neben dem Katzenkopf in der Menüleiste.
     private func showStatus(_ text: String?) {
         guard let button = statusItem.button else { return }
         guard let text else {
@@ -157,7 +134,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        toggleItem.title = cat.isVisible ? "Katze ausblenden" : "Katze einblenden"
+        func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
+        toggleItem.title = cat.isVisible ? t("Katze ausblenden", "Hide cat") : t("Katze einblenden", "Show cat")
 
         // Haken = läuft; nochmal anklicken beendet. Pomodoro und Timer schließen sich aus.
         pomodoroItem.state = cat.pomodoro == nil ? .off : .on
@@ -174,44 +152,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timerItem.isEnabled = cat.pomodoro == nil
 
         func minutesLeft(_ end: Date) -> Int { max(1, Int((end.timeIntervalSinceNow / 60).rounded(.up))) }
+        var info: String?
         if let pomodoro = cat.pomodoro {
-            infoItem.title = pomodoro.stage == .focus
-                ? "Fokus: noch \(minutesLeft(pomodoro.ends)) Min. – die Katze schläft"
-                : "Pause: noch \(minutesLeft(pomodoro.ends)) Min."
-            infoItem.isHidden = false
+            let minutes = minutesLeft(pomodoro.ends)
+            info = pomodoro.stage == .focus
+                ? t("Fokus: noch \(minutes) Min. – die Katze schläft", "Focus: \(minutes) min left – the cat is asleep")
+                : t("Pause: noch \(minutes) Min.", "Break: \(minutes) min left")
         } else if let timer = cat.timer {
+            let minutes = minutesLeft(timer.ends)
             if timer.finished {
-                infoItem.title = "Zeit um – streichle oder klick die Katze"
+                info = t("Zeit um – streichle oder klick die Katze", "Time's up – pet or click the cat")
             } else {
-                infoItem.title = timer.breakEnds == nil
-                    ? "Noch \(minutesLeft(timer.ends)) Min. – die Katze schläft"
-                    : "Noch \(minutesLeft(timer.ends)) Min. – gerade Pause"
+                info = timer.breakEnds == nil
+                    ? t("Noch \(minutes) Min. – die Katze schläft", "\(minutes) min left – the cat is asleep")
+                    : t("Noch \(minutes) Min. – gerade Pause", "\(minutes) min left – on a break")
             }
-            infoItem.isHidden = false
-        } else {
-            infoItem.isHidden = true
         }
-        reminderItem.state = cat.breakReminders ? .on : .off
-        soundItem.state = cat.sounds ? .on : .off
-        climbItem.state = cat.climbing ? .on : .off
-        roamItem.state = cat.roaming ? .on : .off
-        reminderItem.isEnabled = cat.pomodoro == nil
+        if let reason = cat.hiddenBecause {
+            let hidden = t("Versteckt: \(reason.title)", "Hidden: \(reason.title)")
+            info = info.map { $0 + " · " + hidden } ?? hidden
+        }
+        infoItem.title = info ?? ""
+        infoItem.isHidden = info == nil
 
-        // Während der Fokuszeit schläft die Katze – dann gibt es nichts zu füttern oder zu spielen
+        reminderItem.state = settings.breakReminders ? .on : .off
+        reminderItem.isEnabled = cat.pomodoro == nil
+        roamItem.state = settings.roaming ? .on : .off
+
+        // Schläft sie fest oder ist sie draußen, gibt es nichts zu füttern oder zu spielen
         let awake = !cat.isInFocus && !cat.isOutAndAbout
         feedItem.isEnabled = awake
         playItem.isEnabled = awake
         playItem.state = cat.isPlaying ? .on : .off
         startleItem.isEnabled = awake
         sleepItem.isEnabled = awake
-
-        for item in sizeItems {
-            item.state = Self.sizes[item.tag].scale == cat.scale ? .on : .off
-        }
-        for item in coatItems {
-            item.state = Coat.allCases[item.tag] == cat.coat ? .on : .off
-        }
     }
+
+    // MARK: Aktionen
 
     @objc private func toggleCat() {
         cat.isVisible ? cat.hide() : cat.show()
@@ -234,14 +211,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Kleines Eingabefenster für eine eigene Timerzeit.
     @objc private func askForTimer() {
         let alert = NSAlert()
-        alert.messageText = "Timer stellen"
-        alert.informativeText = "Wie lange soll die Katze schlafen?\nMinuten eingeben, z. B. 25 – oder 1:30 für anderthalb Stunden."
+        alert.messageText = L10n.s("Timer stellen", "Set timer")
+        alert.informativeText = L10n.s(
+            "Wie lange soll die Katze schlafen?\nMinuten eingeben, z. B. 25 – oder 1:30 für anderthalb Stunden.",
+            "How long should the cat sleep?\nEnter minutes, e.g. 25 – or 1:30 for an hour and a half.")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
-        field.placeholderString = "Minuten"
+        field.placeholderString = L10n.s("Minuten", "Minutes")
         field.stringValue = UserDefaults.standard.string(forKey: "lastTimer") ?? ""
         alert.accessoryView = field
-        alert.addButton(withTitle: "Starten")
-        alert.addButton(withTitle: "Abbrechen")
+        alert.addButton(withTitle: L10n.s("Starten", "Start"))
+        alert.addButton(withTitle: L10n.s("Abbrechen", "Cancel"))
         alert.window.initialFirstResponder = field
         NSApp.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -270,28 +249,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return value
     }
 
-    @objc private func toggleSounds() {
-        cat.sounds.toggle()
-        UserDefaults.standard.set(cat.sounds, forKey: "sounds")
-        // Zum Probehören
-        if cat.sounds { Meow.play(.breakStarts) }
+    @objc private func toggleReminders() {
+        settings.breakReminders.toggle()
     }
 
     @objc private func toggleRoaming() {
         cat.show()
-        cat.roaming.toggle()
-        UserDefaults.standard.set(cat.roaming, forKey: "roaming")
-    }
-
-    @objc private func toggleClimbing() {
-        cat.show()
-        cat.climbing.toggle()
-        UserDefaults.standard.set(cat.climbing, forKey: "climbing")
-    }
-
-    @objc private func toggleReminders() {
-        cat.breakReminders.toggle()
-        UserDefaults.standard.set(cat.breakReminders, forKey: "breakReminders")
+        settings.roaming.toggle()
     }
 
     @objc private func feed() {
@@ -314,13 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cat.goToSleep()
     }
 
-    @objc private func changeCoat(_ sender: NSMenuItem) {
-        cat.coat = Coat.allCases[sender.tag]
-        UserDefaults.standard.set(cat.coat.rawValue, forKey: "coat")
-    }
-
-    @objc private func changeSize(_ sender: NSMenuItem) {
-        cat.scale = Self.sizes[sender.tag].scale
-        UserDefaults.standard.set(Double(cat.scale), forKey: "scale")
+    @objc private func openSettings() {
+        settingsWindow.show()
     }
 }

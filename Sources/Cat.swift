@@ -52,6 +52,10 @@ struct Temperament {
     /// Wie viele Runden sie nach dem Aufscheuchen noch dreht
     var walksAfterFleeing: ClosedRange<Int>
 
+    /// Fokus aktiv: wenig unterwegs, lange Nickerchen
+    static let calm = Temperament(walks: 0...2, sleep: 120...400, walkSpeed: 22...34,
+                                  fleeDistance: 60...140, fleeSpeed: 130, walksAfterFleeing: 0...1)
+
     static func at(_ date: Date) -> Temperament {
         switch Calendar.current.component(.hour, from: date) {
         case 9..<19: // Tag: unternehmungslustig, kurze Nickerchen
@@ -126,6 +130,8 @@ final class CatBrain {
         /// Hinlegen, auf den Rücken rollen, mit den Pfoten zappeln, wieder aufstehen
         case wriggling
         case climbingUp, climbingDown, jumping, falling
+        /// Anschleichen an den Mauszeiger, Hinterteil wackeln – dann Sprung
+        case stalking
         /// Auf Streifzug: außerhalb des Bildschirms
         case away
     }
@@ -162,6 +168,8 @@ final class CatBrain {
         case wander, bowl, center
         /// Streifzug: aus dem Bild hinaus bzw. zurück aufs Dock
         case exit, comeBack
+        /// Zum Nachbarbildschirm hinüberlaufen (true = links)
+        case otherScreen(Bool)
         case climbUp(Wall)
         case climbDown(Wall)
         /// Am Ziel abspringen – die Landestelle steht als Mitte der Katze (Bildschirm-x) drin
@@ -255,7 +263,45 @@ final class CatBrain {
     private var fallSpeed: CGFloat = 0
 
     private var unit: CGFloat { scale / 3 }
-    private var temperament: Temperament { .at(clock()) }
+    private var temperament: Temperament { calm ? .calm : .at(clock()) }
+
+    // MARK: Eingänge von außen
+
+    /// Fokus aktiv: ruhiger, schläft mehr
+    var calm = false
+    /// Länge einer Pause (Erinnerung, Streifzug-Besuch) in Sekunden
+    var breakVisitLength: Double = 5 * 60
+    /// Mauszeiger jagen erlaubt?
+    var chaseEnabled = true
+    /// Mauszeiger nahe am unteren Rand: Position und wie lange er schon ruht (nil = woanders)
+    var cursor: (x: CGFloat, y: CGFloat, idle: Double)?
+    /// Gibt es links/rechts einen Bildschirm, auf den sie hinüberlaufen darf?
+    var neighborLeft = false
+    var neighborRight = false
+    /// Sie ist zum Nachbarbildschirm hinausgelaufen (true = links) – der Controller wechselt dann den Bildschirm
+    var screenSwitchRequest: Bool?
+    /// Braucht gerade flüssige 30 Bilder pro Sekunde (sonst darf der Takt sparen)
+    var needsSmoothMotion: Bool {
+        [.walking, .fleeing, .chasing, .jumping, .falling, .climbingUp, .climbingDown, .stalking, .startled, .batting]
+            .contains(phase)
+    }
+
+    /// Während Videocalls: keine Pausenbesuche, sie bleibt draußen
+    var suppressVisits = false {
+        didSet {
+            guard suppressVisits != oldValue else { return }
+            if suppressVisits {
+                visitTimeLeft = 0
+                leaveScreen()
+            } else if roaming, awaitingAcknowledgement || mode == .focusBreak {
+                // Call vorbei, aber gerade wäre Pause: jetzt vorbeikommen
+                startVisit(for: .infinity)
+            }
+        }
+    }
+
+    private var stalkWiggle = 0.0
+    private var pounceFollowUp = false
     private var center: CGFloat { x + CGFloat(Layout.canvasWidth) / 2 * scale }
     private var currentPerch: Perch? { perchID.flatMap(perch) }
     private var isAirborne: Bool { [.climbingUp, .climbingDown, .jumping, .falling].contains(phase) }
@@ -307,6 +353,8 @@ final class CatBrain {
             updateClimb(dt)
         case .jumping:
             updateJump()
+        case .stalking:
+            updateStalk(dt)
         case .falling:
             updateFall(dt)
         case .petted:
@@ -404,7 +452,7 @@ final class CatBrain {
         case .sleeping, .lyingDown, .backRolling, .wriggling:
             enter(.wakingUp, for: 1.2)
         case .standing, .walking, .sittingDown, .grooming, .headWashing, .watching,
-             .yawning, .stretching, .chasing, .batting, .slowBlinking:
+             .yawning, .stretching, .chasing, .batting, .slowBlinking, .stalking:
             goal = .wander
             enter(.standing, for: 0.3)
         default:
@@ -424,7 +472,7 @@ final class CatBrain {
     func callToCenter(untilAcknowledged: Bool = false) {
         if untilAcknowledged { awaitingAcknowledgement = true }
         if roaming {
-            if untilAcknowledged || !isVisiting { startVisit(for: untilAcknowledged ? .infinity : 5 * 60) }
+            if untilAcknowledged || !isVisiting { startVisit(for: untilAcknowledged ? .infinity : breakVisitLength) }
             return
         }
         reminderPending = true
@@ -507,7 +555,7 @@ final class CatBrain {
             } else {
                 startFleeing()
             }
-        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away:
+        case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away, .stalking:
             break
         }
     }
@@ -533,8 +581,16 @@ final class CatBrain {
             walk(to: (minX + maxX) / 2, speed: 60 * unit)
         } else if ball != nil {
             enter(.chasing)
+        } else if canChaseCursor, let cursor, cursor.idle > 2, abs(cursor.x - center) < 600 * unit,
+                  Double.random(in: 0..<1) < 0.7 {
+            startStalking(cursor)
         } else if mode == .focusBreak || isVisiting || walksBeforeNap > 0 {
             if mayClimb, climbingStep() { return }
+            if !isVisiting, perchID == nil, bowl == nil, mode == .normal, neighborLeft || neighborRight,
+               Double.random(in: 0..<1) < 0.07 {
+                goToOtherScreen()
+                return
+            }
             startWalking()
         } else if mayClimb, perchID == nil, climbOntoWindow() {
             // Fürs Nickerchen lieber hinauf aufs Fenster
@@ -566,6 +622,9 @@ final class CatBrain {
             enter(.stretching, for: Self.stretchLength)
         case .exit:
             enter(.away, for: .infinity)
+        case .otherScreen(let left):
+            enter(.away, for: .infinity)
+            screenSwitchRequest = left
         case .comeBack:
             offscreenAllowed = false
             enter(.standing, for: .random(in: 0.5...1.2))
@@ -762,7 +821,10 @@ final class CatBrain {
         default:
             break
         }
-        let toLeft = x < (minX + maxX) / 2
+        var toLeft = x < (minX + maxX) / 2
+        // Lieber zu einer Seite ohne Nachbarbildschirm – sonst sähe man sie dort auftauchen
+        if toLeft, neighborLeft, !neighborRight { toLeft = false }
+        if !toLeft, neighborRight, !neighborLeft { toLeft = true }
         offscreenAllowed = true
         goal = .exit
         walk(to: offscreenX(left: toLeft), speed: 70 * unit)
@@ -774,7 +836,7 @@ final class CatBrain {
         var isLeaving = phase == .away
         if case .exit = goal { isLeaving = true }
         guard isLeaving else { return }
-        if phase == .away { x = offscreenX(left: Bool.random()) }
+        if phase == .away { x = offscreenX(left: entrySideIsLeft()) }
         walksBeforeNap = temperament.walks.randomElement() ?? 1
         goal = .comeBack
         walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
@@ -782,13 +844,81 @@ final class CatBrain {
 
     /// Pausenbesuch: von der Seite herein, in die Mitte, strecken und gähnen – und eine Weile bleiben.
     private func startVisit(for duration: Double) {
+        guard !suppressVisits else { return }
         visitTimeLeft = duration
         reminderPending = false
         guard !isAirborne, perchID == nil else { return }
-        if phase == .away { x = offscreenX(left: Bool.random()) }
+        if phase == .away { x = offscreenX(left: entrySideIsLeft()) }
         offscreenAllowed = true
         goal = .center
         walk(to: (minX + maxX) / 2, speed: 65 * unit)
+    }
+
+    /// Von welcher Seite sie hereinkommt: wenn möglich von einer Seite ohne Nachbarbildschirm.
+    private func entrySideIsLeft() -> Bool {
+        if neighborLeft != neighborRight { return neighborRight }
+        return Bool.random()
+    }
+
+    // MARK: Mehrere Bildschirme
+
+    private func goToOtherScreen() {
+        let left: Bool
+        if neighborLeft, neighborRight { left = Bool.random() } else { left = neighborLeft }
+        offscreenAllowed = true
+        goal = .otherScreen(left)
+        walk(to: offscreenX(left: left), speed: .random(in: temperament.walkSpeed) * unit)
+    }
+
+    /// Nach dem Bildschirmwechsel: von der Seite (des neuen Bildschirms) hereinlaufen.
+    func arriveFromSide(left: Bool) {
+        perchID = nil
+        offscreenAllowed = true
+        x = offscreenX(left: left)
+        y = dockY
+        goal = .comeBack
+        let into = CGFloat.random(in: 120...400) * unit
+        walk(to: left ? minX + into : maxX - into, speed: .random(in: temperament.walkSpeed) * unit)
+    }
+
+    // MARK: Mauszeiger jagen
+
+    private var canChaseCursor: Bool {
+        chaseEnabled && !roaming && !calm && perchID == nil && mode != .focus && !awaitingAcknowledgement
+    }
+
+    private func startStalking(_ cursor: (x: CGFloat, y: CGFloat, idle: Double)) {
+        facingRight = cursor.x > center
+        stalkWiggle = 0
+        goal = .wander
+        enter(.stalking)
+    }
+
+    /// Langsam anschleichen, kurz mit dem Hinterteil wackeln, dann auf den Mauszeiger springen.
+    /// Bewegt sich die Maus, ist die Jagd vorbei.
+    private func updateStalk(_ dt: Double) {
+        guard let cursor, cursor.idle > 0.2 else {
+            stalkWiggle = 0
+            enter(.watching, for: .random(in: 1.5...3))
+            return
+        }
+        let dir: CGFloat = cursor.x > center ? 1 : -1
+        let desired = clampX(cursor.x - dir * 60 * unit - CGFloat(Layout.canvasWidth) / 2 * scale)
+        if stalkWiggle == 0, abs(desired - x) > 2 {
+            facingRight = dir > 0
+            let step = min(abs(desired - x), 22 * unit * CGFloat(dt))
+            x += desired > x ? step : -step
+            return
+        }
+        stalkWiggle += dt
+        if stalkWiggle > 0.9 {
+            stalkWiggle = 0
+            pounceFollowUp = true
+            // Pfote landet genau unter dem Zeiger; der Bogen reicht bis auf Zeigerhöhe
+            let target = cursor.x - CGFloat(Layout.canvasWidth) / 2 * scale - dir * 8 * scale
+            startJump(toX: clampX(target), toY: dockY, landing: .dock,
+                      arc: max(25 * unit, cursor.y - dockY - 6 * scale))
+        }
     }
 
     // MARK: Klettern
@@ -1011,12 +1141,12 @@ final class CatBrain {
         }
     }
 
-    private func startJump(toX: CGFloat, toY: CGFloat, landing: Landing) {
+    private func startJump(toX: CGFloat, toY: CGFloat, landing: Landing, arc customArc: CGFloat? = nil) {
         let dx = toX - x, dy = toY - y
         let distance = hypot(dx, dy)
         jump = Jump(fromX: x, fromY: y, toX: toX, toY: toY,
                     duration: min(0.9, 0.35 + Double(distance / (900 * unit))),
-                    arc: max(0, dy) / 2 + 25 * unit, landing: landing)
+                    arc: customArc ?? max(0, dy) / 2 + 25 * unit, landing: landing)
         if abs(dx) > 2 { facingRight = dx > 0 }
         perchID = nil
         wall = nil
@@ -1036,7 +1166,13 @@ final class CatBrain {
         switch jump.landing {
         case .dock:
             y = dockY
-            enter(.standing, for: .random(in: 0.3...0.7))
+            if pounceFollowUp {
+                // gelandet auf dem Mauszeiger: mit der Tatze draufhauen
+                pounceFollowUp = false
+                enter(.batting, for: 0.4)
+            } else {
+                enter(.standing, for: .random(in: 0.3...0.7))
+            }
         case .perch(let id):
             if let perch = perch(id), center >= perch.minX, center <= perch.maxX {
                 perchID = id
@@ -1257,6 +1393,10 @@ final class CatBrain {
             look.sprite = alternate(Frames.climbDownA, Frames.climbDownB, every: 0.16)
             look.facingRight = !(wall?.wallOnRight ?? false)
             look.drawX = Layout.climbX
+        case .stalking:
+            look.sprite = Frames.crouch
+            // vor dem Sprung wackelt das Hinterteil
+            if stalkWiggle > 0 { look.hop = Int(animTime / 0.09) % 2 }
         case .jumping, .falling, .away:
             look.sprite = Frames.walkA
         }
@@ -1276,6 +1416,10 @@ final class CatView: NSView {
     }
     var coat: Coat = .black {
         didSet { needsDisplay = true }
+    }
+    /// Verkleidung auf dem Kopf (Weihnachtsmütze, Partyhut) oder nil
+    var accessory: Sprite? {
+        didSet { if accessory !== oldValue { needsDisplay = true } }
     }
     var onClick: (() -> Void)?
 
@@ -1318,5 +1462,11 @@ final class CatView: NSView {
         }
         look.sprite.draw(in: ctx, x: CGFloat(look.drawX), y: CGFloat(look.hop), scale: scale,
                          colors: coat.colors)
+        // Hut zwischen die Ohren setzen (nur wenn der Kopf aufrecht ist)
+        if let accessory, let ears = look.sprite.earAnchor {
+            let x = look.drawX + ears.center - accessory.width / 2
+            let y = look.hop + look.sprite.height - 1 - ears.row
+            accessory.draw(in: ctx, x: CGFloat(x), y: CGFloat(y), scale: scale, colors: Frames.accessoryColors)
+        }
     }
 }

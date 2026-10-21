@@ -34,6 +34,14 @@ Schwanzspitze.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
   manchmal auf den Rücken.
+- **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe geht sie automatisch
+  auf Streifzug und kommt danach zurück. Ist ein macOS-Fokus aktiv, ist sie still und schläft mehr.
+- **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.
+- **Mauszeiger jagen:** Ruht die Maus knapp über dem Dock, schleicht sie sich an, wackelt mit dem Hinterteil
+  und springt (nicht im Streifzug).
+- **Feiertage:** Weihnachtsmütze am 24./25. Dezember, Partyhut an Silvester und Neujahr.
+- **Mehrere Bildschirme:** Ist ein Bildschirm daneben angeschlossen, läuft sie ab und zu hinüber.
+- **Zweisprachig:** Deutsch und Englisch.
 - **Tageszeit:** Tagsüber (9–19 Uhr) ist sie unternehmungslustig und macht nur kurze
   Nickerchen. Morgens und abends ist sie gemütlich. Nachts (23–6 Uhr) schläft sie lange und
   legt sich nach dem Aufscheuchen sofort wieder hin.
@@ -45,24 +53,25 @@ Schwanzspitze.
 open build/Pixelkatze.app
 ```
 
-Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (Katzenkopf-Symbol):
+Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (Katzenkopf-Symbol).
+Das Menü enthält nur, was man oft braucht:
 
 | Menüpunkt | Wirkung |
 |---|---|
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
-| Pomodoro | Fokus-Modus mit 25/5-Minuten-Rhythmus |
-| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen; läuft er, hat „Timer“ einen Haken – anklicken beendet ihn |
-| Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
-| Miauen | Katzenlaute bei Pomodoro und Pausen-Erinnerung (an/aus) |
-| Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |
+| Pomodoro | Fokus und Pause im Wechsel (Haken = läuft) |
+| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen (Haken = läuft, nochmal klicken beendet) |
+| Pausen-Erinnerung | regelmäßige Pausen (an/aus) |
 | Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
-| Füttern | Napf hinstellen |
-| Mit Wollknäuel spielen | Knäuel an/aus – mit der Maus greifen und werfen |
-| Aufscheuchen | Wie ein Klick auf die Katze |
-| Schlafen legen | Sie legt sich sofort hin |
-| Farbe → Orange getigert / Schwarz / Grau getigert | Fellfarbe (wird gemerkt) |
-| Größe → Klein / Mittel / Groß | Pixelgröße 2, 3 oder 4 Punkte (wird gemerkt) |
+| Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
+| Einstellungen … (⌘,) | Fenster mit allem Weiteren |
 | Pixelkatze beenden (⌘Q) | App beenden |
+
+**Einstellungsfenster** (vier Reiter):
+- **Katze:** Fellfarbe, Größe, Verkleidung an Feiertagen, Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln
+- **Zeiten:** Pomodoro-Fokus und -Pause, Abstand der Pausen-Erinnerung (frühestens/spätestens), Länge einer Pause
+- **Ton & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
+- **Allgemein:** Sprache (wie macOS, Deutsch, English)
 
 Startest du die App erneut, während sie ausgeblendet ist, kommt die Katze zurück.
 Wenn du sie dauerhaft haben willst, zieh `build/Pixelkatze.app` in den Ordner *Programme*
@@ -120,10 +129,17 @@ Eine einseitige Übersicht der Architektur gibt es als PDF:
   aller Fenster – ohne Sonderrechte, da keine Fenstertitel gelesen werden. Von jeder Oberkante wird
   abgezogen, was Fenster weiter vorne verdecken (`CatController.perches`). Ein Fenster in voller
   Bildschirmhöhe heißt Vollbild oder Split View – dann wird nicht geklettert.
-- **Töne (`Resources/Sounds`):** echte Katzenaufnahmen aus „Cat Purr & Meow“ von Kerzoven
+- **Töne (`Resources/Sounds`):** echte Katzenaufnahmen (Miauen und Schnurren) aus „Cat Purr & Meow“ von Kerzoven
   (https://opengameart.org/content/cat-purr-meow, CC0 / gemeinfrei), zugeschnitten und angeglichen.
 - **Napf und Knäuel:** eigene kleine Fenster. Das Knäuel hat eine einfache Physik
   (Schwerkraft, Abprallen, Rollreibung) und lässt sich ziehen und werfen.
+- **Sensoren (`Sensors.swift`):** Ob Kamera oder Mikrofon benutzt werden, fragt die App über CoreMediaIO
+  und CoreAudio ab – ohne Berechtigung. Bildschirmfreigabe erkennt sie an den Prozessen der macOS-Freigabe
+  und von Zoom. Den Fokus-Status gibt macOS nur nach einmaliger Zustimmung heraus (`INFocusStatusCenter`).
+- **Energie sparen:** Der Takt läuft nur bei Bewegung mit 30 Bildern pro Sekunde, in Ruhe mit 8 und
+  ist die Katze weg, nur zweimal pro Sekunde.
+- **Einstellungen (`Settings.swift`):** ein Modell (`AppSettings`) für alles, gespeichert in UserDefaults;
+  das Fenster ist in SwiftUI gebaut. Texte stehen zweisprachig direkt im Code (`L10n.s("Deutsch", "English")`).
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche
   drumherum lässt Klicks durch.
 - **Vorschau der Sprites:** `build/Pixelkatze.app/Contents/MacOS/Pixelkatze --export-preview vorschau.png`
@@ -135,6 +151,7 @@ open build/Pixelkatze.app --args --demo
 ```
 
 Im Demo-Modus ist für die Katze immer Nachmittag (sie ist aktiv) und sie klettert deutlich öfter.
+Mit `--outfit santa` oder `--outfit party` lassen sich die Feiertags-Verkleidungen vorführen.
 
 ## Eigene Posen malen
 

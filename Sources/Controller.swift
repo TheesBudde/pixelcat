@@ -100,20 +100,13 @@ final class PropWindow {
 struct Pomodoro {
     enum Stage { case focus, rest }
 
-    static let focusLength: TimeInterval = 25 * 60
-    static let restLength: TimeInterval = 5 * 60
-
     var stage: Stage
     var ends: Date
-
-    static func startFocus(at now: Date) -> Pomodoro {
-        Pomodoro(stage: .focus, ends: now.addingTimeInterval(focusLength))
-    }
 
     /// Text für die Menüleiste, z. B. "24:13" oder "Pause 4:12".
     func label(at now: Date) -> String {
         let time = countdownText(until: ends, from: now)
-        return stage == .focus ? time : "Pause \(time)"
+        return stage == .focus ? time : L10n.s("Pause", "Break") + " " + time
     }
 }
 
@@ -129,8 +122,6 @@ func countdownText(until end: Date, from now: Date) -> String {
 
 /// Selbst gestellter Timer: Die Katze schläft, bis er abläuft.
 struct CatTimer {
-    static let breakLength: TimeInterval = 5 * 60
-
     var ends: Date
     /// Läuft gerade eine Pause (Pausen-Erinnerung), während der Timer weiterzählt?
     var breakEnds: Date?
@@ -138,18 +129,29 @@ struct CatTimer {
     var finished = false
 }
 
+extension NSScreen {
+    var displayID: CGDirectDisplayID? {
+        deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+}
+
 // MARK: - Steuerung
 
-/// Hält alles zusammen: Katze, Napf, Knäuel, Pomodoro und Pausen-Erinnerung.
-/// Ein Takt 30-mal pro Sekunde bewegt alles und zeichnet neu.
+/// Hält alles zusammen: Katze, Napf, Knäuel, Pomodoro, Timer, Pausen-Erinnerung, Sensoren.
+/// Ein Takt bewegt alles und zeichnet neu – 30-mal pro Sekunde, wenn sich etwas bewegt,
+/// sonst seltener, um Energie zu sparen.
 @MainActor
 final class CatController {
     private let panel = makeOverlayPanel()
     private let view = CatView()
     private let brain = CatBrain()
     private var ticker: Timer?
+    private var tickInterval: TimeInterval = 1.0 / 30
     private var lastTick = CACurrentMediaTime()
     private var lastMouse = NSEvent.mouseLocation
+    private var lastPointer = NSEvent.mouseLocation
+    /// Wie lange der Mauszeiger schon ruht
+    private var pointerIdle = 0.0
     /// Wie weit die Maus schon über die Katze gestrichen ist
     private var strokeDistance: CGFloat = 0
     private(set) var isVisible = false
@@ -163,57 +165,115 @@ final class CatController {
     private var dragVelocity = CGVector.zero
 
     private(set) var pomodoro: Pomodoro?
+    private(set) var timer: CatTimer?
     private var nextReminder = Date.distantFuture
     private var perchRefresh = 0.0
+    private var sensorRefresh = 0.0
     private var statusText: String?
     /// Meldet Änderungen des Texts neben dem Menüleisten-Symbol (nil = kein Text).
     var onStatusChange: ((String?) -> Void)?
 
-    var scale: CGFloat {
-        didSet { applyScale() }
-    }
+    /// Auf welchem Bildschirm sie gerade ist (nil = Hauptbildschirm)
+    private var screenID: CGDirectDisplayID?
+    private let purr = Purr()
+    let focusMonitor: FocusMonitor
+    private var focusActive = false
+    /// Gerade versteckt wegen Videocall oder Bildschirmfreigabe (und warum)
+    private(set) var hiddenBecause: CallDetector.Reason?
+    private var callEndedAt: Date?
+    private var userRoaming = false
 
+    /// Welches Miau beim nächsten Pausen-Strecken kommt (und seit wann es aussteht)
+    private var pendingMeow: (kind: Meow.Kind, since: Date)?
+
+    // MARK: Einstellungen
+
+    var scale: CGFloat {
+        didSet { if scale != oldValue { applyScale() } }
+    }
     var coat: Coat {
         didSet { view.coat = coat }
     }
-
     var breakReminders = false {
         didSet { if breakReminders != oldValue { scheduleReminder() } }
     }
-
     /// Kletter-Modus: Die Katze darf auf offene Fenster.
     var climbing: Bool {
         get { brain.climbingEnabled }
         set {
+            guard newValue != brain.climbingEnabled else { return }
             if newValue { brain.setPerches(findPerches()) }
             brain.climbingEnabled = newValue
         }
     }
-
-    /// Miauen bei Pomodoro-Wechsel und Pausen-Erinnerung
     var sounds = true
-    /// Welches Miau beim nächsten Pausen-Strecken kommt (und seit wann es aussteht)
-    private var pendingMeow: (kind: Meow.Kind, since: Date)?
-
-    var isPlaying: Bool { ball != nil }
+    var purring = true
+    var chaseCursor: Bool {
+        get { brain.chaseEnabled }
+        set { brain.chaseEnabled = newValue }
+    }
+    var multiScreen = true
+    var hideDuringCalls = true {
+        didSet { if !hideDuringCalls { setHidden(because: nil) } }
+    }
+    var respectFocus = true
+    var seasonalOutfits = true {
+        didSet { updateOutfit() }
+    }
+    var focusMinutes = 25
+    var breakMinutes = 5
+    var reminderMinutes: ClosedRange<Double> = 45...55 {
+        didSet { if reminderMinutes != oldValue { scheduleReminder() } }
+    }
+    var breakLength: TimeInterval {
+        get { brain.breakVisitLength }
+        set { brain.breakVisitLength = newValue }
+    }
 
     /// Streifzug: Die Katze ist draußen und kommt nur zu Pausen vorbei.
     var roaming: Bool {
-        get { brain.roaming }
-        set { brain.roaming = newValue }
+        get { userRoaming }
+        set {
+            userRoaming = newValue
+            brain.roaming = userRoaming || hiddenBecause != nil
+        }
     }
+
+    /// Alle Einstellungen auf einmal übernehmen.
+    func apply(_ settings: AppSettings) {
+        coat = settings.coat
+        scale = settings.scale
+        seasonalOutfits = settings.seasonalOutfits
+        climbing = settings.climbing
+        chaseCursor = settings.chaseCursor
+        multiScreen = settings.multiScreen
+        breakReminders = settings.breakReminders
+        sounds = settings.sounds
+        purring = settings.purring
+        hideDuringCalls = settings.hideDuringCalls
+        respectFocus = settings.respectFocus
+        focusMinutes = settings.pomodoroFocus
+        breakMinutes = settings.pomodoroBreak
+        reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
+        breakLength = TimeInterval(settings.breakLength * 60)
+        if settings.roaming != userRoaming { roaming = settings.roaming }
+        updateStatusText(force: true)
+    }
+
+    var isPlaying: Bool { ball != nil }
     /// Im Streifzug unterwegs (kein Pausenbesuch) – dann gibt es nichts zu füttern oder zu spielen
     var isOutAndAbout: Bool { brain.isOutAndAbout }
+    /// Die Katze schläft fest (Pomodoro-Fokus oder laufender Timer).
+    var isInFocus: Bool { brain.mode == .focus }
+    private var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil }
 
     /// Beim Start im Streifzug gleich draußen sein, statt erst hinauszulaufen.
     func startRoamingOutside() {
+        userRoaming = true
         brain.roaming = true
         updateBounds()
         brain.startOutside()
     }
-    /// Die Katze schläft fest (Pomodoro-Fokus oder laufender Timer).
-    var isInFocus: Bool { brain.mode == .focus }
-    private(set) var timer: CatTimer?
 
     /// Zum Vorführen: immer Nachmittag (aktive Katze) und viel Klettern.
     func enableDemo() {
@@ -222,9 +282,13 @@ final class CatController {
         brain.adventurousness = 2.2
     }
 
-    init(scale: CGFloat, coat: Coat) {
+    /// Zum Ausprobieren der Verkleidungen ohne auf Weihnachten zu warten (Start mit --outfit santa|party).
+    var outfitOverride: Sprite?
+
+    init(scale: CGFloat, coat: Coat, focusMonitor: FocusMonitor) {
         self.scale = scale
         self.coat = coat
+        self.focusMonitor = focusMonitor
         view.coat = coat
         panel.contentView = view
         view.onClick = { [weak self] in self?.brain.clicked() }
@@ -232,7 +296,7 @@ final class CatController {
         brain.onBreakStretch = { [weak self] in
             guard let self, let meow = pendingMeow else { return }
             pendingMeow = nil
-            if sounds, Date().timeIntervalSince(meow.since) < 120 { Meow.play(meow.kind) }
+            if soundsAllowed, Date().timeIntervalSince(meow.since) < 120 { Meow.play(meow.kind) }
         }
         // Gestreichelt oder angeklickt: abgelaufener Timer ist erledigt
         brain.onAcknowledged = { [weak self] in
@@ -242,13 +306,9 @@ final class CatController {
             updateStatusText()
         }
         applyScale()
-
-        // Der Takt läuft immer, damit der Pomodoro auch bei ausgeblendeter Katze weiterzählt.
-        let ticker = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
-        }
-        RunLoop.main.add(ticker, forMode: .common)
-        self.ticker = ticker
+        updateOutfit()
+        // Der Takt läuft immer, damit Pomodoro und Timer auch bei ausgeblendeter Katze weiterzählen.
+        restartTicker()
     }
 
     // MARK: Ein- und Ausblenden
@@ -327,7 +387,7 @@ final class CatController {
 
     func startPomodoro() {
         guard timer == nil else { return }
-        pomodoro = .startFocus(at: Date())
+        pomodoro = Pomodoro(stage: .focus, ends: Date().addingTimeInterval(Double(focusMinutes) * 60))
         setPlaying(false)
         removeBowl()
         brain.mode = .focus
@@ -382,10 +442,10 @@ final class CatController {
         self.timer = timer
     }
 
-    /// Pausen-Erinnerung, während ein Timer läuft: 5 Minuten Pause, der Timer zählt weiter.
+    /// Pausen-Erinnerung, während ein Timer läuft: eine Pause, der Timer zählt weiter.
     private func takeBreakDuringTimer(now: Date) {
         guard var timer, timer.breakEnds == nil else { return }
-        timer.breakEnds = now.addingTimeInterval(CatTimer.breakLength)
+        timer.breakEnds = now.addingTimeInterval(breakLength)
         self.timer = timer
         brain.mode = .focusBreak
         pendingMeow = (.reminder, now)
@@ -425,12 +485,27 @@ final class CatController {
         lastDrag = nil
     }
 
-    // MARK: Takt
+    // MARK: Bildschirme
 
-    /// Der Hauptbildschirm (der mit der Menüleiste).
-    private var screen: NSScreen? { NSScreen.screens.first }
+    /// Hauptbildschirm (mit der Menüleiste) – nach ihm richten sich die Fensterkoordinaten.
+    private var primaryScreen: NSScreen? { NSScreen.screens.first }
+    /// Der Bildschirm, auf dem die Katze gerade ist. Wird er abgesteckt, geht's zurück zum Hauptbildschirm.
+    private var screen: NSScreen? {
+        if let screenID, let current = NSScreen.screens.first(where: { $0.displayID == screenID }) { return current }
+        return primaryScreen
+    }
     private var ground: CGFloat { screen?.visibleFrame.minY ?? 0 }
     private var catCenter: CGFloat { brain.x + CGFloat(Layout.canvasWidth) / 2 * scale }
+
+    /// Angrenzender Bildschirm links bzw. rechts (nur wenn angeschlossen und erlaubt).
+    private func neighbor(left: Bool) -> NSScreen? {
+        guard multiScreen, NSScreen.screens.count > 1, let current = screen else { return nil }
+        return NSScreen.screens.first { other in
+            other != current
+                && (left ? abs(other.frame.maxX - current.frame.minX) < 2 : abs(other.frame.minX - current.frame.maxX) < 2)
+                && other.frame.maxY > current.frame.minY && other.frame.minY < current.frame.maxY
+        }
+    }
 
     private func applyScale() {
         let size = NSSize(width: CGFloat(Layout.canvasWidth) * scale,
@@ -448,6 +523,24 @@ final class CatController {
         guard let frame = screen?.frame else { return }
         brain.minX = frame.minX - CGFloat(Layout.margin) * scale
         brain.maxX = frame.maxX - CGFloat(Layout.canvasWidth - Layout.margin) * scale
+        brain.neighborLeft = neighbor(left: true) != nil
+        brain.neighborRight = neighbor(left: false) != nil
+    }
+
+    /// Sie ist zum Nachbarbildschirm hinausgelaufen: Bildschirm wechseln und dort hereinkommen.
+    private func handleScreenSwitch() {
+        guard let left = brain.screenSwitchRequest else { return }
+        brain.screenSwitchRequest = nil
+        if let next = neighbor(left: left) {
+            screenID = next.displayID
+            updateBounds()
+            brain.dockY = ground
+            brain.setPerches([])
+            perchRefresh = 0
+            brain.arriveFromSide(left: !left)
+        } else {
+            brain.arriveFromSide(left: left) // Nachbar inzwischen weg: einfach zurück
+        }
     }
 
     private func removeBowl() {
@@ -458,7 +551,57 @@ final class CatController {
     }
 
     private func scheduleReminder() {
-        nextReminder = breakReminders ? Date().addingTimeInterval(.random(in: 45...55) * 60) : .distantFuture
+        nextReminder = breakReminders
+            ? Date().addingTimeInterval(.random(in: reminderMinutes) * 60)
+            : .distantFuture
+    }
+
+    // MARK: Sensoren
+
+    /// Videocall oder Bildschirmfreigabe → auf Streifzug (und erst 5 s nach dem Ende zurück).
+    private func updateCallHiding(now: Date) {
+        let reason = hideDuringCalls ? CallDetector.currentReason() : nil
+        if let reason {
+            callEndedAt = nil
+            setHidden(because: reason)
+        } else if hiddenBecause != nil {
+            if let ended = callEndedAt {
+                if now.timeIntervalSince(ended) > 5 { setHidden(because: nil) }
+            } else {
+                callEndedAt = now
+            }
+        }
+    }
+
+    private func setHidden(because reason: CallDetector.Reason?) {
+        guard (reason == nil) != (hiddenBecause == nil) || reason != hiddenBecause else { return }
+        hiddenBecause = reason
+        brain.suppressVisits = reason != nil
+        brain.roaming = userRoaming || reason != nil
+    }
+
+    /// Fokus aktiv → leise und ruhig.
+    private func updateFocus() {
+        focusActive = respectFocus && focusMonitor.isFocused
+        brain.calm = focusActive
+    }
+
+    /// Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1.
+    private func updateOutfit() {
+        if let outfitOverride {
+            view.accessory = outfitOverride
+            return
+        }
+        guard seasonalOutfits else {
+            view.accessory = nil
+            return
+        }
+        let day = Calendar.current.dateComponents([.month, .day], from: Date())
+        switch (day.month, day.day) {
+        case (12, 24), (12, 25): view.accessory = Frames.santaHat
+        case (12, 31), (1, 1): view.accessory = Frames.partyHat
+        default: view.accessory = nil
+        }
     }
 
     /// Streicheln: Die Maus bewegt sich über der Katze, ohne zu klicken.
@@ -468,7 +611,7 @@ final class CatController {
         defer { lastMouse = mouse }
         let origin = panel.frame.origin
         let local = NSPoint(x: mouse.x - origin.x, y: mouse.y - origin.y)
-        guard isVisible, NSEvent.pressedMouseButtons == 0, view.isCat(at: local) else {
+        guard isVisible, panel.isVisible, NSEvent.pressedMouseButtons == 0, view.isCat(at: local) else {
             strokeDistance = 0
             return
         }
@@ -480,18 +623,37 @@ final class CatController {
         }
     }
 
-    /// Sichtbare Oberkanten der offenen Fenster auf dem Hauptbildschirm.
+    /// Mauszeiger für die Jagd: nur wenn er auf ihrem Bildschirm knapp über dem Dock ist.
+    private func updatePointer(dt: Double) {
+        let mouse = NSEvent.mouseLocation
+        if hypot(mouse.x - lastPointer.x, mouse.y - lastPointer.y) > 1 {
+            pointerIdle = 0
+        } else {
+            pointerIdle += dt
+        }
+        lastPointer = mouse
+        if let frame = screen?.frame, frame.contains(mouse),
+           mouse.y >= ground, mouse.y <= ground + 110 * scale / 3 {
+            brain.cursor = (mouse.x, mouse.y, pointerIdle)
+        } else {
+            brain.cursor = nil
+        }
+    }
+
+    // MARK: Fensterkanten
+
+    /// Sichtbare Oberkanten der offenen Fenster auf ihrem Bildschirm.
     /// Die Fensterpositionen liefert macOS ohne Sonderrechte (nur Titel wären geschützt).
     /// Ist ein Fenster im Vollbild oder in Split View, gibt es nichts zum Klettern.
     private func findPerches() -> [Perch] {
-        guard let screen,
+        guard let screen, let primary = primaryScreen,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                     kCGNullWindowID) as? [[String: Any]]
         else { return [] }
         let frame = screen.frame
         let ownPID = ProcessInfo.processInfo.processIdentifier
 
-        // von vorne nach hinten, in Bildschirmkoordinaten (y von unten)
+        // von vorne nach hinten, in Bildschirmkoordinaten (y von unten, bezogen auf den Hauptbildschirm)
         var windows: [(id: Int, rect: CGRect)] = []
         for info in list {
             guard (info[kCGWindowLayer as String] as? Int) == 0,
@@ -501,7 +663,8 @@ final class CatController {
                   let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
                   let bounds = CGRect(dictionaryRepresentation: boundsInfo)
             else { continue }
-            let rect = CGRect(x: bounds.minX, y: frame.maxY - bounds.maxY, width: bounds.width, height: bounds.height)
+            let rect = CGRect(x: bounds.minX, y: primary.frame.maxY - bounds.maxY,
+                              width: bounds.width, height: bounds.height)
             guard rect.width >= 120, rect.height >= 80, rect.intersects(frame) else { continue }
             if rect.height >= frame.height - 2 { return [] } // Vollbild oder Split View
             windows.append((id, rect))
@@ -535,45 +698,85 @@ final class CatController {
         return perches
     }
 
+    // MARK: Uhren
+
     private func updatePomodoro(now: Date) {
         guard var pomodoro, now >= pomodoro.ends else { return }
         switch pomodoro.stage {
         case .focus:
             // Fokuszeit vorbei: aufwachen, strecken, Pause machen
-            pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Pomodoro.restLength))
+            pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Double(breakMinutes) * 60))
             brain.mode = .focusBreak
             pendingMeow = (.breakStarts, now)
         case .rest:
-            pomodoro = .startFocus(at: now)
+            pomodoro = Pomodoro(stage: .focus, ends: now.addingTimeInterval(Double(focusMinutes) * 60))
             setPlaying(false)
             removeBowl()
             brain.mode = .focus
-            if sounds { Meow.play(.backToWork) }
+            if soundsAllowed { Meow.play(.backToWork) }
         }
         self.pomodoro = pomodoro
     }
 
-    private func updateStatusText() {
+    private func updateStatusText(force: Bool = false) {
         let text = pomodoro?.label(at: Date())
             ?? timer.map { $0.finished ? "0:00" : countdownText(until: $0.ends, from: Date()) }
-        if text != statusText {
+        if text != statusText || force {
             statusText = text
             onStatusChange?(text)
         }
     }
 
+    // MARK: Takt
+
+    /// Wie oft der Takt läuft: flüssig bei Bewegung, sparsam in Ruhe, fast gar nicht, wenn sie weg ist.
+    private func adjustTickRate() {
+        let mouse = NSEvent.mouseLocation
+        let mouseNearCat = panel.isVisible && panel.frame.insetBy(dx: -100, dy: -100).contains(mouse)
+        let interval: TimeInterval
+        if !isVisible || brain.isAway {
+            interval = 0.5
+        } else if brain.needsSmoothMotion || ball != nil || mouseNearCat || brain.isBeingPetted {
+            interval = 1.0 / 30
+        } else {
+            interval = 1.0 / 8
+        }
+        if interval != tickInterval {
+            tickInterval = interval
+            restartTicker()
+        }
+    }
+
+    private func restartTicker() {
+        ticker?.invalidate()
+        let ticker = Timer(timeInterval: tickInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        ticker.tolerance = tickInterval * 0.2
+        RunLoop.main.add(ticker, forMode: .common)
+        self.ticker = ticker
+    }
+
     private func tick() {
         let now = CACurrentMediaTime()
-        let dt = min(now - lastTick, 0.1)
+        let dt = min(now - lastTick, 0.6)
         lastTick = now
         let date = Date()
 
+        if screenID != nil, screen?.displayID != screenID { screenID = nil } // Bildschirm abgesteckt
         updateBounds()
         brain.dockY = ground
         perchRefresh -= dt
         if perchRefresh <= 0, brain.climbingEnabled || brain.isOnWindow {
             perchRefresh = 0.2
             brain.setPerches(findPerches())
+        }
+        sensorRefresh -= dt
+        if sensorRefresh <= 0 {
+            sensorRefresh = 2
+            updateCallHiding(now: date)
+            updateFocus()
+            updateOutfit()
         }
         updatePomodoro(now: date)
         updateTimer(now: date)
@@ -590,7 +793,10 @@ final class CatController {
         }
 
         checkStroking()
+        updatePointer(dt: dt)
         brain.update(dt: dt)
+        handleScreenSwitch()
+        purr.update(dt: dt, active: purring && soundsAllowed && isVisible && brain.isBeingPetted)
 
         if let ball, let frame = screen?.visibleFrame {
             let radius = 4 * scale
@@ -601,6 +807,7 @@ final class CatController {
             bowl.emptyFor += dt
             if bowl.emptyFor > 12 { removeBowl() }
         }
+        defer { adjustTickRate() }
 
         // Draußen auf Streifzug: Fenster weg (sonst tauchte es auf einem Nachbarbildschirm auf),
         // liegengebliebenes Spielzeug wird weggeräumt
