@@ -11,10 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cat: CatController!
     private var toggleItem: NSMenuItem!
     private var sizeItems: [NSMenuItem] = []
+    private var coatItems: [NSMenuItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        UserDefaults.standard.register(defaults: ["scale": 3.0])
-        cat = CatController(scale: UserDefaults.standard.double(forKey: "scale"))
+        let defaults = UserDefaults.standard
+        defaults.register(defaults: ["scale": 3.0, "coat": Coat.black.rawValue])
+        let coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
+        cat = CatController(scale: defaults.double(forKey: "scale"), coat: coat)
         setUpStatusItem()
         cat.show()
     }
@@ -39,6 +42,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Aufscheuchen", #selector(startle)))
         menu.addItem(item("Schlafen legen", #selector(goToSleep)))
         menu.addItem(.separator())
+
+        let coatMenu = NSMenu()
+        for (index, coat) in Coat.allCases.enumerated() {
+            let coatItem = item(coat.title, #selector(changeCoat(_:)))
+            coatItem.tag = index
+            coatMenu.addItem(coatItem)
+            coatItems.append(coatItem)
+        }
+        let coatParent = NSMenuItem(title: "Farbe", action: nil, keyEquivalent: "")
+        coatParent.submenu = coatMenu
+        menu.addItem(coatParent)
 
         let sizeMenu = NSMenu()
         for (index, size) in Self.sizes.enumerated() {
@@ -71,6 +85,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for item in sizeItems {
             item.state = Self.sizes[item.tag].scale == cat.scale ? .on : .off
         }
+        for item in coatItems {
+            item.state = Coat.allCases[item.tag] == cat.coat ? .on : .off
+        }
+    }
+
+    @objc private func changeCoat(_ sender: NSMenuItem) {
+        cat.coat = Coat.allCases[sender.tag]
+        UserDefaults.standard.set(cat.coat.rawValue, forKey: "coat")
     }
 
     @objc private func toggleCat() {

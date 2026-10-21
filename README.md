@@ -1,7 +1,8 @@
 # Pixelkatze 🐈
 
-Eine kleine schwarze Pixel-Art-Katze, die auf der Oberkante deines Docks hin und her
-läuft, sich irgendwann hinlegt und schläft.
+Eine kleine Pixel-Art-Katze (orange getigert, schwarz oder grau getigert), die auf der Oberkante deines Docks hin und her
+läuft, sich irgendwann hinlegt und schläft. Im Liegen bewegt sie ab und zu ruhig die
+Schwanzspitze.
 
 - **Streicheln:** Fährst du mit der Maus über sie, ohne zu klicken, wacht sie auf,
   kneift zufrieden die Augen zu und schmiegt sich an. Danach kuschelt sie sich wieder ein.
@@ -24,6 +25,7 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
 | Aufscheuchen | Wie ein Klick auf die Katze |
 | Schlafen legen | Sie legt sich sofort hin |
+| Farbe → Orange getigert / Schwarz / Grau getigert | Fellfarbe (wird gemerkt) |
 | Größe → Klein / Mittel / Groß | Pixelgröße 2, 3 oder 4 Punkte (wird gemerkt) |
 | Pixelkatze beenden (⌘Q) | App beenden |
 
@@ -52,8 +54,10 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
   verschoben. Die Unterkante liegt auf `visibleFrame.minY`, also genau auf dem Dock.
   `.nonactivatingPanel` sorgt dafür, dass ein Klick auf die Katze dem gerade aktiven
   Programm nicht den Fokus wegnimmt.
-- **Grafik (`Sprites.swift`):** Jede Pose ist ein Textraster, ein Buchstabe pro Pixel und
-  Farbe (`K` Umriss, `O` Fell, `h` Glanz, `E` Augen, `P` rosa, `w` Schnurrhaare). Gezeichnet
+- **Grafik (`Sprites.swift`):** Jede Pose ist ein Textraster mit einem Buchstaben pro Pixel
+  (`K` Umriss, `O` Fell, `h` Glanz, `s` Streifen, `W` Brust/Pfoten, `E` Augen, `P` Nase/Ohren,
+  `w` Schnurrhaare). Welche Farbe ein Buchstabe bekommt, legt die Fellfarbe (`Coat`) fest.
+  Bei der schwarzen Katze sind Streifen und Brust einfach auch schwarz. Gezeichnet
   wird Pixel für Pixel als Quadrat, also bewusst „blockig“. Nach links wird gespiegelt.
   Die Varianten mit geschlossenen und zufriedenen Augen werden automatisch erzeugt.
 - **Verhalten (`Cat.swift` → `CatBrain`):** ein Zustandsautomat:
@@ -68,6 +72,7 @@ und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu
 - **Streicheln:** 30-mal pro Sekunde wird die Mausposition abgefragt. Bewegt sich die
   Maus über den Katzenpixeln, ohne dass eine Taste gedrückt ist, zählt das als Streicheln.
   Dafür braucht die App keine besonderen Rechte.
+- **Menüleisten-Symbol:** als Vektorgrafik gezeichnet, damit es auf jedem Bildschirm scharf ist.
 - **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche
   drumherum lässt Klicks durch.
 - **Vorschau der Sprites:** `build/Pixelkatze.app/Contents/MacOS/Pixelkatze --export-preview vorschau.png`

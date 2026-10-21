@@ -8,28 +8,47 @@ enum Exporter {
         for base in [16, 32, 128, 256, 512] {
             for factor in [1, 2] {
                 let suffix = factor == 2 ? "@2x" : ""
-                let data = try png(width: base * factor, height: base * factor) { ctx, size in
-                    drawIcon(in: ctx, size: size)
+                let data = try png(width: base * factor, height: base * factor) { ctx in
+                    drawIcon(in: ctx, size: CGFloat(base * factor))
                 }
                 try data.write(to: dir.appendingPathComponent("icon_\(base)x\(base)\(suffix).png"))
             }
         }
     }
 
+    /// Alle Posen in allen Fellfarben (eine Zeile pro Farbe) plus das Menüleisten-Symbol.
     static func exportPreview(to path: String) throws {
-        let scale: CGFloat = 8
+        let scale: CGFloat = 5
         let cell = 28
-        let columns = 4
-        let rows = (Frames.all.count + columns - 1) / columns
-        let width = columns * cell * Int(scale)
-        let height = rows * cell * Int(scale)
-        let data = try png(width: width, height: height) { ctx, _ in
+        let frames = Frames.all
+        let width = (frames.count * cell + 2) * Int(scale)
+        let height = (Coat.allCases.count * cell + 24) * Int(scale)
+        let data = try png(width: width, height: height) { ctx in
             ctx.setFillColor(CGColor(gray: 0.45, alpha: 1))
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            for (i, (_, sprite)) in Frames.all.enumerated() {
-                let cx = CGFloat((i % columns) * cell + 2)
-                let cy = CGFloat((rows - 1 - i / columns) * cell + 2)
-                sprite.draw(in: ctx, x: cx, y: cy, scale: scale)
+            for (row, coat) in Coat.allCases.reversed().enumerated() {
+                for (col, sprite) in frames.enumerated() {
+                    sprite.draw(in: ctx, x: CGFloat(col * cell + 2), y: CGFloat(row * cell + 24 + 2),
+                                scale: scale, coat: coat)
+                }
+            }
+            // Menüleisten-Symbol in 1×, 2× und groß, auf hellem und dunklem Grund
+            let icon = Frames.menuBarIcon()
+            for (i, (factor, dark)) in [(1.0, false), (2.0, false), (6.0, false), (1.0, true), (2.0, true), (6.0, true)].enumerated() {
+                let box = CGRect(x: 10 + CGFloat(i) * 150 * scale / 5, y: 10, width: 20 * factor + 16, height: 16 * factor + 16)
+                ctx.setFillColor(dark ? CGColor(gray: 0.15, alpha: 1) : CGColor(gray: 0.93, alpha: 1))
+                ctx.fill(box)
+                let tinted = NSImage(size: icon.size, flipped: false) { rect in
+                    icon.draw(in: rect)
+                    (dark ? NSColor.white : NSColor.black).set()
+                    rect.fill(using: .sourceAtop)
+                    return true
+                }
+                var rect = CGRect(x: box.minX + 8, y: box.minY + 8, width: 20 * factor, height: 16 * factor)
+                if let cg = tinted.cgImage(forProposedRect: &rect, context: nil, hints: nil) {
+                    ctx.interpolationQuality = .high
+                    ctx.draw(cg, in: CGRect(x: box.minX + 8, y: box.minY + 8, width: 20 * factor, height: 16 * factor))
+                }
             }
         }
         try data.write(to: URL(fileURLWithPath: path))
@@ -60,18 +79,19 @@ enum Exporter {
         if scale >= 2 { scale = scale.rounded(.down) }
         let originX = (size - CGFloat(sprite.width) * scale) / 2 / scale
         let originY = (rect.minY + groundHeight) / scale
-        sprite.draw(in: ctx, x: originX, y: originY, scale: scale)
+        sprite.draw(in: ctx, x: originX, y: originY, scale: scale, coat: .black)
     }
 
-    private static func png(width: Int, height: Int,
-                            draw: (CGContext, CGFloat) -> Void) throws -> Data {
+    private static func png(width: Int, height: Int, draw: (CGContext) -> Void) throws -> Data {
         guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                                   bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { throw CocoaError(.fileWriteUnknown) }
         ctx.setShouldAntialias(false)
         ctx.interpolationQuality = .none
-        draw(ctx, CGFloat(width))
+        // Damit NSImage-Zeichnungen (Menüleisten-Symbol) in diesen Kontext gehen
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        draw(ctx)
         guard let image = ctx.makeImage(),
               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
         else { throw CocoaError(.fileWriteUnknown) }

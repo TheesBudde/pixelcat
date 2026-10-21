@@ -75,6 +75,8 @@ final class CatBrain {
     private lazy var walksBeforeNap = temperament.walks.randomElement() ?? 1
     private var blinkCountdown = 3.0
     private var blinkLeft = 0.0
+    private var tailCountdown = 3.0
+    private var tailLeft = 0.0
     private var timeSinceStroke = 0.0
     private var pettedWhileLying = false
 
@@ -86,6 +88,7 @@ final class CatBrain {
         phaseTime += dt
         animTime += dt
         updateBlink(dt)
+        updateTail(dt)
         x = min(max(x, minX), maxX)
 
         switch phase {
@@ -216,9 +219,23 @@ final class CatBrain {
         }
     }
 
+    /// Im Liegen hebt sie ab und zu ruhig die Schwanzspitze.
+    private func updateTail(_ dt: Double) {
+        if tailLeft > 0 {
+            tailLeft -= dt
+            return
+        }
+        tailCountdown -= dt
+        if tailCountdown <= 0 {
+            tailLeft = .random(in: 0.7...1.3)
+            tailCountdown = .random(in: 2.5...7)
+        }
+    }
+
     var look: CatLook {
         var look = CatLook(sprite: Frames.stand, facingRight: facingRight)
         let blinking = blinkLeft > 0
+        let tailUp = tailLeft > 0
 
         switch phase {
         case .standing:
@@ -232,10 +249,18 @@ final class CatBrain {
             look.sprite = blinking ? Frames.sitBlink : Frames.sit
         case .lyingDown:
             // Gegen Ende werden die Augen schwer
-            let sleepy = phaseTime > phaseDuration * 0.65
-            look.sprite = blinking || sleepy ? Frames.lieBlink : Frames.lie
+            let eyesClosed = blinking || phaseTime > phaseDuration * 0.65
+            if eyesClosed {
+                look.sprite = tailUp ? Frames.lieBlinkTailUp : Frames.lieBlink
+            } else {
+                look.sprite = tailUp ? Frames.lieTailUp : Frames.lie
+            }
         case .sleeping:
-            look.sprite = Int(animTime / 1.1) % 2 == 0 ? Frames.sleepA : Frames.sleepB
+            if Int(animTime / 1.1) % 2 == 0 {
+                look.sprite = tailUp ? Frames.sleepATailUp : Frames.sleepA
+            } else {
+                look.sprite = tailUp ? Frames.sleepBTailUp : Frames.sleepB
+            }
         case .wakingUp:
             if phaseTime < 0.7 {
                 look.sprite = Frames.lie
@@ -268,6 +293,9 @@ final class CatView: NSView {
         didSet { needsDisplay = true }
     }
     var scale: CGFloat = 3 {
+        didSet { needsDisplay = true }
+    }
+    var coat: Coat = .black {
         didSet { needsDisplay = true }
     }
     var onClick: (() -> Void)?
@@ -309,7 +337,7 @@ final class CatView: NSView {
             ctx.translateBy(x: bounds.width, y: 0)
             ctx.scaleBy(x: -1, y: 1)
         }
-        look.sprite.draw(in: ctx, x: CGFloat(Layout.margin), y: CGFloat(look.hop), scale: scale)
+        look.sprite.draw(in: ctx, x: CGFloat(Layout.margin), y: CGFloat(look.hop), scale: scale, coat: coat)
     }
 }
 
@@ -333,8 +361,14 @@ final class CatController {
         didSet { applyScale() }
     }
 
-    init(scale: CGFloat) {
+    var coat: Coat {
+        didSet { view.coat = coat }
+    }
+
+    init(scale: CGFloat, coat: Coat) {
         self.scale = scale
+        self.coat = coat
+        view.coat = coat
         panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
         panel.isOpaque = false
