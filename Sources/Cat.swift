@@ -379,11 +379,18 @@ final class CatBrain {
     /// Pausen-Erinnerung: zur Bildschirmmitte laufen und sich strecken.
     func remindToTakeBreak() {
         guard mode == .normal else { return }
+        callToCenter()
+    }
+
+    /// Zeit für eine Pause (Erinnerung, abgelaufener Timer): aufwachen, in die Bildschirmmitte
+    /// laufen, strecken und gähnen. Im Streifzug kommt sie dafür 5 Minuten herein.
+    func callToCenter() {
         if roaming {
-            startVisit(for: 5 * 60)
+            if !isVisiting { startVisit(for: 5 * 60) }
             return
         }
         reminderPending = true
+        if mode == .focus { return } // schläft weiter; der Aufruf kommt mit der Pause
         noticeSomething()
     }
 
@@ -420,7 +427,8 @@ final class CatBrain {
             }
         case .wakingUp:
             walksBeforeNap = temperament.walks.randomElement() ?? 1
-            if mode == .focusBreak || Double.random(in: 0..<1) < 0.7 {
+            if !reminderPending, mode == .focusBreak || Double.random(in: 0..<1) < 0.7 {
+                // (soll sie in die Mitte, streckt sie sich erst dort)
                 enter(.stretching, for: 1.8)
             } else {
                 enter(.standing, for: .random(in: 0.5...1.2))

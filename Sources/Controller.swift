@@ -112,10 +112,28 @@ struct Pomodoro {
 
     /// Text für die Menüleiste, z. B. "24:13" oder "Pause 4:12".
     func label(at now: Date) -> String {
-        let left = max(0, Int(ends.timeIntervalSince(now).rounded(.up)))
-        let time = String(format: "%d:%02d", left / 60, left % 60)
+        let time = countdownText(until: ends, from: now)
         return stage == .focus ? time : "Pause \(time)"
     }
+}
+
+/// Restzeit als "4:12" bzw. "1:04:12".
+func countdownText(until end: Date, from now: Date) -> String {
+    let left = max(0, Int(end.timeIntervalSince(now).rounded(.up)))
+    return left >= 3600
+        ? String(format: "%d:%02d:%02d", left / 3600, left / 60 % 60, left % 60)
+        : String(format: "%d:%02d", left / 60, left % 60)
+}
+
+// MARK: - Timer
+
+/// Selbst gestellter Timer: Die Katze schläft, bis er abläuft.
+struct CatTimer {
+    static let breakLength: TimeInterval = 5 * 60
+
+    var ends: Date
+    /// Läuft gerade eine Pause (Pausen-Erinnerung), während der Timer weiterzählt?
+    var breakEnds: Date?
 }
 
 // MARK: - Steuerung
@@ -127,7 +145,7 @@ final class CatController {
     private let panel = makeOverlayPanel()
     private let view = CatView()
     private let brain = CatBrain()
-    private var timer: Timer?
+    private var ticker: Timer?
     private var lastTick = CACurrentMediaTime()
     private var lastMouse = NSEvent.mouseLocation
     /// Wie weit die Maus schon über die Katze gestrichen ist
@@ -189,7 +207,9 @@ final class CatController {
         updateBounds()
         brain.startOutside()
     }
-    var isInFocus: Bool { pomodoro?.stage == .focus }
+    /// Die Katze schläft fest (Pomodoro-Fokus oder laufender Timer).
+    var isInFocus: Bool { brain.mode == .focus }
+    private(set) var timer: CatTimer?
 
     /// Zum Vorführen: immer Nachmittag (aktive Katze) und viel Klettern.
     func enableDemo() {
@@ -207,11 +227,11 @@ final class CatController {
         applyScale()
 
         // Der Takt läuft immer, damit der Pomodoro auch bei ausgeblendeter Katze weiterzählt.
-        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+        let ticker = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        RunLoop.main.add(ticker, forMode: .common)
+        self.ticker = ticker
     }
 
     // MARK: Ein- und Ausblenden
@@ -289,6 +309,7 @@ final class CatController {
     }
 
     func startPomodoro() {
+        guard timer == nil else { return }
         pomodoro = .startFocus(at: Date())
         setPlaying(false)
         removeBowl()
@@ -301,6 +322,50 @@ final class CatController {
         brain.mode = .normal
         scheduleReminder()
         updateStatusText()
+    }
+
+    func startTimer(minutes: Double) {
+        guard pomodoro == nil else { return }
+        timer = CatTimer(ends: Date().addingTimeInterval(minutes * 60))
+        setPlaying(false)
+        removeBowl()
+        brain.mode = .focus
+        updateStatusText()
+    }
+
+    func stopTimer() {
+        timer = nil
+        brain.mode = .normal
+        updateStatusText()
+    }
+
+    /// Timer abgelaufen oder Pause vorbei?
+    private func updateTimer(now: Date) {
+        guard var timer else { return }
+        if now >= timer.ends {
+            // Abgelaufen – auch mitten in einer Pause: Sie (bleibt) wach und kommt in die Mitte.
+            self.timer = nil
+            brain.mode = .normal
+            brain.callToCenter()
+            if sounds { Meow.play(.breakStarts) }
+            scheduleReminder() // gilt als Pause; die nächste Erinnerung zählt neu
+            return
+        }
+        if let breakEnds = timer.breakEnds, now >= breakEnds {
+            // Pause vorbei, der Timer läuft weiter: wieder schlafen bzw. hinaus
+            timer.breakEnds = nil
+            brain.mode = .focus
+        }
+        self.timer = timer
+    }
+
+    /// Pausen-Erinnerung, während ein Timer läuft: 5 Minuten Pause, der Timer zählt weiter.
+    private func takeBreakDuringTimer(now: Date) {
+        guard var timer, timer.breakEnds == nil else { return }
+        timer.breakEnds = now.addingTimeInterval(CatTimer.breakLength)
+        self.timer = timer
+        brain.mode = .focusBreak
+        brain.callToCenter()
     }
 
     // MARK: Knäuel ziehen und werfen
@@ -465,7 +530,7 @@ final class CatController {
     }
 
     private func updateStatusText() {
-        let text = pomodoro?.label(at: Date())
+        let text = pomodoro?.label(at: Date()) ?? timer.map { countdownText(until: $0.ends, from: Date()) }
         if text != statusText {
             statusText = text
             onStatusChange?(text)
@@ -486,9 +551,14 @@ final class CatController {
             brain.setPerches(findPerches())
         }
         updatePomodoro(now: date)
+        updateTimer(now: date)
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
-            brain.remindToTakeBreak()
+            if timer != nil {
+                takeBreakDuringTimer(now: date)
+            } else {
+                brain.remindToTakeBreak()
+            }
             if sounds { Meow.play(.reminder) }
             scheduleReminder()
         }

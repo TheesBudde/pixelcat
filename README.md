@@ -19,11 +19,15 @@ Schwanzspitze.
   schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
   Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
 - **Streifzug:** Die Katze geht nach draußen und ist nicht mehr zu sehen. Nur wenn Pause ist
-  (Pomodoro-Pause oder Pausen-Erinnerung), kommt sie herein, läuft in die Bildschirmmitte, streckt
+  (Pomodoro-Pause, Pausen-Erinnerung oder abgelaufener Timer), kommt sie herein, läuft in die Bildschirmmitte, streckt
   sich, miaut und bummelt dort 5 Minuten herum. Danach geht sie wieder. Ohne Streifzug ist sie
   wie gewohnt die ganze Zeit da.
 - **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
   bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
+- **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
+  oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
+  Bildschirmmitte, streckt sich und miaut. Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
+  währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen und rollt sich manchmal auf den Rücken.
@@ -44,10 +48,11 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 |---|---|
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
 | Pomodoro starten / beenden | Fokus-Modus mit 25/5-Minuten-Rhythmus |
+| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen; läuft er, steht hier „Timer beenden“ |
 | Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
 | Miauen | Katzenlaute bei Pomodoro und Pausen-Erinnerung (an/aus) |
 | Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |
-| Streifzug – kommt nur zur Pause | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
+| Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
 | Füttern | Napf hinstellen |
 | Mit Wollknäuel spielen | Knäuel an/aus – mit der Maus greifen und werfen |
 | Aufscheuchen | Wie ein Klick auf die Katze |

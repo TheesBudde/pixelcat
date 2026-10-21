@@ -6,12 +6,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let sizes: [(name: String, scale: CGFloat)] = [
         ("Klein", 2), ("Mittel", 3), ("Groß", 4),
     ]
+    private static let timerPresets = [5, 10, 15, 20, 30, 45, 60]
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
     private var toggleItem: NSMenuItem!
     private var pomodoroItem: NSMenuItem!
-    private var pomodoroInfoItem: NSMenuItem!
+    private var timerItem: NSMenuItem!
+    private var timerMenu: NSMenu!
+    /// Restzeit von Pomodoro oder Timer
+    private var infoItem: NSMenuItem!
     private var reminderItem: NSMenuItem!
     private var soundItem: NSMenuItem!
     private var climbItem: NSMenuItem!
@@ -63,9 +67,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         pomodoroItem = item("Pomodoro starten", #selector(togglePomodoro))
         menu.addItem(pomodoroItem)
-        pomodoroInfoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        pomodoroInfoItem.isEnabled = false
-        menu.addItem(pomodoroInfoItem)
+
+        timerMenu = NSMenu()
+        for minutes in Self.timerPresets {
+            let preset = item("\(minutes) Min.", #selector(startPresetTimer(_:)))
+            preset.tag = minutes
+            timerMenu.addItem(preset)
+        }
+        timerMenu.addItem(.separator())
+        timerMenu.addItem(item("Eigene Zeit …", #selector(askForTimer)))
+        timerItem = NSMenuItem(title: "Timer", action: nil, keyEquivalent: "")
+        timerItem.target = self
+        timerItem.submenu = timerMenu
+        menu.addItem(timerItem)
+
+        infoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        infoItem.isEnabled = false
+        menu.addItem(infoItem)
         reminderItem = item("Pausen-Erinnerung", #selector(toggleReminders))
         menu.addItem(reminderItem)
         menu.addItem(.separator())
@@ -74,8 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(soundItem)
         climbItem = item("Klettern", #selector(toggleClimbing))
         menu.addItem(climbItem)
-        roamItem = item("Streifzug – kommt nur zur Pause", #selector(toggleRoaming))
-        roamItem.toolTip = "Die Katze geht nach draußen und kommt nur zu Pomodoro-Pausen und Pausen-Erinnerungen in die Bildschirmmitte."
+        roamItem = item("Streifzug", #selector(toggleRoaming))
+        roamItem.toolTip = "Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte: "
+            + "Pomodoro-Pause, Pausen-Erinnerung oder wenn der Timer abläuft."
         menu.addItem(roamItem)
 
         feedItem = item("Füttern", #selector(feed))
@@ -140,18 +159,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         toggleItem.title = cat.isVisible ? "Katze ausblenden" : "Katze einblenden"
 
-        if let pomodoro = cat.pomodoro {
-            pomodoroItem.title = "Pomodoro beenden"
-            pomodoroItem.state = .on
-            let minutes = max(1, Int((pomodoro.ends.timeIntervalSinceNow / 60).rounded(.up)))
-            pomodoroInfoItem.title = pomodoro.stage == .focus
-                ? "Fokus: noch \(minutes) Min. – die Katze schläft"
-                : "Pause: noch \(minutes) Min. – Zeit zum Strecken"
-            pomodoroInfoItem.isHidden = false
+        // Pomodoro und Timer schließen sich aus
+        pomodoroItem.title = cat.pomodoro == nil ? "Pomodoro starten" : "Pomodoro beenden"
+        pomodoroItem.state = cat.pomodoro == nil ? .off : .on
+        pomodoroItem.isEnabled = cat.timer == nil
+        if cat.timer == nil {
+            timerItem.title = "Timer"
+            timerItem.submenu = timerMenu
+            timerItem.action = nil
+            timerItem.state = .off
         } else {
-            pomodoroItem.title = "Pomodoro starten"
-            pomodoroItem.state = .off
-            pomodoroInfoItem.isHidden = true
+            timerItem.submenu = nil
+            timerItem.title = "Timer beenden"
+            timerItem.action = #selector(stopTimer)
+            timerItem.state = .on
+        }
+        timerItem.isEnabled = cat.pomodoro == nil
+
+        func minutesLeft(_ end: Date) -> Int { max(1, Int((end.timeIntervalSinceNow / 60).rounded(.up))) }
+        if let pomodoro = cat.pomodoro {
+            infoItem.title = pomodoro.stage == .focus
+                ? "Fokus: noch \(minutesLeft(pomodoro.ends)) Min. – die Katze schläft"
+                : "Pause: noch \(minutesLeft(pomodoro.ends)) Min. – Zeit zum Strecken"
+            infoItem.isHidden = false
+        } else if let timer = cat.timer {
+            infoItem.title = timer.breakEnds == nil
+                ? "Timer: noch \(minutesLeft(timer.ends)) Min. – die Katze schläft"
+                : "Timer: noch \(minutesLeft(timer.ends)) Min. – gerade Pause"
+            infoItem.isHidden = false
+        } else {
+            infoItem.isHidden = true
         }
         reminderItem.state = cat.breakReminders ? .on : .off
         soundItem.state = cat.sounds ? .on : .off
@@ -182,6 +219,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func togglePomodoro() {
         cat.show()
         cat.pomodoro == nil ? cat.startPomodoro() : cat.stopPomodoro()
+    }
+
+    @objc private func startPresetTimer(_ sender: NSMenuItem) {
+        cat.show()
+        cat.startTimer(minutes: Double(sender.tag))
+    }
+
+    @objc private func stopTimer() {
+        cat.stopTimer()
+    }
+
+    /// Kleines Eingabefenster für eine eigene Timerzeit.
+    @objc private func askForTimer() {
+        let alert = NSAlert()
+        alert.messageText = "Timer stellen"
+        alert.informativeText = "Wie lange soll die Katze schlafen?\nMinuten eingeben, z. B. 25 – oder 1:30 für anderthalb Stunden."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.placeholderString = "Minuten"
+        field.stringValue = UserDefaults.standard.string(forKey: "lastTimer") ?? ""
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Starten")
+        alert.addButton(withTitle: "Abbrechen")
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard let minutes = Self.minutes(from: field.stringValue) else {
+            NSSound.beep()
+            askForTimer()
+            return
+        }
+        UserDefaults.standard.set(field.stringValue, forKey: "lastTimer")
+        cat.show()
+        cat.startTimer(minutes: minutes)
+    }
+
+    /// "25" → 25 Minuten, "1:30" → 90 Minuten. Erlaubt sind 1 Minute bis 24 Stunden.
+    static func minutes(from text: String) -> Double? {
+        let cleaned = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let value: Double?
+        if cleaned.contains(":") {
+            let parts = cleaned.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, let hours = Double(parts[0]), let mins = Double(parts[1]) else { return nil }
+            value = hours * 60 + mins
+        } else {
+            value = Double(cleaned)
+        }
+        guard let value, value >= 1, value <= 24 * 60 else { return nil }
+        return value
     }
 
     @objc private func toggleSounds() {
