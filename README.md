@@ -26,7 +26,8 @@ Schwanzspitze.
   bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
 - **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
   oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
-  Bildschirmmitte, streckt sich und miaut. Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
+  Bildschirmmitte, streckt sich, miaut und wartet dort, bis du sie streichelst oder anklickst.
+  Erst dann ist der Timer vorbei (im Streifzug geht sie danach wieder hinaus). Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
   währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
 - **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
@@ -47,8 +48,8 @@ Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (K
 | Menüpunkt | Wirkung |
 |---|---|
 | Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
-| Pomodoro starten / beenden | Fokus-Modus mit 25/5-Minuten-Rhythmus |
-| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen; läuft er, steht hier „Timer beenden“ |
+| Pomodoro | Fokus-Modus mit 25/5-Minuten-Rhythmus |
+| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen; läuft er, hat „Timer“ einen Haken – anklicken beendet ihn |
 | Pausen-Erinnerung | Alle 45–55 Minuten Strecken in der Bildschirmmitte (an/aus) |
 | Miauen | Katzenlaute bei Pomodoro und Pausen-Erinnerung (an/aus) |
 | Klettern | Kletter-Modus an/aus – beim Ausschalten springt sie zurück aufs Dock |

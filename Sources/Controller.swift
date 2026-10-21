@@ -134,6 +134,8 @@ struct CatTimer {
     var ends: Date
     /// Läuft gerade eine Pause (Pausen-Erinnerung), während der Timer weiterzählt?
     var breakEnds: Date?
+    /// Abgelaufen – die Katze wartet in der Mitte, bis man sie streichelt oder anklickt
+    var finished = false
 }
 
 // MARK: - Steuerung
@@ -190,6 +192,8 @@ final class CatController {
 
     /// Miauen bei Pomodoro-Wechsel und Pausen-Erinnerung
     var sounds = true
+    /// Welches Miau beim nächsten Pausen-Strecken kommt (und seit wann es aussteht)
+    private var pendingMeow: (kind: Meow.Kind, since: Date)?
 
     var isPlaying: Bool { ball != nil }
 
@@ -223,7 +227,20 @@ final class CatController {
         self.coat = coat
         view.coat = coat
         panel.contentView = view
-        view.onClick = { [weak self] in self?.brain.startle() }
+        view.onClick = { [weak self] in self?.brain.clicked() }
+        // Miauen erst, wenn sie sich zur Pause streckt
+        brain.onBreakStretch = { [weak self] in
+            guard let self, let meow = pendingMeow else { return }
+            pendingMeow = nil
+            if sounds, Date().timeIntervalSince(meow.since) < 120 { Meow.play(meow.kind) }
+        }
+        // Gestreichelt oder angeklickt: abgelaufener Timer ist erledigt
+        brain.onAcknowledged = { [weak self] in
+            guard let self, timer?.finished == true else { return }
+            timer = nil
+            scheduleReminder()
+            updateStatusText()
+        }
         applyScale()
 
         // Der Takt läuft immer, damit der Pomodoro auch bei ausgeblendeter Katze weiterzählt.
@@ -334,6 +351,9 @@ final class CatController {
     }
 
     func stopTimer() {
+        if timer?.finished == true {
+            brain.acknowledge() // wie Streicheln
+        }
         timer = nil
         brain.mode = .normal
         updateStatusText()
@@ -341,13 +361,16 @@ final class CatController {
 
     /// Timer abgelaufen oder Pause vorbei?
     private func updateTimer(now: Date) {
-        guard var timer else { return }
+        guard var timer, !timer.finished else { return }
         if now >= timer.ends {
-            // Abgelaufen – auch mitten in einer Pause: Sie (bleibt) wach und kommt in die Mitte.
-            self.timer = nil
+            // Abgelaufen – auch mitten in einer Pause: Sie (bleibt) wach, kommt in die Mitte
+            // und wartet dort, bis man sie streichelt oder anklickt.
+            timer.finished = true
+            timer.breakEnds = nil
+            self.timer = timer
             brain.mode = .normal
-            brain.callToCenter()
-            if sounds { Meow.play(.breakStarts) }
+            pendingMeow = (.breakStarts, now)
+            brain.callToCenter(untilAcknowledged: true)
             scheduleReminder() // gilt als Pause; die nächste Erinnerung zählt neu
             return
         }
@@ -365,6 +388,7 @@ final class CatController {
         timer.breakEnds = now.addingTimeInterval(CatTimer.breakLength)
         self.timer = timer
         brain.mode = .focusBreak
+        pendingMeow = (.reminder, now)
         brain.callToCenter()
     }
 
@@ -518,7 +542,7 @@ final class CatController {
             // Fokuszeit vorbei: aufwachen, strecken, Pause machen
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Pomodoro.restLength))
             brain.mode = .focusBreak
-            if sounds { Meow.play(.breakStarts) }
+            pendingMeow = (.breakStarts, now)
         case .rest:
             pomodoro = .startFocus(at: now)
             setPlaying(false)
@@ -530,7 +554,8 @@ final class CatController {
     }
 
     private func updateStatusText() {
-        let text = pomodoro?.label(at: Date()) ?? timer.map { countdownText(until: $0.ends, from: Date()) }
+        let text = pomodoro?.label(at: Date())
+            ?? timer.map { $0.finished ? "0:00" : countdownText(until: $0.ends, from: Date()) }
         if text != statusText {
             statusText = text
             onStatusChange?(text)
@@ -554,12 +579,13 @@ final class CatController {
         updateTimer(now: date)
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
-            if timer != nil {
-                takeBreakDuringTimer(now: date)
+            if let timer {
+                // Wartet sie schon auf Streicheln, ist ohnehin Pause
+                if !timer.finished { takeBreakDuringTimer(now: date) }
             } else {
+                pendingMeow = (.reminder, date)
                 brain.remindToTakeBreak()
             }
-            if sounds { Meow.play(.reminder) }
             scheduleReminder()
         }
 

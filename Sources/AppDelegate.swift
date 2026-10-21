@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggleItem)
         menu.addItem(.separator())
 
-        pomodoroItem = item("Pomodoro starten", #selector(togglePomodoro))
+        pomodoroItem = item("Pomodoro", #selector(togglePomodoro))
         menu.addItem(pomodoroItem)
 
         timerMenu = NSMenu()
@@ -159,18 +159,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         toggleItem.title = cat.isVisible ? "Katze ausblenden" : "Katze einblenden"
 
-        // Pomodoro und Timer schließen sich aus
-        pomodoroItem.title = cat.pomodoro == nil ? "Pomodoro starten" : "Pomodoro beenden"
+        // Haken = läuft; nochmal anklicken beendet. Pomodoro und Timer schließen sich aus.
         pomodoroItem.state = cat.pomodoro == nil ? .off : .on
         pomodoroItem.isEnabled = cat.timer == nil
         if cat.timer == nil {
-            timerItem.title = "Timer"
             timerItem.submenu = timerMenu
             timerItem.action = nil
             timerItem.state = .off
         } else {
             timerItem.submenu = nil
-            timerItem.title = "Timer beenden"
             timerItem.action = #selector(stopTimer)
             timerItem.state = .on
         }
@@ -180,12 +177,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let pomodoro = cat.pomodoro {
             infoItem.title = pomodoro.stage == .focus
                 ? "Fokus: noch \(minutesLeft(pomodoro.ends)) Min. – die Katze schläft"
-                : "Pause: noch \(minutesLeft(pomodoro.ends)) Min. – Zeit zum Strecken"
+                : "Pause: noch \(minutesLeft(pomodoro.ends)) Min."
             infoItem.isHidden = false
         } else if let timer = cat.timer {
-            infoItem.title = timer.breakEnds == nil
-                ? "Timer: noch \(minutesLeft(timer.ends)) Min. – die Katze schläft"
-                : "Timer: noch \(minutesLeft(timer.ends)) Min. – gerade Pause"
+            if timer.finished {
+                infoItem.title = "Zeit um – streichle oder klick die Katze"
+            } else {
+                infoItem.title = timer.breakEnds == nil
+                    ? "Noch \(minutesLeft(timer.ends)) Min. – die Katze schläft"
+                    : "Noch \(minutesLeft(timer.ends)) Min. – gerade Pause"
+            }
             infoItem.isHidden = false
         } else {
             infoItem.isHidden = true

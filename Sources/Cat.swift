@@ -251,6 +251,13 @@ final class CatBrain {
     private var currentPerch: Perch? { perchID.flatMap(perch) }
     private var isAirborne: Bool { [.climbingUp, .climbingDown, .jumping, .falling].contains(phase) }
     var isBeingPetted: Bool { phase == .petted }
+
+    /// Abgelaufener Timer: Sie wartet in der Mitte, bis man sie streichelt oder anklickt.
+    private(set) var awaitingAcknowledgement = false
+    /// Meldet, dass sie quittiert wurde
+    var onAcknowledged: (() -> Void)?
+    /// Meldet das Strecken zu Beginn einer Pause – dann miaut sie
+    var onBreakStretch: (() -> Void)?
     var isOnWindow: Bool { perchID != nil || isAirborne }
 
     private func perch(_ id: Int) -> Perch? { perches.first { $0.id == id } }
@@ -351,8 +358,28 @@ final class CatBrain {
         enter(.sittingDown, for: 1.0)
     }
 
+    /// Klick auf die Katze: Wartet sie auf Quittung, freut sie sich – sonst erschrickt sie.
+    func clicked() {
+        if awaitingAcknowledgement {
+            acknowledge()
+            stroke()
+        } else {
+            startle()
+        }
+    }
+
+    /// Streicheln oder Klick beendet den abgelaufenen Timer.
+    func acknowledge() {
+        guard awaitingAcknowledgement else { return }
+        awaitingAcknowledgement = false
+        reminderPending = false
+        if roaming { visitTimeLeft = 0 } // danach geht sie wieder hinaus
+        onAcknowledged?()
+    }
+
     /// Wird aufgerufen, solange die Maus über die Katze streicht.
     func stroke() {
+        if awaitingAcknowledgement { acknowledge() }
         timeSinceStroke = 0
         guard !isAirborne, phase != .away, phase != .petted, phase != .startled, phase != .fleeing else { return }
         pettedWhileLying = mode == .focus
@@ -384,9 +411,11 @@ final class CatBrain {
 
     /// Zeit für eine Pause (Erinnerung, abgelaufener Timer): aufwachen, in die Bildschirmmitte
     /// laufen, strecken und gähnen. Im Streifzug kommt sie dafür 5 Minuten herein.
-    func callToCenter() {
+    /// `untilAcknowledged`: Sie bleibt in der Mitte, bis man sie streichelt oder anklickt.
+    func callToCenter(untilAcknowledged: Bool = false) {
+        if untilAcknowledged { awaitingAcknowledgement = true }
         if roaming {
-            if !isVisiting { startVisit(for: 5 * 60) }
+            if untilAcknowledged || !isVisiting { startVisit(for: untilAcknowledged ? .infinity : 5 * 60) }
             return
         }
         reminderPending = true
@@ -397,6 +426,7 @@ final class CatBrain {
     // MARK: Ablauf
 
     private func enter(_ newPhase: Phase, for duration: Double = 0) {
+        if newPhase == .stretching, breakRoutine || mode == .focusBreak { onBreakStretch?() }
         phase = newPhase
         phaseTime = 0
         phaseDuration = duration
@@ -479,11 +509,13 @@ final class CatBrain {
             leaveScreen()
             return
         }
-        let needsDock = (bowl?.food ?? 0) > 0 || reminderPending || ball != nil
+        let needsDock = (bowl?.food ?? 0) > 0 || reminderPending || ball != nil || awaitingAcknowledgement
         if mode == .focus {
             enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
         } else if perchID != nil, needsDock || !mayClimb {
             leaveWindows()
+        } else if awaitingAcknowledgement, !reminderPending {
+            waitAtCenter()
         } else if let bowl, bowl.food > 0 {
             walk(mouthTo: bowl.x, goal: .bowl, speed: 70 * unit)
         } else if reminderPending {
@@ -664,6 +696,22 @@ final class CatBrain {
         speed = temperament.fleeSpeed * unit
         facingRight = right
         enter(.fleeing)
+    }
+
+    /// Wartet in der Bildschirmmitte auf Streicheln: sitzt, putzt sich, gähnt, räkelt sich.
+    private func waitAtCenter() {
+        let middle = (minX + maxX) / 2
+        if abs(x - middle) > 40 * unit {
+            goal = .center
+            walk(to: middle, speed: 50 * unit)
+            return
+        }
+        switch Double.random(in: 0..<1) {
+        case ..<0.55: enter(.watching, for: .random(in: 4...8))
+        case ..<0.75: enter(Bool.random() ? .grooming : .headWashing, for: .random(in: 3...5))
+        case ..<0.9: enter(.yawning, for: 1.3)
+        default: enter(.stretching, for: 2.0)
+        }
     }
 
     // MARK: Streifzug
