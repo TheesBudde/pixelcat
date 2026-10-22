@@ -531,9 +531,11 @@ final class CatController {
     private static let aboveDockLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
 
     /// So groß ist ein Katzenpixel im Dock-Symbol (Symbolgröße aus den Dock-Einstellungen).
-    private var basketCatScale: CGFloat {
+    private var basketCatScale: CGFloat { BasketArt.shared.scale(forTile: dockTileSize) }
+    /// Größe der Dock-Symbole (aus den Dock-Einstellungen)
+    private var dockTileSize: CGFloat {
         let tile = UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 0
-        return CGFloat(tile > 0 ? tile : 48) * 0.94 / CGFloat(BasketArt.shared.width)
+        return CGFloat(tile > 0 ? tile : 48)
     }
 
     private func resizeCatWindow(to drawScale: CGFloat) {
@@ -823,7 +825,9 @@ final class CatController {
         brain.basketX = DockLocator.basketCenterX(appName: name, screen: primary)
         // Ins Körbchen steigen geht nur, wenn das Dock unten zu sehen ist
         let dockHeight = primary.visibleFrame.minY - primary.frame.minY
-        brain.basketFloorY = primary.frame.minY + dockHeight * 0.22
+        // Genau dort, wo die Katze im Dock-Symbol liegt (die Symbole sitzen mittig im Dock)
+        brain.basketFloorY = primary.frame.minY + dockHeight / 2
+            + BasketArt.shared.catBottom(fromCenterOfTile: dockTileSize)
         brain.useBasket = brain.basketX != nil && (screen == primary) && dockHeight > 20 && !isFullscreen
     }
 
@@ -992,7 +996,16 @@ final class CatController {
         let level: NSWindow.Level = brain.isAboveDock ? Self.aboveDockLevel : .floating
         if panel.level != level { panel.level = level }
         let half = CGFloat(Layout.canvasWidth) / 2
-        panel.setFrameOrigin(NSPoint(x: (brain.x + half * scale - half * drawScale).rounded(), y: brain.y.rounded()))
+        let origin = NSPoint(x: (brain.x + half * scale - half * drawScale).rounded(), y: brain.y.rounded())
+        panel.setFrameOrigin(origin)
+        // Im Körbchen: dessen vorderen Rand vor die Katze legen – genau wie im Dock-Symbol
+        var front: CGPoint?
+        if brain.isAboveDock, brain.basketShrink >= 1, let basketX = brain.basketX, let floor = brain.basketFloorY {
+            let art = BasketArt.shared
+            front = CGPoint(x: (basketX - CGFloat(art.width) / 2 * drawScale - origin.x) / drawScale,
+                            y: (floor - CGFloat(art.catY) * drawScale - origin.y) / drawScale)
+        }
+        if view.basketFront != front { view.basketFront = front }
         let look = brain.look
         if look != view.look { view.look = look }
 

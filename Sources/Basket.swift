@@ -17,9 +17,9 @@ final class BasketTileView: NSView {
         ctx.clear(bounds)
         ctx.setShouldAntialias(false)
         let art = BasketArt.shared
-        let scale = min(bounds.width / CGFloat(art.width), bounds.height / CGFloat(art.height)) * 0.94
+        let scale = art.scale(forTile: min(bounds.width, bounds.height))
         let ox = (bounds.width / scale - CGFloat(art.width)) / 2
-        let oy = (bounds.height / scale - CGFloat(art.height)) / 2 - 2
+        let oy = (bounds.height / scale - CGFloat(art.height)) / 2 - CGFloat(BasketArt.lift)
         // hinten: Rand und Kissen, dann die Katze, vorne das Geflecht
         art.back.draw(in: ctx, x: ox, y: oy + CGFloat(art.backY), scale: scale, colors: BasketArt.colors)
         if catInside {
@@ -57,6 +57,15 @@ struct BasketArt {
     let backY = 0
     /// Unterkante der Katze (von unten gezählt) – ihr Bauch verschwindet hinter dem vorderen Rand
     let catY = 11
+    /// So weit sitzt das Bett unter der Mitte des Symbols (in Bildpixeln)
+    static let lift = 2
+
+    /// Größe eines Bildpixels bei dieser Symbolgröße
+    func scale(forTile tile: CGFloat) -> CGFloat { tile * 0.94 / CGFloat(width) }
+    /// Wo die Unterkante der Katze im Symbol liegt – gemessen von der Mitte des Symbols
+    func catBottom(fromCenterOfTile tile: CGFloat) -> CGFloat {
+        CGFloat(catY - height / 2 - Self.lift) * scale(forTile: tile)
+    }
 
     init() {
         let w = width, h = height

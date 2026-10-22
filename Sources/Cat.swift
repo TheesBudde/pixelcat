@@ -965,6 +965,7 @@ final class CatBrain {
                 y = floor
             }
             if phaseTime >= phaseDuration {
+                facingRight = true // liegt im Dock-Symbol mit dem Kopf nach rechts
                 enter(.away, for: .infinity)
             }
         } else {
@@ -1549,14 +1550,14 @@ final class CatBrain {
             case ..<2.2:                                                  // im Kreis drehen
                 look.sprite = Int(t / 0.13) % 4 == 0 ? Frames.walkA : Frames.walkB
                 look.facingRight = Int((t - 1.4) / 0.27) % 2 == 0 ? facingRight : !facingRight
-            case ..<2.55: look.sprite = Frames.sit
-            case ..<2.85: look.sprite = Frames.lie
-            default: look.sprite = Frames.sleepA
+            case ..<2.55: look.sprite = Frames.sit; look.facingRight = true   // so wie im Dock-Symbol
+            case ..<2.85: look.sprite = Frames.lie; look.facingRight = true
+            default: look.sprite = Frames.sleepA; look.facingRight = true
             }
         case .leavingBasket:
             let t = phaseTime
             switch t {
-            case ..<0.3: look.sprite = Frames.lie                         // klein im Körbchen aufwachen
+            case ..<0.3: look.sprite = Frames.lie; look.facingRight = true // klein im Körbchen aufwachen, wie im Symbol
             case ..<0.55: look.sprite = Frames.sit
             case ..<0.75: look.sprite = Frames.stand
             case ..<1.2: look.sprite = Frames.walkA                       // hinaus aufs Dock hüpfen
@@ -1595,6 +1596,10 @@ final class CatView: NSView {
         didSet { if accessory !== oldValue { needsDisplay = true } }
     }
     var onClick: (() -> Void)?
+    /// Vorderer Rand des Körbchens (Lage in Bildpixeln) – beim Hinein- und Heraussteigen
+    var basketFront: CGPoint? {
+        didSet { if basketFront != oldValue { needsDisplay = true } }
+    }
 
     override var isOpaque: Bool { false }
 
@@ -1629,6 +1634,7 @@ final class CatView: NSView {
         guard let look, let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
         ctx.setShouldAntialias(false)
+        ctx.saveGState()
         if !look.facingRight {
             ctx.translateBy(x: bounds.width, y: 0)
             ctx.scaleBy(x: -1, y: 1)
@@ -1640,6 +1646,10 @@ final class CatView: NSView {
             let x = look.drawX + ears.center - accessory.width / 2
             let y = look.hop + look.sprite.height - 1 - ears.row
             accessory.draw(in: ctx, x: CGFloat(x), y: CGFloat(y), scale: scale, colors: Frames.accessoryColors)
+        }
+        ctx.restoreGState()
+        if let front = basketFront {
+            BasketArt.shared.front.draw(in: ctx, x: front.x, y: front.y, scale: scale, colors: BasketArt.colors)
         }
     }
 }
