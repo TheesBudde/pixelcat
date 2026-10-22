@@ -824,6 +824,8 @@ final class CatController {
             return
         }
         let edge = DockLocator.edge
+        // Ohne Bedienungshilfen vor dem Herausklettern kurz warten, bis das Dock eine Verschiebung gespeichert hat
+        brain.emergeDelay = DockLocator.isTrusted ? 0 : 2
         // Steht das Dock seitlich, geht sie zu dieser Seite hinaus
         brain.dockSideIsLeft = edge == .left ? true : edge == .right ? false : nil
         // Hineinsteigen geht nur, wenn das Dock unten auf ihrem Bildschirm zu sehen ist
@@ -846,7 +848,9 @@ final class CatController {
         }
         if Self.debug {
             print("Korb:", DockLocator.debugDescription(appName: name, screen: dock),
-                  "boden=\(brain.basketFloorY ?? -1) kachel=\(dockTileSize)")
+                  "boden=\(brain.basketFloorY ?? -1) kachel=\(dockTileSize) phase=\(brain.phase) "
+                  + "katze=\(brain.x + CGFloat(Layout.canvasWidth) / 2 * scale) \(Date())")
+            fflush(stdout)
         }
     }
     private static let debug = ProcessInfo.processInfo.environment["PIXELCAT_DEBUG"] != nil

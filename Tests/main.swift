@@ -18,6 +18,7 @@ MainActor.assumeIsolated {
         b.clock = { afternoon }
         b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 300
         b.useBasket = true
+        b.emergeDelay = 2 // wie ohne Bedienungshilfen
         let bed = Bed()
         b.locateBasket = { b.basketX = bed.x; b.basketFloorY = bed.x == nil ? nil : 27 }
         var pending = events, t = 0.0, last = "", problems: [String] = []
@@ -77,6 +78,10 @@ MainActor.assumeIsolated {
         bedOn, at(14, "Vollbild an") { b, _ in b.useBasket = false; b.dockY = 0 }, breakStarts(15), focus(25),
         at(26, "Vollbild aus") { b, _ in b.useBasket = true; b.dockY = 57 }, breakStarts(45)])
 
+    scenario("Dock speichert die Verschiebung erst nach der Pause-Anfrage", seconds: 40, endsInBed: false,
+             [bedOn, move(20, to: 700), breakStarts(25), move(26, to: 400)])
+    scenario("Katzenkorb aus und gleich wieder an (sie bleibt liegen)", seconds: 35, endsInBed: true,
+             [bedOn, bedOff(25), at(25.5, "Katzenkorb an") { b, _ in b.roaming = true }])
     scenario("Videocall: Pause bleibt aus, nach dem Call heraus", seconds: 45, endsInBed: false, [
         bedOn, at(20, "Call") { b, _ in b.suppressVisits = true }, breakStarts(22),
         at(30, "Call vorbei") { b, _ in b.suppressVisits = false }])

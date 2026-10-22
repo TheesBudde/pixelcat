@@ -326,6 +326,11 @@ final class CatBrain {
     var locateBasket: (() -> Void)?
     /// Steht das Dock links oder rechts, geht sie zu dieser Seite hinaus und kommt dort wieder herein
     var dockSideIsLeft: Bool?
+    /// Wie lange sie im Korb noch wartet, bevor sie herausklettert (0 = sofort). Ohne Bedienungshilfen kennt sie
+    /// die Stelle nur aus den Dock-Einstellungen – und die speichert das Dock erst kurz nach dem Verschieben.
+    var emergeDelay = 0.0
+    /// Herausklettern ist angefragt; danach geht es mit `then` weiter
+    private var pendingEmerge: (wait: Double, then: () -> Void)?
     /// Wo die Pfoten im Körbchen stehen (innerhalb des Docks)
     var basketFloorY: CGFloat?
     /// Steht gerade vor dem Dock (beim Hinein- und Heraussteigen)
@@ -375,6 +380,17 @@ final class CatBrain {
         if isVisiting {
             visitTimeLeft -= dt
             if visitTimeLeft <= 0 { leaveScreen() }
+        }
+        if let pending = pendingEmerge {
+            if phase != .away {
+                pendingEmerge = nil
+            } else if pending.wait - dt > 0 {
+                pendingEmerge = (pending.wait - dt, pending.then)
+            } else if roaming, suppressVisits || (!isVisiting && !awaitingAcknowledgement && mode != .focusBreak) {
+                pendingEmerge = nil // inzwischen gibt es keinen Grund mehr herauszukommen
+            } else {
+                finishEmerge(pending.then)
+            }
         }
         // Boden hat sich verschoben (Vollbild an/aus): nicht springen lassen, sondern hinunter-/hinaufsteigen
         if let last = lastDockY, abs(dockY - last) > 3 * unit, perchID == nil, !isAirborne, phase != .away {
@@ -946,8 +962,8 @@ final class CatBrain {
             walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
         }
         if phase == .away {
-            if basketReady() {
-                emergeFromBasket(then: wander)
+            if useBasket {
+                requestEmerge(then: wander)
                 return
             }
             x = offscreenX(left: entrySideIsLeft())
@@ -967,13 +983,30 @@ final class CatBrain {
             walk(to: (minX + maxX) / 2, speed: 65 * unit)
         }
         if phase == .away {
-            if basketReady() {
-                emergeFromBasket(then: toCenter)
+            if useBasket {
+                requestEmerge(then: toCenter)
                 return
             }
             x = offscreenX(left: entrySideIsLeft())
         }
         toCenter()
+    }
+
+    /// Aus dem Körbchen kommen – wenn nötig erst nach kurzem Warten, damit sie die Stelle sicher kennt.
+    private func requestEmerge(then next: @escaping () -> Void) {
+        if emergeDelay <= 0 { return finishEmerge(next) }
+        if pendingEmerge == nil { pendingEmerge = (emergeDelay, next) } else { pendingEmerge?.then = next }
+    }
+
+    private func finishEmerge(_ next: @escaping () -> Void) {
+        pendingEmerge = nil
+        if basketReady() {
+            emergeFromBasket(then: next)
+        } else {
+            // Korb nicht (mehr) zu finden: von der Seite herein
+            x = offscreenX(left: entrySideIsLeft())
+            next()
+        }
     }
 
     /// Körbchen erreichbar? Dann genau jetzt nachsehen, wo es im Dock sitzt.
