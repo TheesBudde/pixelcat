@@ -31,8 +31,25 @@ Schwanzspitze.
   Erst dann ist der Timer vorbei (im Streifzug geht sie danach wieder hinaus). Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
   währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
 - **Gedankenblase:** Erinnert sie an eine Pause (Pausen-Erinnerung, Pomodoro-Pause), schwebt über ihrem Kopf
-  eine Wolke mit „PAUSE“ bzw. „BREAK“. Ein Klick lässt sie platzen, sonst platzt sie am Ende der Pause.
-- **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich.
+  eine Wolke mit „PAUSE“ bzw. „BREAK“ – genauso bei Trinken, Feierabend und Aufgaben. Die Pixelschrift kann
+  alle Buchstaben, Umlaute, Ziffern und gängigen Satzzeichen. Ein Klick lässt die Blase platzen.
+- **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich. Wahlweise
+  **nach Aktivität:** Dann zählt Pixelcat nur die Zeit, in der du tippst, klickst oder die Maus bewegst (bis zu
+  einer Minute Lesen zählt mit). Bist du 5 Minuten weg, war das schon eine Pause – die Zählung beginnt neu.
+  Dafür fragt Pixelcat nur ab, wie lange die letzte Eingabe her ist; keine Freigabe nötig, keine Tasten werden gelesen.
+- **Trink-Erinnerung:** Ungefähr alle 45 Minuten (einstellbar) stellt sie einen blauen Wassernapf hin,
+  schlabbert 25 Sekunden lang und denkt dabei „Trinken“. Danach putzt sie sich das Schnäuzchen.
+- **Augenpause:** Ungefähr alle 20 Minuten (einstellbar) ploppt ein kleines Fenster auf – Himmel, Sonne,
+  Hügel und eine vorbeiziehende Wolke. Sie setzt sich davor aufs Fensterbrett und schaut eine halbe Minute
+  hinaus (von hinten zu sehen, der Schwanz zuckt). Schau mit ihr in die Ferne; danach verschwindet das Fenster.
+- **Feierabend:** Zur eingestellten Uhrzeit (wahlweise nur werktags) setzt sie eine Schlafmütze mit Sternen
+  auf, kommt in die Mitte, streckt sich und denkt „Feierabend“. Die Mütze trägt sie bis zum nächsten Morgen.
+- **Aufgaben-Erinnerung:** In den Einstellungen trägst du Stichworte ein („Mama anrufen“). In einstellbaren
+  Abständen denkt sie an einen davon – in zufälliger Reihenfolge, jede einmal, dann wieder von vorn. Lange
+  Einträge werden auf bis zu drei Zeilen umbrochen.
+- **Kleine Erinnerungen, nacheinander:** Trinken, Augenpause, Aufgaben und Feierabend warten aufeinander und
+  auf Pausen, Pomodoro und Timer – nie zwei auf einmal. Im Streifzug oder Katzenkorb kommt sie dafür herein und
+  geht danach wieder. Jede lässt sich in den Einstellungen mit „Jetzt zeigen“ vorführen.
 - **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
   Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
   manchmal auf den Rücken.
@@ -88,6 +105,7 @@ Das Menü enthält nur, was man oft braucht:
 | Pomodoro | Fokus und Pause im Wechsel (Haken = läuft) |
 | Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen (Haken = läuft, nochmal klicken beendet) |
 | Pausen-Erinnerung | regelmäßige Pausen (an/aus) |
+| Trink-Erinnerung · Augenpause · Aufgaben-Erinnerung | kleine Erinnerungen (je an/aus) |
 | Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
 | Katzenkorb | statt Streifzug, wenn der Katzenkorb im Dock eingeschaltet ist: Katze schläft im Korb und kommt nur zu Pausen heraus (an/aus) |
 | Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
@@ -97,7 +115,11 @@ Das Menü enthält nur, was man oft braucht:
 **Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
 - **Aussehen:** Fellfarbe, Größe
 - **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Katzenkorb im Dock, dazu Streifzug bzw. Katzenkorb
-- **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung mit frühestens/spätestens, Länge einer Pause
+- **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung in festen Abständen (frühestens/spätestens)
+  oder nach Aktivität (Minuten Arbeit am Stück), Länge einer Pause
+- **Trinken, Augen:** an/aus, ungefähre Abstände, „Jetzt zeigen“
+- **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
+- **Aufgaben:** an/aus, Abstand, Liste zum Eintragen und Entfernen
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English
 
@@ -192,12 +214,14 @@ In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneu
 ## Testen
 
 ```bash
-./test.sh
+./test.sh       # Abläufe durchspielen und prüfen
+./preview.sh    # Pixelbilder (Blasen, Posen, Napf, Fenster) nach build/preview/ rendern
 ```
 
-Spielt Szenarien rund um den Katzenkorb durch (Pause, Timer, Erinnerung, Videocall, Vollbild, Klicks, Korb im Dock
-verschoben – jeweils auch mitten im Hinein- oder Herausklettern) und prüft, dass sie immer genau am Korb hinein- und
-herausklettert und nie hängen bleibt. Zum Nachmessen am echten Dock: Pixelcat mit `PIXELCAT_CALIBRATE=1` starten –
+`test.sh` spielt Szenarien rund um den Katzenkorb und die kleinen Erinnerungen durch (Trinken, Augenpause,
+Feierabend, Aufgaben, Aktivität, Überschneidungen mit Pausen und Pomodoro). Beim Katzenkorb kommen Pause, Timer,
+Erinnerung, Videocall, Vollbild, Klicks und ein im Dock verschobener Korb vor – jeweils auch mitten im Hinein- oder
+Herausklettern –, und es wird geprüft, dass sie immer genau am Korb hinein- und herausklettert und nie hängen bleibt. Zum Nachmessen am echten Dock: Pixelcat mit `PIXELCAT_CALIBRATE=1` starten –
 erst zeigt das Dock-Symbol die schlafende Katze, nach 6 s liegt stattdessen das letzte Bild der Animation darüber.
 
 ## Neue Version veröffentlichen

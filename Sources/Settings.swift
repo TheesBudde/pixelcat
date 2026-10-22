@@ -367,7 +367,9 @@ struct SettingsView: View {
                 }
             }
             HStack {
-                TextField(t("Neue Aufgabe, z. B. „Mama anrufen“", "New task, e.g. “Call mom”"), text: $newTask)
+                TextField("", text: $newTask, prompt: Text(t("Neue Aufgabe, z. B. „Mama anrufen“", "New task, e.g. “Call mom”")))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
                     .onSubmit(addTask)
                     .onChange(of: newTask) { value in
                         if value.count > Self.maxTaskLength { newTask = String(value.prefix(Self.maxTaskLength)) }

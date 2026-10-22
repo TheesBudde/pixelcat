@@ -216,6 +216,44 @@ MainActor.assumeIsolated {
               "\(result.phases["gazing"] ?? 0) s")
     }
 
+    print("\nÜberschneidungen")
+    do {
+        // Pausen-Erinnerung kommt, während sie trinkt: erst austrinken, dann zur Pause in die Mitte
+        let b = freshBrain()
+        let bowl = Bowl(x: 300, water: true)
+        b.bowl = bowl
+        b.noticeSomething()
+        var called = false
+        let result = run(b, seconds: 80) { _ in
+            if !called, b.phase == .drinking { called = true; b.remindToTakeBreak() }
+        }
+        check("trinkt trotz Pausen-Erinnerung zu Ende", (result.phases["drinking"] ?? 0) >= 24, "\(result.phases["drinking"] ?? 0) s")
+        check("danach Pause in der Mitte (strecken)", (result.phases["stretching"] ?? 0) > 0)
+    }
+    do {
+        // Pomodoro-Fokus beginnt mitten im Hinausschauen: Sie hört auf und schläft
+        let b = freshBrain()
+        b.lookout = 600
+        b.noticeSomething()
+        var focused = false
+        _ = run(b, seconds: 60) { _ in
+            if !focused, b.phase == .gazing { focused = true; b.lookout = nil; b.mode = .focus }
+        }
+        check("Fokus beendet das Hinausschauen, sie schläft", [.sleeping, .lyingDown, .sittingDown].contains(b.phase), "\(b.phase)")
+    }
+    do {
+        // Trinken und danach Fenster (wie zwei Erinnerungen hintereinander)
+        let b = freshBrain()
+        let bowl = Bowl(x: 1000, water: true)
+        b.bowl = bowl
+        b.noticeSomething()
+        var stage = 0
+        let result = run(b, seconds: 150) { _ in
+            if stage == 0, bowl.food <= 0 { stage = 1; b.bowl = nil; b.lookout = 400 }
+        }
+        check("trinkt und schaut danach hinaus", (result.phases["drinking"] ?? 0) >= 24 && (result.phases["gazing"] ?? 0) >= 24)
+    }
+
     print("\nPausen nach Aktivität")
     do {
         var tracker = ActivityTracker()
