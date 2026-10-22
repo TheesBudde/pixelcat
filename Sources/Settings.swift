@@ -48,8 +48,8 @@ final class AppSettings: ObservableObject {
     @Published var morningOutfit: Bool { didSet { changed() } }
     @Published var morningEnd: Int { didSet { changed() } }
     @Published var taskReminders: Bool { didSet { changed() } }
-    @Published var taskInterval: Int { didSet { changed() } }
-    @Published var taskItems: [String] { didSet { changed() } }
+    /// Aufgaben, jede mit eigenem Abstand
+    @Published var taskItems: [TaskItem] { didSet { changed() } }
     /// An Aufgaben auch während Videocalls bzw. bei eingeschaltetem Mikrofon erinnern (nur die Blase)
     @Published var tasksDuringCalls: Bool { didSet { changed() } }
     // Ton & Rücksicht
@@ -70,6 +70,10 @@ final class AppSettings: ObservableObject {
     var onChange: (() -> Void)?
     /// Knopf „Jetzt zeigen“: diese Erinnerung sofort vorführen
     var onPreview: ((ErrandKind) -> Void)?
+    /// Eine bestimmte Aufgabe sofort zeigen (Aufgabenfenster)
+    var onPreviewTask: ((UUID) -> Void)?
+    /// Das Aufgabenfenster öffnen
+    var onOpenTasks: (() -> Void)?
     private var loading = true
 
     private let defaults = UserDefaults.standard
@@ -84,7 +88,7 @@ final class AppSettings: ObservableObject {
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "taskInterval": 30, "taskItems": [String](), "tasksDuringCalls": false,
+            "taskReminders": false, "tasksDuringCalls": false,
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -118,8 +122,13 @@ final class AppSettings: ObservableObject {
         morningOutfit = defaults.bool(forKey: "morningOutfit")
         morningEnd = defaults.integer(forKey: "morningEnd")
         taskReminders = defaults.bool(forKey: "taskReminders")
-        taskInterval = defaults.integer(forKey: "taskInterval")
-        taskItems = defaults.stringArray(forKey: "taskItems") ?? []
+        if let stored = defaults.array(forKey: "taskList") as? [[String: Any]] {
+            taskItems = stored.compactMap(TaskItem.init(dictionary:))
+        } else {
+            // Früher: nur Texte mit einem gemeinsamen Abstand
+            let minutes = defaults.object(forKey: "taskInterval") as? Int ?? TaskItem.defaultMinutes
+            taskItems = (defaults.stringArray(forKey: "taskItems") ?? []).map { TaskItem(text: $0, minutes: minutes) }
+        }
         tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
         sounds = defaults.bool(forKey: "sounds")
         purring = defaults.bool(forKey: "purring")
@@ -144,7 +153,7 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": quittingTimeEnabled, "quittingTime": quittingTime,
             "quittingWeekdaysOnly": quittingWeekdaysOnly,
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
-            "taskReminders": taskReminders, "taskInterval": taskInterval, "taskItems": taskItems,
+            "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "tasksDuringCalls": tasksDuringCalls,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue,
@@ -190,10 +199,6 @@ final class SettingsWindow {
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var focus: FocusMonitor
-    /// Eingabefeld für eine neue Aufgabe
-    @State private var newTask = ""
-    /// Länger passt nicht gut in die Gedankenblase (drei Zeilen)
-    private static let maxTaskLength = 45
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -252,12 +257,12 @@ struct SettingsView: View {
                    "Shows a cat bed in the Dock. The menu then offers “Cat Bed” instead of “Roaming”."))
             if settings.basketInDock {
                 Toggle(t("Katzenkorb", "Cat Bed"), isOn: $settings.basketNap)
-                hint(t("Sie legt sich in den Korb und schläft dort – zu Pausen und wenn der Timer abläuft, klettert sie heraus.",
-                       "She curls up in the bed and sleeps there – she climbs out for breaks and when the timer runs out."))
+                hint(t("Sie legt sich in den Korb und schläft dort. Heraus klettert sie zu Pausen, wenn der Timer abläuft und für die kleinen Erinnerungen (Trinken, Augenpause, Aufgaben, Feierabend) – danach geht sie zurück in den Korb.",
+                       "She curls up in the bed and sleeps there. She climbs out for breaks, when the timer runs out and for the small reminders (drink, eye break, tasks, end of the workday) – then she goes back to bed."))
             } else {
                 Toggle(t("Streifzug", "Roaming"), isOn: $settings.roaming)
-                hint(t("Sie geht weg und kommt nur zu Pausen in die Bildschirmmitte.",
-                       "She goes away and only comes to the middle of the screen for breaks."))
+                hint(t("Sie geht weg und kommt nur noch herein, wenn es etwas gibt: zu Pausen, wenn der Timer abläuft und für die kleinen Erinnerungen (Trinken, Augenpause, Aufgaben, Feierabend) – danach geht sie wieder.",
+                       "She goes away and only comes in when there is something to do: for breaks, when the timer runs out and for the small reminders (drink, eye break, tasks, end of the workday) – then she leaves again."))
             }
             if settings.basketInDock {
                 HStack {
@@ -305,8 +310,8 @@ struct SettingsView: View {
                        "The exact moment is random in between – it feels more natural."))
             }
             minutesSlider(t("Länge einer Pause", "Length of a break"), value: $settings.breakLength, range: 1...30, step: 1)
-            hint(t("Gilt für Pausen-Erinnerungen und für die Besuche im Streifzug.",
-                   "Used for break reminders and for visits while roaming."))
+            hint(t("Gilt für Pausen-Erinnerungen und für Pausenbesuche im Streifzug oder aus dem Katzenkorb.",
+                   "Used for break reminders and for break visits while roaming or from the cat bed."))
         }
     }
 
@@ -389,59 +394,22 @@ struct SettingsView: View {
 
     private var taskSection: some View {
         Section(t("Aufgaben", "Tasks")) {
-            Toggle(t("An Aufgaben erinnern", "Remind me of tasks"), isOn: $settings.taskReminders)
-            minutesSlider(t("Ungefähr alle", "About every"), value: $settings.taskInterval, range: 5...120, step: 5)
-            ForEach(Array(settings.taskItems.enumerated()), id: \.offset) { index, task in
-                HStack {
-                    Text(task)
-                    Spacer()
-                    Button {
-                        settings.taskItems.remove(at: index)
-                    } label: {
-                        Image(systemName: "minus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(t("Entfernen", "Remove"))
-                }
-            }
             HStack {
-                TextField("", text: $newTask, prompt: Text(t("Neue Aufgabe, z. B. „Mama anrufen“", "New task, e.g. “Call mom”")))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(addTask)
-                    .onChange(of: newTask) { value in
-                        if value.count > Self.maxTaskLength { newTask = String(value.prefix(Self.maxTaskLength)) }
-                    }
-                Button(t("Hinzufügen", "Add"), action: addTask)
-                    .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            Toggle(t("Auch während Videocalls erinnern", "Also remind me during video calls"), isOn: $settings.tasksDuringCalls)
-            hint(settings.hideDuringCalls
-                 ? t("Bei Kamera oder Mikrofon bleibt die Katze versteckt – nur die Blase erscheint unten am Dock. Während der Bildschirm geteilt wird, nie.",
-                     "While the camera or microphone is on, the cat stays hidden – only the bubble shows up at the Dock. Never while the screen is shared.")
-                 : t("Gilt nur, wenn sie sich bei Videocalls versteckt (unter „Rücksicht“) – sonst erinnert sie ohnehin.",
-                     "Only matters if she hides during video calls (see “Being considerate”) – otherwise she reminds you anyway."))
-            HStack {
-                hint(t("Sie denkt in zufälliger Reihenfolge an deine Einträge – erst an alle einmal, dann wieder von vorn. Im Körbchen oder auf Streifzug kommt sie dafür herein.",
-                       "She thinks of your entries in random order – each once, then all over again. In her bed or while roaming she comes in for it."))
+                hint(settings.taskItems.isEmpty
+                     ? t("Noch keine Aufgaben eingetragen.", "No tasks yet.")
+                     : t("\(settings.taskItems.count) Aufgabe(n), jede mit eigenem Abstand.",
+                         "\(settings.taskItems.count) task(s), each with its own interval."))
                 Spacer()
-                previewButton(.task).disabled(settings.taskItems.isEmpty)
+                Button(t("Aufgaben bearbeiten …", "Edit tasks …")) { settings.onOpenTasks?() }
             }
         }
-    }
-
-    private func addTask() {
-        let task = newTask.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !task.isEmpty else { return }
-        settings.taskItems.append(task)
-        newTask = ""
     }
 
     // MARK: Ton & Rücksicht
 
     private var soundSection: some View {
         Section(t("Töne", "Sounds")) {
-            Toggle(t("Miauen (Pausen, Timer, Erinnerung)", "Meow (breaks, timer, reminder)"), isOn: $settings.sounds)
+            Toggle(t("Miauen (Pausen, Timer, Feierabend)", "Meow (breaks, timer, end of the workday)"), isOn: $settings.sounds)
             Toggle(t("Schnurren beim Streicheln", "Purr while petting"), isOn: $settings.purring)
         }
     }
@@ -450,8 +418,8 @@ struct SettingsView: View {
         Section(t("Rücksicht", "Being considerate")) {
             Toggle(t("Bei Videocall oder Bildschirmfreigabe verstecken", "Hide during video calls and screen sharing"),
                    isOn: $settings.hideDuringCalls)
-            hint(t("Sind Kamera oder Mikrofon an oder wird der Bildschirm geteilt, geht sie automatisch auf Streifzug – und kommt danach zurück.",
-                   "While the camera or microphone is on or the screen is shared, she goes roaming – and comes back afterwards."))
+            hint(t("Sind Kamera oder Mikrofon an oder wird der Bildschirm geteilt, versteckt sie sich und kommt danach zurück. Erinnerungen warten so lange – Aufgaben auf Wunsch nicht (im Aufgabenfenster einstellbar).",
+                   "While the camera or microphone is on or the screen is shared, she hides and comes back afterwards. Reminders wait until then – tasks only if you like (set in the tasks window)."))
             Toggle(t("Fokus berücksichtigen", "Respect Focus"), isOn: $settings.respectFocus)
             HStack {
                 hint(focusStatusText)

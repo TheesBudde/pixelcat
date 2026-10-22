@@ -28,11 +28,74 @@ final class SelfTest {
         self.settings = settings
     }
 
-    func start() {
+    /// `calls`: nur den Videocall-Test (Start mit `--selftest calls`)
+    func start(calls: Bool = false) {
         Task { @MainActor in
-            await run()
+            if calls { await runCalls() } else { await run() }
             finish()
         }
+    }
+
+    // MARK: Videocall
+
+    /// Spielt einen Videocall nach (ohne Kamera und Mikrofon): Die Katze versteckt sich, Trinken wartet, die Aufgabe
+    /// erscheint nur als Blase am Dock – wenn so eingestellt, und nie beim Teilen des Bildschirms.
+    private func runCalls() async {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        log("Pixelcat \(version) – Videocall-Test am \(Date())")
+        cat.breakReminders = false
+        cat.drinkMinutes = nil
+        cat.eyeBreakMinutes = nil
+        cat.tasksEnabled = false
+        cat.hideDuringCalls = true
+        cat.show()
+        let task = TaskItem(text: "Selbsttest: im Call", minutes: 30)
+        cat.selfTestTasks([task])
+        cat.roaming = false
+        await waitUntil("Katze ist zu sehen", 60) { !$0.isAway && $0.catFrame != nil }
+
+        section("Call mit „Auch während Videocalls“ an")
+        cat.tasksDuringCalls = true
+        cat.simulatedCall = .camera
+        log("   (Kamera an – nachgespielt)")
+        await waitUntil("Katze versteckt sich", 60) { $0.isAway }
+        cat.showErrandNow(.drink)
+        cat.showErrandNow(.task)
+        await waitUntil("Aufgaben-Blase erscheint ohne Katze", 15) { $0.bubble?.frame != nil && $0.isAway }
+        if let frame = cat.snapshot().bubble?.frame, let screen = NSScreen.screens.first {
+            check("Blase steht unten am Dock", frame.minY < screen.visibleFrame.minY + 120, "Unterkante bei \(Int(frame.minY))")
+        }
+        let drinkWaits = cat.snapshot().queued.contains(.drink) && cat.snapshot().errand == .task
+        check("Trinken wartet bis nach dem Call", drinkWaits, "\(cat.snapshot().queued)")
+        await waitUntil("Blase verschwindet von selbst", 45) { $0.bubble == nil }
+        await pause(2)
+        check("Trinken wartet immer noch", cat.snapshot().errand == nil && cat.snapshot().queued.contains(.drink))
+
+        section("Bildschirm wird geteilt")
+        cat.simulatedCall = .screenSharing
+        log("   (Bildschirmfreigabe – nachgespielt)")
+        await pause(16)
+        cat.showErrandNow(.task)
+        await pause(6)
+        check("keine Aufgaben-Blase, solange der Bildschirm geteilt wird", cat.snapshot().bubble == nil)
+
+        section("Call mit „Auch während Videocalls“ aus")
+        cat.simulatedCall = .microphone
+        cat.tasksDuringCalls = false
+        log("   (Mikrofon an – nachgespielt)")
+        await pause(16)
+        check("keine Aufgaben-Blase im Call", cat.snapshot().bubble == nil)
+
+        section("Call vorbei")
+        cat.simulatedCall = nil
+        log("   (Call beendet – nachgespielt)")
+        await waitUntil("Katze kommt zurück", 60) { !$0.isAway && $0.catFrame != nil }
+        await waitUntil("jetzt kommt das Trinken (oder die Aufgabe) dran", 40) { $0.errand != nil }
+        await waitUntil("Trinken ist dran", 120) { $0.errand == .drink }
+        await waitUntil("erledigt", 120) { $0.errand == nil && $0.bowl == nil }
+
+        cat.selfTestTasks(nil)
+        cat.apply(settings)
     }
 
     // MARK: Ablauf
@@ -45,7 +108,7 @@ final class SelfTest {
         cat.breakReminders = false
         cat.drinkMinutes = nil
         cat.eyeBreakMinutes = nil
-        cat.taskMinutes = nil
+        cat.tasksEnabled = false
         cat.show()
 
         section("Vorbereitung")
@@ -126,7 +189,7 @@ final class SelfTest {
 
     private func task() async {
         section("Aufgabe")
-        cat.selfTestTasks(["Selbsttest: Mama anrufen"])
+        cat.selfTestTasks([TaskItem(text: "Selbsttest: Mama anrufen", minutes: 30)])
         cat.showErrandNow(.task)
         await waitUntil("Blase mit der Aufgabe über der Katze", 10) { self.bubbleAboveCat($0) }
         await waitUntil("Blase verschwindet von selbst", 45) { $0.bubble == nil }
@@ -142,7 +205,7 @@ final class SelfTest {
         cat.selfTestPopBubble()
         await waitUntil("platzt sofort", 2) { $0.bubble == nil }
         await waitUntil("erledigt", 3) { $0.errand == nil }
-        cat.selfTestTasks(settings.taskItems)
+        cat.selfTestTasks(nil)
         await pause(3)
     }
 

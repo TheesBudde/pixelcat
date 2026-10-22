@@ -275,12 +275,12 @@ final class CatController {
     var outfitTimes = OutfitTimes() {
         didSet { updateOutfit() }
     }
-    /// Aufgaben-Erinnerung: alle so viele Minuten (nil = aus) und woran
-    var taskMinutes: Int? {
-        didSet { if taskMinutes != oldValue { errands.configure(.task, every: taskMinutes.map(Double.init), now: Date()) } }
+    /// Aufgaben-Erinnerung: an/aus und die Aufgaben, jede mit eigenem Abstand
+    var tasksEnabled = false {
+        didSet { if tasksEnabled != oldValue { configureTasks() } }
     }
-    var taskItems: [String] = [] {
-        didSet { if taskItems != oldValue { errands.configureTasks(taskItems) } }
+    var taskList: [TaskItem] = [] {
+        didSet { if taskList != oldValue { configureTasks() } }
     }
     /// An Aufgaben auch während Videocalls erinnern – die Katze bleibt dann versteckt, nur die Blase erscheint
     var tasksDuringCalls = false
@@ -321,9 +321,9 @@ final class CatController {
         breakLength = TimeInterval(settings.breakLength * 60)
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
-        taskItems = settings.taskItems
+        taskList = settings.taskItems
         tasksDuringCalls = settings.tasksDuringCalls
-        taskMinutes = settings.taskReminders && !settings.taskItems.isEmpty ? settings.taskInterval : nil
+        tasksEnabled = settings.taskReminders
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
             quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
@@ -725,7 +725,7 @@ final class CatController {
 
     /// Videocall oder Bildschirmfreigabe → auf Streifzug (und erst 5 s nach dem Ende zurück).
     private func updateCallHiding(now: Date) {
-        let reason = hideDuringCalls ? CallDetector.currentReason() : nil
+        let reason = simulatedCall ?? (hideDuringCalls ? CallDetector.currentReason() : nil)
         if let reason {
             callEndedAt = nil
             setHidden(because: reason)
@@ -1089,6 +1089,7 @@ final class CatController {
         var hat: String?
         var scale: CGFloat
         var idleSeconds: Double
+        var queued: [ErrandKind]
     }
 
     func snapshot() -> Snapshot {
@@ -1116,12 +1117,27 @@ final class CatController {
             lookout: lookoutWindow.map { (lookoutX, $0.panel.isVisible ? $0.panel.frame : nil,
                                          $0.panel.alphaValue, catAbove) },
             bubble: bubble.map { ($0.visibleFrame, $0.isPopping) },
-            hat: hat, scale: scale, idleSeconds: Self.secondsSinceInput)
+            hat: hat, scale: scale, idleSeconds: Self.secondsSinceInput, queued: errands.queuedKinds)
     }
 
     /// Selbsttest: Aufgaben vorübergehend setzen (die Einstellungen bleiben unberührt)
-    func selfTestTasks(_ items: [String]) {
-        errands.configureTasks(items)
+    /// (nil = wieder die eigenen Aufgaben)
+    func selfTestTasks(_ items: [TaskItem]?) {
+        if let items {
+            errands.configureTasks(items, enabled: false, now: Date())
+        } else {
+            configureTasks()
+        }
+    }
+
+    /// Selbsttest: einen Videocall bzw. eine Bildschirmfreigabe nachspielen (nil = vorbei)
+    var simulatedCall: CallDetector.Reason? {
+        didSet { sensorRefresh = 0 }
+    }
+
+    /// Wird gerade der Bildschirm geteilt (oder im Selbsttest so getan)?
+    private var screenIsShared: Bool {
+        simulatedCall.map { $0 == .screenSharing } ?? CallDetector.screenIsShared()
     }
 
     /// Selbsttest: wie ein Klick auf die Blase
@@ -1137,6 +1153,16 @@ final class CatController {
         nextErrandAllowed = .distantPast
     }
 
+    /// Aus dem Aufgabenfenster: genau diese Aufgabe gleich zeigen.
+    func showTaskNow(_ id: UUID) {
+        errands.requestTask(id)
+        nextErrandAllowed = .distantPast
+    }
+
+    private func configureTasks() {
+        errands.configureTasks(taskList, enabled: tasksEnabled, now: Date())
+    }
+
     /// Fällige Erinnerungen einsammeln; läuft keine, die nächste starten – sobald die Katze frei ist.
     private func updateErrands(now: Date) {
         errands.collectDue(now: now)
@@ -1147,7 +1173,7 @@ final class CatController {
         guard now >= nextErrandAllowed, canRunErrand else { return }
         // Im Videocall nur Aufgaben (falls so eingestellt) – und nie, während der Bildschirm geteilt wird
         let allowed: (ErrandKind) -> Bool = hiddenBecause == nil ? { _ in true }
-            : { [tasksDuringCalls] kind in kind == .task && tasksDuringCalls && !CallDetector.screenIsShared() }
+            : { [tasksDuringCalls, screenIsShared] kind in kind == .task && tasksDuringCalls && !screenIsShared }
         guard let errand = errands.popNext(where: allowed) else { return }
         startErrand(errand, now: now)
     }
@@ -1385,7 +1411,7 @@ final class CatController {
             updateOutfit()
             if isActivityBreakDue() { remindToTakeBreak(now: date) }
             // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
-            if hiddenBecause != nil, activeErrand?.errand.kind == .task, CallDetector.screenIsShared() { errandBubble?.pop() }
+            if hiddenBecause != nil, activeErrand?.errand.kind == .task, screenIsShared { errandBubble?.pop() }
         }
         updatePomodoro(now: date)
         updateTimer(now: date)

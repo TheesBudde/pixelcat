@@ -7,8 +7,36 @@ enum ErrandKind: Hashable, CaseIterable {
 
 struct Errand: Equatable {
     let kind: ErrandKind
-    /// Bei Aufgaben: woran sie erinnert
+    /// Bei Aufgaben: woran sie erinnert und welche es ist
     var text: String?
+    var taskID: UUID?
+}
+
+/// Eine Aufgabe, an die sie erinnert – jede mit eigenem Abstand.
+struct TaskItem: Equatable, Identifiable {
+    var id = UUID()
+    var text: String
+    /// Ungefähr alle so viele Minuten
+    var minutes: Int
+
+    /// Wählbare Abstände (Minuten)
+    static let intervals = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240]
+    static let defaultMinutes = 30
+
+    /// Zum Speichern in den Einstellungen
+    var dictionary: [String: Any] { ["id": id.uuidString, "text": text, "minutes": minutes] }
+
+    init(id: UUID = UUID(), text: String, minutes: Int) {
+        self.id = id
+        self.text = text
+        self.minutes = minutes
+    }
+
+    init?(dictionary: [String: Any]) {
+        guard let text = dictionary["text"] as? String else { return nil }
+        self.init(id: (dictionary["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID(),
+                  text: text, minutes: dictionary["minutes"] as? Int ?? Self.defaultMinutes)
+    }
 }
 
 /// Plant die kleinen Erinnerungen und reiht fällige hintereinander ein – es läuft immer nur eine,
@@ -21,7 +49,9 @@ final class ErrandScheduler {
     private(set) var queue: [Errand] = []
     private var nextDue: [ErrandKind: Date] = [:]
     private var intervals: [ErrandKind: Double] = [:]
-    private let tasks = TaskBag()
+    /// Aufgaben (nur die mit Text) und wann jede wieder dran ist
+    private var tasks: [TaskItem] = []
+    private var taskDue: [UUID: Date] = [:]
 
     /// Feierabend: Uhrzeit (Minuten nach Mitternacht) und ob nur Montag bis Freitag
     private var quittingTime: (minutes: Int, weekdaysOnly: Bool)?
@@ -46,9 +76,29 @@ final class ErrandScheduler {
         }
     }
 
-    func configureTasks(_ items: [String]) {
-        tasks.items = items.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        if tasks.items.isEmpty { queue.removeAll { $0.kind == .task } }
+    /// Aufgaben übernehmen: Neue oder mit geändertem Abstand werden neu geplant, die anderen behalten ihren Termin.
+    /// Ausgeschaltet bleibt die Liste erhalten (für „Jetzt zeigen“), aber nichts wird fällig.
+    func configureTasks(_ items: [TaskItem], enabled: Bool, now: Date) {
+        let old = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        tasks = items.compactMap { item in
+            var item = item
+            item.text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return item.text.isEmpty ? nil : item
+        }
+        var due: [UUID: Date] = [:]
+        if enabled {
+            for task in tasks {
+                if let existing = taskDue[task.id], old[task.id]?.minutes == task.minutes {
+                    due[task.id] = existing
+                } else {
+                    due[task.id] = now.addingTimeInterval(spread(Double(task.minutes)) * 60)
+                }
+            }
+        }
+        taskDue = due
+        // Was es nicht mehr gibt (oder ausgeschaltet ist), fliegt aus der Schlange – „Jetzt zeigen“ bleibt
+        let ids = Set(tasks.map(\.id))
+        queue.removeAll { $0.kind == .task && !ids.contains($0.taskID ?? UUID()) }
     }
 
     func configureQuittingTime(hour: Int, minute: Int, weekdaysOnly: Bool, enabled: Bool) {
@@ -59,8 +109,13 @@ final class ErrandScheduler {
     /// Fällige Erinnerungen einreihen (jede Art höchstens einmal) und neu planen.
     func collectDue(now: Date) {
         for (kind, due) in nextDue where now >= due {
-            if kind != .task || !tasks.items.isEmpty { enqueue(kind) }
+            enqueue(kind)
             nextDue[kind] = now.addingTimeInterval(spread(intervals[kind] ?? 30) * 60)
+        }
+        for task in tasks {
+            guard let due = taskDue[task.id], now >= due else { continue }
+            enqueue(task)
+            taskDue[task.id] = now.addingTimeInterval(spread(Double(task.minutes)) * 60)
         }
         if let start = quittingCheckedUntil, quittingCrossing(after: start, upTo: now) != nil {
             enqueue(.quittingTime)
@@ -68,30 +123,50 @@ final class ErrandScheduler {
         quittingCheckedUntil = now
     }
 
-    /// Die nächste Erinnerung aus der Warteschlange, die gerade erlaubt ist – Aufgaben bekommen dabei ihren Text.
+    /// Die nächste Erinnerung aus der Warteschlange, die gerade erlaubt ist (Aufgaben mit ihrem aktuellen Text).
     /// Nicht erlaubte bleiben in der Schlange und kommen später.
     func popNext(where allowed: (ErrandKind) -> Bool = { _ in true }) -> Errand? {
         guard let index = queue.firstIndex(where: { allowed($0.kind) }) else { return nil }
         var errand = queue.remove(at: index)
         if errand.kind == .task {
-            guard let text = tasks.next(random: random) else { return popNext(where: allowed) }
-            errand.text = text
+            guard let task = tasks.first(where: { $0.id == errand.taskID }) else { return popNext(where: allowed) }
+            errand.text = task.text
         }
         return errand
     }
 
-    /// Sofort zeigen (Knopf „Jetzt zeigen“ in den Einstellungen): vorne einreihen.
+    /// Sofort zeigen („Jetzt zeigen“): vorne einreihen – bei Aufgaben eine zufällige.
     func requestNow(_ kind: ErrandKind) {
+        if kind == .task {
+            guard !tasks.isEmpty else { return }
+            let task = tasks[min(tasks.count - 1, Int(random() * Double(tasks.count)))]
+            return requestTask(task.id)
+        }
         queue.removeAll { $0.kind == kind }
-        if kind == .task, tasks.items.isEmpty { return }
         queue.insert(Errand(kind: kind), at: 0)
     }
+
+    /// Eine bestimmte Aufgabe sofort zeigen (Knopf in der Aufgabenliste).
+    func requestTask(_ id: UUID) {
+        guard let task = tasks.first(where: { $0.id == id }) else { return }
+        queue.removeAll { $0.taskID == id }
+        queue.insert(Errand(kind: .task, text: task.text, taskID: id), at: 0)
+    }
+
+    /// Welche Erinnerungen gerade warten (für den Selbsttest)
+    var queuedKinds: [ErrandKind] { queue.map(\.kind) }
 
     // MARK: Intern
 
     private func enqueue(_ kind: ErrandKind) {
         guard !queue.contains(where: { $0.kind == kind }) else { return }
         queue.append(Errand(kind: kind))
+    }
+
+    /// Jede Aufgabe höchstens einmal in der Schlange
+    private func enqueue(_ task: TaskItem) {
+        guard !queue.contains(where: { $0.taskID == task.id }) else { return }
+        queue.append(Errand(kind: .task, text: task.text, taskID: task.id))
     }
 
     private func spread(_ minutes: Double) -> Double {
@@ -151,38 +226,6 @@ struct OutfitTimes {
     /// Liegt `minutes` in [from, to) – auch über Mitternacht hinweg?
     private static func contains(_ minutes: Int, from: Int, to: Int) -> Bool {
         from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to
-    }
-}
-
-/// Geht die Aufgaben in zufälliger Reihenfolge durch: erst alle einmal, dann neu gemischt –
-/// und nie zweimal dieselbe direkt hintereinander.
-final class TaskBag {
-    var items: [String] = [] {
-        didSet { if items != oldValue { bag = [] } }
-    }
-    private var bag: [String] = []
-    private(set) var last: String?
-
-    func next(random: () -> Double) -> String? {
-        guard !items.isEmpty else { return nil }
-        if bag.isEmpty {
-            bag = shuffled(items, random: random)
-            // Nicht mit der zuletzt gezeigten anfangen, wenn es andere gibt
-            if items.count > 1, bag.first == last { bag.append(bag.removeFirst()) }
-        }
-        let item = bag.removeFirst()
-        last = item
-        return item
-    }
-
-    private func shuffled(_ list: [String], random: () -> Double) -> [String] {
-        var list = list
-        guard list.count > 1 else { return list }
-        for i in stride(from: list.count - 1, to: 0, by: -1) {
-            let j = min(i, Int(random() * Double(i + 1)))
-            list.swapAt(i, j)
-        }
-        return list
     }
 }
 

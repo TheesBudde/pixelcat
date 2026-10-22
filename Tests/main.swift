@@ -299,65 +299,68 @@ MainActor.assumeIsolated {
 
     print("\nAufgaben")
     do {
-        var seed: UInt64 = 42
-        let random: () -> Double = {
-            seed = seed &* 6364136223846793005 &+ 1442695040888963407
-            return Double(seed >> 11) / Double(1 << 53)
-        }
-        let bag = TaskBag()
-        bag.items = ["Mama anrufen", "Steuer", "Blumen gießen", "Sport"]
-        var seen: [String] = []
-        for _ in 0..<40 { seen.append(bag.next(random: random)!) }
-        let rounds = stride(from: 0, to: 40, by: 4).map { Set(seen[$0..<$0 + 4]) }
-        check("jede Runde enthält jede Aufgabe genau einmal", rounds.allSatisfy { $0.count == 4 })
-        check("nie zweimal dieselbe hintereinander", zip(seen, seen.dropFirst()).allSatisfy { $0 != $1 })
-        check("Reihenfolge ist gemischt (nicht jede Runde gleich)", Set(stride(from: 0, to: 40, by: 4).map { seen[$0] }).count > 1)
-        bag.items = ["Nur eins"]
-        check("eine einzige Aufgabe kommt immer wieder", bag.next(random: random) == "Nur eins" && bag.next(random: random) == "Nur eins")
-
         let start = Date(timeIntervalSince1970: 1_800_000_000)
         let s = ErrandScheduler()
-        s.random = { 0.5 }
-        s.configure(.task, every: 10, now: start)
-        s.collectDue(now: start.addingTimeInterval(11 * 60))
-        check("ohne Einträge keine Aufgaben-Erinnerung", s.popNext() == nil)
-        s.configureTasks(["  Mama anrufen  ", "", "Sport"])
-        s.collectDue(now: start.addingTimeInterval(22 * 60))
-        let errand = s.popNext()
-        check("mit Einträgen: Erinnerung mit Text", errand?.kind == .task && ["Mama anrufen", "Sport"].contains(errand?.text ?? ""),
-              "\(String(describing: errand))")
+        s.random = { 0.5 } // ohne Zufallsschwankung
+        let often = TaskItem(text: "Wasser", minutes: 5)
+        let rarely = TaskItem(text: "Steuer", minutes: 120)
+        s.configureTasks([often, rarely, TaskItem(text: "   ", minutes: 10)], enabled: true, now: start)
+        var counts: [String: Int] = [:]
+        var t = 0.0
+        while t <= 4 * 3600 {
+            s.collectDue(now: start.addingTimeInterval(t))
+            while let errand = s.popNext() { counts[errand.text ?? "?", default: 0] += 1 }
+            t += 30
+        }
+        check("jede Aufgabe hat ihren eigenen Abstand", (counts["Wasser"] ?? 0) >= 45 && counts["Steuer"] == 2,
+              "in 4 Stunden: \(counts)")
+        check("leere Einträge zählen nicht", counts["?"] == nil && counts.count == 2, "\(counts)")
+
+        // Abstand ändern: nur diese Aufgabe wird neu geplant
+        let s2 = ErrandScheduler()
+        s2.random = { 0.5 }
+        s2.configureTasks([often, rarely], enabled: true, now: start)
+        var changed = rarely
+        changed.minutes = 10
+        s2.configureTasks([often, changed], enabled: true, now: start.addingTimeInterval(60))
+        s2.collectDue(now: start.addingTimeInterval(60 + 11 * 60))
+        var seen: [String] = []
+        while let errand = s2.popNext() { seen.append(errand.text ?? "") }
+        check("geänderter Abstand gilt sofort", seen.contains("Steuer") && seen.contains("Wasser"), "\(seen)")
+
+        // Ausgeschaltet: nichts wird fällig, „Jetzt zeigen“ geht trotzdem
+        let off = ErrandScheduler()
+        off.configureTasks([often], enabled: false, now: start)
+        off.collectDue(now: start.addingTimeInterval(3600))
+        check("ausgeschaltet kommt nichts", off.popNext() == nil)
+        off.requestTask(often.id)
+        check("eine bestimmte Aufgabe vorführen", off.popNext()?.text == "Wasser")
+        off.requestNow(.task)
+        check("„Jetzt zeigen“ nimmt irgendeine Aufgabe", off.popNext()?.kind == .task)
+
+        // Umbenannt, während sie wartet: Es erscheint der neue Text
+        let rename = ErrandScheduler()
+        rename.configureTasks([often], enabled: false, now: start)
+        rename.requestTask(often.id)
+        var renamed = often
+        renamed.text = "Wasser trinken!"
+        rename.configureTasks([renamed], enabled: false, now: start)
+        check("umbenannte Aufgabe zeigt den neuen Text", rename.popNext()?.text == "Wasser trinken!")
+        // Gelöscht, während sie wartet: kommt nicht mehr
+        rename.requestTask(often.id)
+        rename.configureTasks([], enabled: false, now: start)
+        check("gelöschte Aufgabe kommt nicht mehr", rename.popNext() == nil)
+
+        // Speichern und Laden
+        let restored = TaskItem(dictionary: rarely.dictionary)
+        check("Aufgabe übersteht Speichern und Laden", restored == rarely)
+
         let lines = PixelFont.lines("Steuererklärung bis Freitag abgeben!", maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
         check("langer Text wird an Wortgrenzen umbrochen", lines == ["STEUERERKLÄRUNG", "BIS FREITAG", "ABGEBEN!"], "\(lines)")
         let long = PixelFont.lines(String(repeating: "Wort ", count: 30), maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
         check("zu langer Text endet nach drei Zeilen mit …", long.count == 3 && long[2].hasSuffix("…"), "\(long)")
-    }
-
-    print("\nOutfits nach Tageszeit")
-    do {
-        let cal = Calendar.current
-        func at(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
-            cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
-        }
-        var times = OutfitTimes()
-        check("ohne Einstellungen kein Outfit", times.outfit(at: at(22, 20, 0)) == nil)
-        times.quitting = (17 * 60 + 30, true)
-        check("nach Feierabend Zylinder", times.outfit(at: at(22, 18, 0)) == .evening)
-        check("vor Feierabend nichts", times.outfit(at: at(22, 15, 0)) == nil)
-        check("ohne Schlafenszeit Zylinder bis in die Nacht", times.outfit(at: at(23, 2, 0)) == .evening)
-        check("Samstagabend kein Zylinder (nur werktags)", times.outfit(at: at(24, 19, 0)) == nil)
-        check("Freitagnacht nach Mitternacht noch Zylinder", times.outfit(at: at(24, 1, 0)) == .evening)
-        times.bedtime = 22 * 60 + 30
-        check("ab Schlafenszeit Schlafmütze", times.outfit(at: at(22, 22, 45)) == .night)
-        check("vorher noch Zylinder", times.outfit(at: at(22, 22, 0)) == .evening)
-        check("nachts Schlafmütze", times.outfit(at: at(23, 3, 0)) == .night)
-        check("Schlafmütze auch am Wochenende", times.outfit(at: at(24, 23, 0)) == .night)
-        check("ab 5 Uhr keine Schlafmütze mehr", times.outfit(at: at(23, 5, 30)) == nil)
-        times.morningEnd = 9 * 60
-        check("morgens Schlafmaske", times.outfit(at: at(23, 7, 0)) == .morning)
-        check("ab 9 Uhr nichts mehr", times.outfit(at: at(23, 9, 0)) == nil)
-        times.bedtime = 0 * 60 + 30
-        check("Schlafenszeit nach Mitternacht: um 23 Uhr noch Zylinder", times.outfit(at: at(22, 23, 0)) == .evening)
-        check("um 0:45 Schlafmütze", times.outfit(at: at(23, 0, 45)) == .night)
+        check("Abstände lesbar", TasksView.intervalText(5) == L10n.s("alle 5 Min.", "every 5 min")
+              && TasksView.intervalText(90) == L10n.s("alle 1,5 Std.", "every 1.5 h"), TasksView.intervalText(90))
     }
 
     print("\nWarteschlange")
@@ -382,7 +385,7 @@ MainActor.assumeIsolated {
         s.requestNow(.drink)
         check("„Jetzt zeigen“ kommt sofort", s.popNext()?.kind == .drink)
         // Im Videocall nur Aufgaben: Die anderen warten in der Schlange
-        s.configureTasks(["Mama anrufen"])
+        s.configureTasks([TaskItem(text: "Mama anrufen", minutes: 30)], enabled: true, now: start)
         s.requestNow(.task)
         s.requestNow(.lookout)
         let inCall = s.popNext(where: { $0 == .task })

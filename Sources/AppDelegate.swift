@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = AppSettings()
     private let focusMonitor = FocusMonitor()
     private lazy var settingsWindow = SettingsWindow(settings: settings, focus: focusMonitor)
+    private lazy var tasksWindow = TasksWindow(settings: settings)
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
@@ -23,6 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var drinkItem: NSMenuItem!
     private var eyeItem: NSMenuItem!
     private var taskItem: NSMenuItem!
+    private var taskOnItem: NSMenuItem!
+    private var taskCallsItem: NSMenuItem!
     private var selfTest: SelfTest?
     private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
@@ -40,19 +43,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             buildMenu() // Sprache könnte sich geändert haben
             buildMainMenu()
         }
-        // „Jetzt zeigen“ in den Einstellungen
+        // „Jetzt zeigen“ in den Einstellungen bzw. bei einer Aufgabe
         settings.onPreview = { [weak self] kind in
             guard let self else { return }
             cat.show()
             cat.showErrandNow(kind)
         }
+        settings.onPreviewTask = { [weak self] id in
+            guard let self else { return }
+            cat.show()
+            cat.showTaskNow(id)
+        }
+        settings.onOpenTasks = { [weak self] in self?.openTasks() }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
         // Start mit --selftest: alle Erinnerungen auf dem Bildschirm durchspielen und prüfen
         if CommandLine.arguments.contains("--selftest") {
             selfTest = SelfTest(cat: cat, settings: settings)
-            selfTest?.start()
+            selfTest?.start(calls: CommandLine.arguments.contains("calls"))
         }
         // Start mit --outfit pumpkin|santa|party: Verkleidung vorführen
         if let i = CommandLine.arguments.firstIndex(of: "--outfit"), i + 1 < CommandLine.arguments.count {
@@ -118,18 +127,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(drinkItem)
         eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks))
         menu.addItem(eyeItem)
-        taskItem = item(t("Aufgaben-Erinnerung", "Task reminder"), #selector(toggleTasks))
-        taskItem.toolTip = t("Die Aufgaben trägst du in den Einstellungen ein.", "Add your tasks in the settings.")
+        // Aufgaben: Untermenü zum Ein-/Ausschalten und zum Bearbeiten der Liste
+        let taskMenu = NSMenu()
+        taskOnItem = item(t("Eingeschaltet", "On"), #selector(toggleTasks))
+        taskMenu.addItem(taskOnItem)
+        taskCallsItem = item(t("Auch während Videocalls", "Also during video calls"), #selector(toggleTasksDuringCalls))
+        taskMenu.addItem(taskCallsItem)
+        taskMenu.addItem(.separator())
+        for task in settings.taskItems.prefix(8) {
+            let entry = NSMenuItem(title: "\(task.text) – \(TasksView.intervalText(task.minutes))", action: nil, keyEquivalent: "")
+            entry.isEnabled = false
+            taskMenu.addItem(entry)
+        }
+        if settings.taskItems.count > 8 {
+            let more = NSMenuItem(title: "…", action: nil, keyEquivalent: "")
+            more.isEnabled = false
+            taskMenu.addItem(more)
+        }
+        if !settings.taskItems.isEmpty { taskMenu.addItem(.separator()) }
+        taskMenu.addItem(item(t("Aufgaben hinzufügen und bearbeiten …", "Add and edit tasks …"), #selector(openTasks)))
+        taskItem = NSMenuItem(title: t("Aufgaben-Erinnerung", "Task reminder"), action: nil, keyEquivalent: "")
+        taskItem.submenu = taskMenu
         menu.addItem(taskItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
         if settings.basketInDock {
             roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming))
-            roamItem.toolTip = t("Die Katze schläft im Korb im Dock und kommt nur zu Pausen heraus.",
-                                 "The cat sleeps in the bed in the Dock and only comes out for breaks.")
+            roamItem.toolTip = t("Die Katze schläft im Korb im Dock und kommt nur zu Pausen und Erinnerungen heraus.",
+                                 "The cat sleeps in the bed in the Dock and only comes out for breaks and reminders.")
         } else {
             roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming))
-            roamItem.toolTip = t("Die Katze geht nach draußen und kommt nur zu Pausen in die Bildschirmmitte.",
-                                 "The cat heads outside and only comes to the middle of the screen for breaks.")
+            roamItem.toolTip = t("Die Katze geht weg und kommt nur zu Pausen und Erinnerungen herein.",
+                                 "The cat heads out and only comes in for breaks and reminders.")
         }
         menu.addItem(roamItem)
         menu.addItem(.separator())
@@ -235,6 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         drinkItem.state = settings.drinkReminders ? .on : .off
         eyeItem.state = settings.eyeBreaks ? .on : .off
         taskItem.state = settings.taskReminders ? .on : .off
+        taskOnItem.state = settings.taskReminders ? .on : .off
+        taskCallsItem.state = settings.tasksDuringCalls ? .on : .off
         roamItem.state = settings.awayMode ? .on : .off
 
         // Schläft sie fest oder ist sie draußen, gibt es nichts zu füttern oder zu spielen
@@ -322,7 +352,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func toggleTasks() {
         settings.taskReminders.toggle()
         // Noch keine Aufgaben eingetragen: gleich die Einstellungen zeigen
-        if settings.taskReminders, settings.taskItems.isEmpty { openSettings() }
+        if settings.taskReminders, settings.taskItems.isEmpty { openTasks() }
+    }
+
+    @objc private func toggleTasksDuringCalls() {
+        settings.tasksDuringCalls.toggle()
+    }
+
+    @objc private func openTasks() {
+        tasksWindow.show()
     }
 
     @objc private func toggleRoaming() {

@@ -20,10 +20,11 @@ Schwanzspitze.
   Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
 - **Streifzug:** Die Katze geht nach draußen und ist nicht mehr zu sehen. Nur wenn Pause ist
   (Pomodoro-Pause, Pausen-Erinnerung oder abgelaufener Timer), kommt sie herein, läuft in die Bildschirmmitte, streckt
-  sich, miaut und bummelt dort 5 Minuten herum. Danach geht sie wieder. Ohne Streifzug ist sie
+  sich, miaut und bummelt dort 5 Minuten herum. Für die kleinen Erinnerungen (Trinken, Augenpause, Aufgaben,
+  Feierabend) kommt sie ebenfalls herein. Danach geht sie wieder. Ohne Streifzug ist sie
   wie gewohnt die ganze Zeit da.
 - **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
-  bei der Pausen-Erinnerung. Im Menü unter „Miauen“ ganz abschaltbar.
+  bei der Pausen-Erinnerung, außerdem zum Feierabend. In den Einstellungen unter „Töne“ ganz abschaltbar.
 - **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
   oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
   Bildschirmmitte, streckt sich, miaut und sucht dort dezent Aufmerksamkeit – strecken, dich
@@ -46,11 +47,12 @@ Schwanzspitze.
   die Mitte, streckt sich und denkt „Feierabend“. Den Anzug-Look trägt sie bis zur Schlafenszeit.
 - **Outfits nach Tageszeit (Einstellung):** Ab der Schlafenszeit eine Schlafmütze mit Sternen (bis 5 Uhr), morgens
   bis zur eingestellten Uhrzeit eine hochgeschobene Schlafmaske auf der Stirn.
-- **Aufgaben-Erinnerung:** In den Einstellungen trägst du Stichworte ein („Mama anrufen“). In einstellbaren
-  Abständen denkt sie an einen davon – in zufälliger Reihenfolge, jede einmal, dann wieder von vorn. Lange
-  Einträge werden auf bis zu drei Zeilen umbrochen. Wahlweise **auch während Videocalls** (Kamera oder Mikrofon
-  an): Die Katze bleibt dann versteckt, nur die Blase erscheint über dem Katzenkorb im Dock bzw. unten rechts –
-  nie, während der Bildschirm geteilt wird.
+- **Aufgaben-Erinnerung:** Im eigenen Aufgabenfenster (Menü „Aufgaben-Erinnerung ▸ Aufgaben hinzufügen und
+  bearbeiten …“) trägst du Stichworte ein („Mama anrufen“) und stellst für **jede einzeln** ein, wie oft sie
+  ungefähr daran denkt – von alle 5 Minuten bis alle 4 Stunden. Der genaue Zeitpunkt schwankt ein wenig. Lange
+  Einträge werden auf bis zu drei Zeilen umbrochen; jede Aufgabe lässt sich mit einem Klick vorführen. Wahlweise
+  **auch während Videocalls** (Kamera oder Mikrofon an): Die Katze bleibt dann versteckt, nur die Blase erscheint
+  über dem Katzenkorb im Dock bzw. unten rechts – nie, während der Bildschirm geteilt wird.
 - **Kleine Erinnerungen, nacheinander:** Trinken, Augenpause, Aufgaben und Feierabend warten aufeinander und
   auf Pausen, Pomodoro und Timer – nie zwei auf einmal. Im Streifzug oder Katzenkorb kommt sie dafür herein und
   geht danach wieder. Jede lässt sich in den Einstellungen mit „Jetzt zeigen“ vorführen.
@@ -62,14 +64,15 @@ Schwanzspitze.
 - **Katzenkorb im Dock (Einstellung):** Pixelcat zeigt ein ovales Plüschbett im Dock, und im Menü steht
   **Katzenkorb** statt **Streifzug**. Ist der Katzenkorb an, schrumpft
   sie auf dem Dock auf Körbchengröße, steigt mit den Pfoten hinein, dreht sich einmal im Kreis, legt sich hin – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
-  Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie erst nach, wenn sie
+  den Erinnerungen (Trinken, Augenpause, Aufgaben, Feierabend) klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie erst nach, wenn sie
   hinein- oder herausklettert – mit der Freigabe „Bedienungshilfen“ (wird beim Einschalten angefragt) genau,
   sonst geschätzt aus den Dock-Einstellungen (Symbolgröße, angeheftete und laufende Apps, Abstandshalter,
   Ordner, zuletzt benutzte Apps, automatisches Verkleinern bei vollem Dock). Wandert das Dock auf einen anderen
   Bildschirm, wacht sie dort auf. Steht das Dock links oder rechts, ist es automatisch ausgeblendet oder läuft
   ein Programm im Vollbild, läuft sie stattdessen zur Seite hinaus (beim seitlichen Dock zu dessen Seite).
-- **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe geht sie automatisch
-  auf Streifzug und kommt danach zurück. Ist ein macOS-Fokus aktiv, ist sie still und schläft mehr.
+- **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe versteckt sie sich und
+  kommt danach zurück; Erinnerungen warten so lange (Aufgaben auf Wunsch nicht). Ist ein macOS-Fokus aktiv, ist sie
+  still und schläft mehr.
 - **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.
 - **Mauszeiger jagen:** Ruht die Maus knapp über dem Dock, schleicht sie sich an, wackelt mit dem Hinterteil
   und springt (nicht im Streifzug).
@@ -109,9 +112,10 @@ Das Menü enthält nur, was man oft braucht:
 | Pomodoro | Fokus und Pause im Wechsel (Haken = läuft) |
 | Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen (Haken = läuft, nochmal klicken beendet) |
 | Pausen-Erinnerung | regelmäßige Pausen (an/aus) |
-| Trink-Erinnerung · Augenpause · Aufgaben-Erinnerung | kleine Erinnerungen (je an/aus) |
-| Streifzug | Katze geht nach draußen und kommt nur zu Pausen vorbei (an/aus) |
-| Katzenkorb | statt Streifzug, wenn der Katzenkorb im Dock eingeschaltet ist: Katze schläft im Korb und kommt nur zu Pausen heraus (an/aus) |
+| Trink-Erinnerung · Augenpause | kleine Erinnerungen (je an/aus) |
+| Aufgaben-Erinnerung ▸ | Eingeschaltet · Auch während Videocalls · Liste der Aufgaben · Aufgaben hinzufügen und bearbeiten … |
+| Streifzug | Katze geht weg und kommt nur zu Pausen und Erinnerungen herein (an/aus) |
+| Katzenkorb | statt Streifzug, wenn der Katzenkorb im Dock eingeschaltet ist: Katze schläft im Korb und kommt nur zu Pausen und Erinnerungen heraus (an/aus) |
 | Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
 | Einstellungen … (⌘,) | Fenster mit allem Weiteren |
 | Pixelcat beenden (⌘Q) | App beenden |
@@ -124,7 +128,7 @@ Das Menü enthält nur, was man oft braucht:
 - **Trinken, Augen:** an/aus, ungefähre Abstände, „Jetzt zeigen“
 - **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
 - **Outfits:** Schlafmütze ab Schlafenszeit, Morgen-Outfit bis zu einer Uhrzeit
-- **Aufgaben:** an/aus, Abstand, auch während Videocalls, Liste zum Eintragen und Entfernen
+- **Aufgaben:** Knopf zum Aufgabenfenster (dort: an/aus, auch während Videocalls, Liste mit Abstand je Aufgabe)
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English
 
@@ -220,7 +224,14 @@ In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneu
 
 ```bash
 ./test.sh       # Abläufe durchspielen und prüfen
-./preview.sh    # Pixelbilder (Blasen, Posen, Napf, Fenster) nach build/preview/ rendern
+./preview.sh    # Pixelbilder (Blasen, Posen, Napf, Fenster) und Fenster nach build/preview/ rendern
+```
+
+Auf dem echten Bildschirm (die installierte App, sie beendet sich danach; Protokoll in `build/selftest.log`):
+
+```bash
+/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest         # alle Erinnerungen
+/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest calls   # Videocall nachgespielt
 ```
 
 `test.sh` spielt Szenarien rund um den Katzenkorb und die kleinen Erinnerungen durch (Trinken, Augenpause,
