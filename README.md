@@ -177,6 +177,17 @@ Mit `--outfit pumpkin`, `--outfit santa` oder `--outfit party` lassen sich die F
 
 In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneut ausführen.
 
+## Testen
+
+```bash
+./test.sh
+```
+
+Spielt Szenarien rund um den Katzenkorb durch (Pause, Timer, Erinnerung, Videocall, Vollbild, Klicks, Korb im Dock
+verschoben – jeweils auch mitten im Hinein- oder Herausklettern) und prüft, dass sie immer genau am Korb hinein- und
+herausklettert und nie hängen bleibt. Zum Nachmessen am echten Dock: Pixelcat mit `PIXELCAT_CALIBRATE=1` starten –
+erst zeigt das Dock-Symbol die schlafende Katze, nach 6 s liegt stattdessen das letzte Bild der Animation darüber.
+
 ## Neue Version veröffentlichen
 
 ```bash

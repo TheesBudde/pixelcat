@@ -467,7 +467,8 @@ final class CatBrain {
     }
 
     func startle() {
-        guard mode != .focus, phase != .away, phase != .startled, phase != .fleeing, phase != .jumping, phase != .falling else {
+        guard mode != .focus, phase != .away, !isAboveDock, phase != .startled, phase != .fleeing, phase != .jumping,
+              phase != .falling else {
             return
         }
         if phase == .climbingUp || phase == .climbingDown {
@@ -487,6 +488,11 @@ final class CatBrain {
 
     /// Klick auf die Katze: Wartet sie auf Quittung, freut sie sich – sonst erschrickt sie.
     func clicked() {
+        // Beim Hinein- und Herausklettern nicht erschrecken – sie ist gerade klein und halb im Korb
+        if isAboveDock {
+            acknowledge()
+            return
+        }
         if awaitingAcknowledgement {
             acknowledge()
             stroke()
@@ -699,6 +705,13 @@ final class CatBrain {
             enter(.away, for: .infinity)
         case .intoBasket:
             // Inzwischen Vollbild (kein Dock, kein Körbchen)? Dann nicht ins Leere steigen, sondern hinaus
+            guard useBasket, basketX != nil else { return leaveScreen() }
+            // Noch einmal nachsehen: Wurde der Korb gerade erst verschoben, dorthin weiterlaufen
+            locateBasket?()
+            if let basketX, abs(clampX(basketX - CGFloat(Layout.canvasWidth) / 2 * scale) - x) > 2 * unit {
+                walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
+                return
+            }
             guard useBasket, basketX != nil else { return leaveScreen() }
             // ins Körbchen steigen und es sich gemütlich machen
             enter(.enteringBasket, for: 3.3)
@@ -920,6 +933,8 @@ final class CatBrain {
 
     /// Streifzug beendet: von der Seite zurück aufs Dock.
     private func returnToScreen() {
+        // Mitten im Hinein- oder Herausklettern: erst fertig klettern (danach wird es nachgeholt)
+        if phase == .enteringBasket || phase == .leavingBasket { return }
         visitTimeLeft = 0
         var isLeaving = phase == .away
         if case .exit = goal { isLeaving = true }
@@ -1001,6 +1016,7 @@ final class CatBrain {
             if phaseTime >= phaseDuration {
                 facingRight = true // liegt im Dock-Symbol mit dem Kopf nach rechts
                 enter(.away, for: .infinity)
+                settledInBasket()
             }
         } else {
             switch t {
@@ -1017,8 +1033,28 @@ final class CatBrain {
                 y = dockY
                 let next = afterHop
                 afterHop = nil
-                if let next { next() } else { enter(.standing, for: 0.5) }
+                if roaming, suppressVisits || (!isVisiting && !awaitingAcknowledgement && mode != .focusBreak) {
+                    // Während des Herauskletterns war die Pause schon wieder vorbei (oder ein Videocall begann): zurück
+                    enter(.standing, for: 0.3)
+                    leaveScreen()
+                } else if let next {
+                    next()
+                } else {
+                    enter(.standing, for: 0.5)
+                }
             }
+        }
+    }
+
+    /// Gerade fertig hineingelegt: Was in diesen Sekunden passiert ist (Pause, Timer, Erinnerung,
+    /// Katzenkorb aus), wird jetzt nachgeholt – sonst bliebe sie liegen.
+    private func settledInBasket() {
+        if !roaming {
+            returnToScreen()
+        } else if isVisiting {
+            startVisit(for: visitTimeLeft)
+        } else if mode == .focusBreak || awaitingAcknowledgement {
+            startVisit(for: .infinity)
         }
     }
 
