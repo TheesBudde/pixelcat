@@ -146,9 +146,15 @@ struct BasketArt {
     }
 }
 
-/// Wo das Körbchen im Dock sitzt (Bildschirm-x der Mitte).
+/// Wo das Körbchen im Dock sitzt und wie groß das Symbol gerade ist.
 /// Exakt über die Bedienungshilfen (falls freigegeben), sonst geschätzt aus den Dock-Einstellungen.
 enum DockLocator {
+    /// Das Dock-Symbol: Mitte (Bildschirmkoordinaten) und Kantenlänge
+    struct Tile {
+        let center: CGPoint
+        let size: CGFloat
+    }
+
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
     /// Fragt einmalig nach der Freigabe „Bedienungshilfen“.
@@ -157,14 +163,22 @@ enum DockLocator {
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
     }
 
-    static func basketCenterX(appName: String, screen: NSScreen) -> CGFloat? {
-        exactCenterX(appName: appName) ?? estimatedCenterX(screen: screen)
+    static func basketTile(appName: String, screen: NSScreen) -> Tile? {
+        exactTile(appName: appName) ?? estimatedTile(screen: screen)
     }
 
-    /// Über die Bedienungshilfen: das Dock-Element mit unserem Namen suchen.
-    private static func exactCenterX(appName: String) -> CGFloat? {
+    /// Für die Fehlersuche: was die Bedienungshilfen und die Schätzung sagen
+    static func debugDescription(appName: String, screen: NSScreen) -> String {
+        "trusted=\(isTrusted) ax=\(exactTile(appName: appName).map { "\($0)" } ?? "nil") "
+            + "schätzung=\(estimatedTile(screen: screen).map { "\($0)" } ?? "nil")"
+    }
+
+    /// Über die Bedienungshilfen: das Dock-Element mit unserem Namen suchen. Sein Rahmen ist so breit wie
+    /// das Symbol und reicht oben ein Stück darüber hinaus – das Symbol sitzt unten darin.
+    private static func exactTile(appName: String) -> Tile? {
         guard isTrusted,
-              let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first
+              let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first,
+              let top = NSScreen.screens.first?.frame.maxY
         else { return nil }
         let app = AXUIElementCreateApplication(dock.processIdentifier)
         for list in children(of: app) {
@@ -180,7 +194,11 @@ enum DockLocator {
                 var size = CGSize.zero
                 if let positionValue { AXValueGetValue(positionValue as! AXValue, .cgPoint, &position) }
                 if let sizeValue { AXValueGetValue(sizeValue as! AXValue, .cgSize, &size) }
-                return position.x + size.width / 2
+                // Gerade erst aufgetaucht (Symbol wächst noch)? Dann lieber schätzen
+                guard size.width > 16 else { return nil }
+                // Bedienungshilfen zählen y von oben
+                let bottom = top - (position.y + size.height)
+                return Tile(center: CGPoint(x: position.x + size.width / 2, y: bottom + size.width / 2), size: size.width)
             }
         }
         return nil
@@ -194,7 +212,9 @@ enum DockLocator {
 
     /// Schätzung: Das Dock ist zentriert; laufende, nicht angeheftete Apps stehen hinter den angehefteten,
     /// rechts folgen Trennstrich, Ordner und Papierkorb. Pixelcat sitzt meist als letzte laufende App.
-    private static func estimatedCenterX(screen: NSScreen) -> CGFloat? {
+    /// Die Symbole stehen dicht an dicht; an beiden Enden und am Trennstrich ist je knapp ein halbes Symbol Luft
+    /// (nachgemessen am echten Dock).
+    private static func estimatedTile(screen: NSScreen) -> Tile? {
         let prefs = UserDefaults(suiteName: "com.apple.dock")
         guard (prefs?.string(forKey: "orientation") ?? "bottom") == "bottom" else { return nil }
         let tile = CGFloat(prefs?.double(forKey: "tilesize") ?? 0) > 0 ? CGFloat(prefs!.double(forKey: "tilesize")) : 48
@@ -210,16 +230,15 @@ enum DockLocator {
         let appCount = CGFloat(1 + pinned.count + running)            // Finder + angeheftete + laufende
         let rightCount = CGFloat(others + 1 + recents)                 // Ordner, Papierkorb, zuletzt benutzte
         let separators: CGFloat = recents > 0 ? 2 : 1
+        let pad: CGFloat = 0.47, gap: CGFloat = 0.45                   // Luft am Rand bzw. am Trennstrich (in Symbolen)
+        let slots = appCount + rightCount + 2 * pad + separators * gap
         // Wird das Dock zu breit, verkleinert macOS die Symbole
-        var pitch = tile * 1.1
-        var width = (appCount + rightCount) * pitch + (separators + 1) * pitch * 0.36
-        let available = screen.frame.width * 0.98
-        if width > available {
-            pitch *= available / width
-            width = available
-        }
-        let left = screen.frame.midX - width / 2 + pitch * 0.18
-        let x = left + (appCount - 0.5) * pitch
-        return min(max(x, screen.frame.minX + pitch), screen.frame.maxX - pitch)
+        let size = min(tile, screen.frame.width * 0.98 / slots)
+        let left = screen.frame.midX - slots * size / 2
+        let x = left + (pad + appCount - 0.5) * size
+        let dockHeight = screen.visibleFrame.minY - screen.frame.minY
+        return Tile(center: CGPoint(x: min(max(x, screen.frame.minX + size), screen.frame.maxX - size),
+                                    y: screen.frame.minY + dockHeight / 2),
+                    size: size)
     }
 }

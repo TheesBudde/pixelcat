@@ -532,11 +532,8 @@ final class CatController {
 
     /// So groß ist ein Katzenpixel im Dock-Symbol (Symbolgröße aus den Dock-Einstellungen).
     private var basketCatScale: CGFloat { BasketArt.shared.scale(forTile: dockTileSize) }
-    /// Größe der Dock-Symbole (aus den Dock-Einstellungen)
-    private var dockTileSize: CGFloat {
-        let tile = UserDefaults(suiteName: "com.apple.dock")?.double(forKey: "tilesize") ?? 0
-        return CGFloat(tile > 0 ? tile : 48)
-    }
+    /// Wie groß das Pixelcat-Symbol im Dock gerade ist (bei vollem Dock kleiner als eingestellt)
+    private var dockTileSize: CGFloat = 48
 
     private func resizeCatWindow(to drawScale: CGFloat) {
         let size = NSSize(width: CGFloat(Layout.canvasWidth) * drawScale,
@@ -822,14 +819,22 @@ final class CatController {
             return
         }
         let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Pixelcat"
-        brain.basketX = DockLocator.basketCenterX(appName: name, screen: primary)
+        let tile = DockLocator.basketTile(appName: name, screen: primary)
+        brain.basketX = tile?.center.x
+        if let tile {
+            dockTileSize = tile.size
+            // Genau dort, wo die Katze im Dock-Symbol liegt
+            brain.basketFloorY = tile.center.y + BasketArt.shared.catBottom(fromCenterOfTile: tile.size)
+        }
         // Ins Körbchen steigen geht nur, wenn das Dock unten zu sehen ist
         let dockHeight = primary.visibleFrame.minY - primary.frame.minY
-        // Genau dort, wo die Katze im Dock-Symbol liegt (die Symbole sitzen mittig im Dock)
-        brain.basketFloorY = primary.frame.minY + dockHeight / 2
-            + BasketArt.shared.catBottom(fromCenterOfTile: dockTileSize)
         brain.useBasket = brain.basketX != nil && (screen == primary) && dockHeight > 20 && !isFullscreen
+        if Self.debug {
+            print("Korb:", DockLocator.debugDescription(appName: name, screen: primary),
+                  "boden=\(brain.basketFloorY ?? -1) dockHöhe=\(dockHeight) kachel=\(dockTileSize)")
+        }
     }
+    private static let debug = ProcessInfo.processInfo.environment["PIXELCAT_DEBUG"] != nil
 
     /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
     private func updateBasketTile(dt: Double) {
@@ -1006,6 +1011,9 @@ final class CatController {
                             y: (floor - CGFloat(art.catY) * drawScale - origin.y) / drawScale)
         }
         if view.basketFront != front { view.basketFront = front }
+        if Self.debug, brain.isAboveDock {
+            print("Katze: \(brain.phase) fenster=\(panel.frame) mitte=\(panel.frame.midX) korbX=\(brain.basketX ?? -1)")
+        }
         let look = brain.look
         if look != view.look { view.look = look }
 
