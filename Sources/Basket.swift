@@ -157,6 +157,32 @@ enum DockLocator {
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
+    enum Edge { case bottom, left, right }
+
+    private static var prefs: UserDefaults? { UserDefaults(suiteName: "com.apple.dock") }
+
+    /// Wo das Dock steht (Einstellung „Position auf dem Bildschirm“)
+    static var edge: Edge {
+        switch prefs?.string(forKey: "orientation") {
+        case "left": return .left
+        case "right": return .right
+        default: return .bottom
+        }
+    }
+
+    /// Der Bildschirm, auf dem das Dock gerade ist: Dort lässt macOS am Rand Platz dafür frei.
+    /// Bei automatisch ausgeblendetem Dock gibt es keinen freien Rand – dann der Hauptbildschirm.
+    static func dockScreen() -> NSScreen? {
+        let edge = edge
+        return NSScreen.screens.first { screen in
+            switch edge {
+            case .bottom: return screen.visibleFrame.minY - screen.frame.minY > 4
+            case .left: return screen.visibleFrame.minX - screen.frame.minX > 4
+            case .right: return screen.frame.maxX - screen.visibleFrame.maxX > 4
+            }
+        } ?? NSScreen.screens.first
+    }
+
     /// Fragt einmalig nach der Freigabe „Bedienungshilfen“.
     static func requestTrust() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
@@ -216,8 +242,8 @@ enum DockLocator {
     /// Die Symbole stehen dicht an dicht; an beiden Enden und am Trennstrich ist je knapp ein halbes Symbol Luft
     /// (nachgemessen am echten Dock).
     private static func estimatedTile(screen: NSScreen) -> Tile? {
-        let prefs = UserDefaults(suiteName: "com.apple.dock")
-        guard (prefs?.string(forKey: "orientation") ?? "bottom") == "bottom" else { return nil }
+        let prefs = prefs
+        guard edge == .bottom else { return nil }
         let tile = CGFloat(prefs?.double(forKey: "tilesize") ?? 0) > 0 ? CGFloat(prefs!.double(forKey: "tilesize")) : 48
         let pinned = (prefs?.array(forKey: "persistent-apps") as? [[String: Any]]) ?? []
         func bundleID(_ entry: [String: Any]) -> String? {

@@ -41,8 +41,12 @@ Schwanzspitze.
 - **Katzenkorb im Dock (Einstellung):** Pixelcat zeigt ein ovales Plüschbett im Dock, und im Menü steht
   **Katzenkorb** statt **Streifzug**. Ist der Katzenkorb an, schrumpft
   sie auf dem Dock auf Körbchengröße, steigt mit den Pfoten hinein, dreht sich einmal im Kreis, legt sich hin – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
-  Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie mit der Freigabe
-  „Bedienungshilfen“ genau aus, sonst schätzt sie es aus den Dock-Einstellungen.
+  Erinnerung klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie erst nach, wenn sie
+  hinein- oder herausklettert – mit der Freigabe „Bedienungshilfen“ (wird beim Einschalten angefragt) genau,
+  sonst geschätzt aus den Dock-Einstellungen (Symbolgröße, angeheftete und laufende Apps, Abstandshalter,
+  Ordner, zuletzt benutzte Apps, automatisches Verkleinern bei vollem Dock). Wandert das Dock auf einen anderen
+  Bildschirm, wacht sie dort auf. Steht das Dock links oder rechts, ist es automatisch ausgeblendet oder läuft
+  ein Programm im Vollbild, läuft sie stattdessen zur Seite hinaus (beim seitlichen Dock zu dessen Seite).
 - **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe geht sie automatisch
   auf Streifzug und kommt danach zurück. Ist ein macOS-Fokus aktiv, ist sie still und schläft mehr.
 - **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.

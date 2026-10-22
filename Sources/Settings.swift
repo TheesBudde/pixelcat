@@ -13,7 +13,13 @@ final class AppSettings: ObservableObject {
     @Published var multiScreen: Bool { didSet { changed() } }
     /// Streifzug (ohne Körbchen): Sie geht aus dem Bild und kommt nur zu Pausen vorbei.
     @Published var roaming: Bool { didSet { changed() } }
-    @Published var basketInDock: Bool { didSet { changed() } }
+    @Published var basketInDock: Bool {
+        didSet {
+            // Beim Einschalten gleich um die Freigabe bitten – damit findet sie das Körbchen überall genau
+            if basketInDock, !oldValue, !loading, !DockLocator.isTrusted { DockLocator.requestTrust() }
+            changed()
+        }
+    }
     /// Katzenkorb (mit Körbchen): Sie schläft im Körbchen im Dock und kommt nur zu Pausen heraus.
     @Published var basketNap: Bool { didSet { changed() } }
     @Published var breakReminders: Bool { didSet { changed() } }

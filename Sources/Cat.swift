@@ -318,7 +318,12 @@ final class CatBrain {
 
     /// Körbchen-Modus: Statt hinauszulaufen, hüpft sie ins Körbchen im Dock (Bildschirm-x der Körbchenmitte).
     var basketX: CGFloat?
+    /// Ist das Körbchen von hier aus erreichbar (Dock unten auf ihrem Bildschirm, kein Vollbild)?
     var useBasket = false
+    /// Sucht das Körbchen im Dock (setzt `basketX` und `basketFloorY`) – nur wenn sie es gleich braucht
+    var locateBasket: (() -> Void)?
+    /// Steht das Dock links oder rechts, geht sie zu dieser Seite hinaus und kommt dort wieder herein
+    var dockSideIsLeft: Bool?
     /// Wo die Pfoten im Körbchen stehen (innerhalb des Docks)
     var basketFloorY: CGFloat?
     /// Steht gerade vor dem Dock (beim Hinein- und Heraussteigen)
@@ -876,8 +881,8 @@ final class CatBrain {
         default:
             break
         }
-        if useBasket, let basketX {
-            if case .intoBasket = goal, phase == .walking { return }
+        if useBasket, case .intoBasket = goal, phase == .walking { return }
+        if basketReady(), let basketX {
             goal = .intoBasket
             walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
             return
@@ -886,6 +891,7 @@ final class CatBrain {
         // Lieber zu einer Seite ohne Nachbarbildschirm – sonst sähe man sie dort auftauchen
         if toLeft, neighborLeft, !neighborRight { toLeft = false }
         if !toLeft, neighborRight, !neighborLeft { toLeft = true }
+        if let dockSideIsLeft { toLeft = dockSideIsLeft } // zum Körbchen im seitlichen Dock
         offscreenAllowed = true
         goal = .exit
         walk(to: offscreenX(left: toLeft), speed: 70 * unit)
@@ -904,7 +910,7 @@ final class CatBrain {
             walk(to: .random(in: minX...max(minX, maxX)), speed: .random(in: temperament.walkSpeed) * unit)
         }
         if phase == .away {
-            if useBasket, basketX != nil {
+            if basketReady() {
                 emergeFromBasket(then: wander)
                 return
             }
@@ -925,13 +931,20 @@ final class CatBrain {
             walk(to: (minX + maxX) / 2, speed: 65 * unit)
         }
         if phase == .away {
-            if useBasket, basketX != nil {
+            if basketReady() {
                 emergeFromBasket(then: toCenter)
                 return
             }
             x = offscreenX(left: entrySideIsLeft())
         }
         toCenter()
+    }
+
+    /// Körbchen erreichbar? Dann genau jetzt nachsehen, wo es im Dock sitzt.
+    private func basketReady() -> Bool {
+        guard useBasket else { return false }
+        locateBasket?()
+        return basketX != nil
     }
 
     /// Aus dem Körbchen klettern: von hinter dem Dock hinaufspringen, dann weiter.
@@ -997,6 +1010,7 @@ final class CatBrain {
 
     /// Von welcher Seite sie hereinkommt: wenn möglich von einer Seite ohne Nachbarbildschirm.
     private func entrySideIsLeft() -> Bool {
+        if let dockSideIsLeft { return dockSideIsLeft }
         if neighborLeft != neighborRight { return neighborRight }
         return Bool.random()
     }

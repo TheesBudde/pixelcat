@@ -318,6 +318,7 @@ final class CatController {
             scheduleReminder()
             updateStatusText()
         }
+        brain.locateBasket = { [weak self] in self?.locateBasket() }
         applyScale()
         updateOutfit()
         // Der Takt läuft immer, damit Pomodoro und Timer auch bei ausgeblendeter Katze weiterzählen.
@@ -811,27 +812,40 @@ final class CatController {
         basketRefresh = 0
     }
 
-    /// Wo das Körbchen im Dock sitzt – nur dann hüpft sie hinein (statt hinauszulaufen).
-    private func updateBasketPosition() {
-        guard basketInDock, let primary = primaryScreen else {
+    /// Der Bildschirm mit dem Dock (es kann auf jeden Bildschirm wandern)
+    private var dockScreen: NSScreen? { DockLocator.dockScreen() }
+
+    /// Kann sie gerade ins Körbchen steigen? Günstig – läuft jede Sekunde. Wo genau das Körbchen sitzt,
+    /// wird erst gelesen, wenn sie es braucht (`locateBasket`).
+    private func updateBasketAvailability() {
+        guard basketInDock, let dock = dockScreen else {
             brain.useBasket = false
-            brain.basketX = nil
+            brain.dockSideIsLeft = nil
             return
         }
+        let edge = DockLocator.edge
+        // Steht das Dock seitlich, geht sie zu dieser Seite hinaus
+        brain.dockSideIsLeft = edge == .left ? true : edge == .right ? false : nil
+        // Hineinsteigen geht nur, wenn das Dock unten auf ihrem Bildschirm zu sehen ist
+        // (nicht bei automatisch ausgeblendetem Dock oder im Vollbild)
+        let dockHeight = dock.visibleFrame.minY - dock.frame.minY
+        brain.useBasket = edge == .bottom && dockHeight > 20 && screen?.displayID == dock.displayID && !isFullscreen
+    }
+
+    /// Genau jetzt nachsehen, wo das Körbchen im Dock sitzt und wie groß das Symbol ist.
+    private func locateBasket() {
+        guard basketInDock, let dock = dockScreen else { return }
         let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Pixelcat"
-        let tile = DockLocator.basketTile(appName: name, screen: primary)
+        let tile = DockLocator.basketTile(appName: name, screen: dock)
         brain.basketX = tile?.center.x
         if let tile {
             dockTileSize = tile.size
             // Genau dort, wo die Katze im Dock-Symbol liegt
             brain.basketFloorY = tile.center.y + BasketArt.shared.catBottom(fromCenterOfTile: tile.size)
         }
-        // Ins Körbchen steigen geht nur, wenn das Dock unten zu sehen ist
-        let dockHeight = primary.visibleFrame.minY - primary.frame.minY
-        brain.useBasket = brain.basketX != nil && (screen == primary) && dockHeight > 20 && !isFullscreen
         if Self.debug {
-            print("Korb:", DockLocator.debugDescription(appName: name, screen: primary),
-                  "boden=\(brain.basketFloorY ?? -1) dockHöhe=\(dockHeight) kachel=\(dockTileSize)")
+            print("Korb:", DockLocator.debugDescription(appName: name, screen: dock),
+                  "boden=\(brain.basketFloorY ?? -1) kachel=\(dockTileSize)")
         }
     }
     private static let debug = ProcessInfo.processInfo.environment["PIXELCAT_DEBUG"] != nil
@@ -921,7 +935,9 @@ final class CatController {
 
         if screenID != nil, screen?.displayID != screenID { screenID = nil } // Bildschirm abgesteckt
         // Wer im Körbchen liegt, kommt beim Hauptbildschirm (mit dem Dock) wieder heraus
-        if basketInDock, brain.isAway, screenID != nil { screenID = nil }
+        if basketInDock, brain.isAway, let dock = dockScreen, screen?.displayID != dock.displayID {
+            screenID = dock.displayID == primaryScreen?.displayID ? nil : dock.displayID
+        }
         fullscreenRefresh -= dt
         if fullscreenRefresh <= 0 {
             fullscreenRefresh = 0.5
@@ -930,7 +946,7 @@ final class CatController {
         basketRefresh -= dt
         if basketRefresh <= 0 {
             basketRefresh = 1
-            updateBasketPosition()
+            updateBasketAvailability()
         }
         updateBounds()
         brain.dockY = ground
