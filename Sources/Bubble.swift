@@ -67,23 +67,16 @@ struct BubbleFrames {
     /// "K" Umriss, "W" Wolke, "g" Schatten, "T" Schrift
     static let colors = rgbPalette(["K": 0x2B1D16, "W": 0xFFFFFF, "g": 0xE4DED6, "T": 0x2B1D16])
 
-    /// Kleine Pixelschrift, 5 × 5
-    private static let font: [Character: [String]] = [
-        "A": [".###.", "#...#", "#####", "#...#", "#...#"],
-        "B": ["####.", "#...#", "####.", "#...#", "####."],
-        "E": ["#####", "#....", "####.", "#....", "#####"],
-        "K": ["#...#", "#..#.", "###..", "#..#.", "#...#"],
-        "P": ["####.", "#...#", "####.", "#....", "#...."],
-        "R": ["####.", "#...#", "####.", "#..#.", "#...#"],
-        "S": [".####", "#....", ".###.", "....#", "####."],
-        "U": ["#...#", "#...#", "#...#", "#...#", ".###."],
-    ]
+    /// Längste Zeile in Pixeln und höchstens so viele Zeilen – längere Texte enden mit „…“
+    static let maxTextWidth = 89
+    static let maxLines = 3
 
     init(text: String) {
-        let letters = text.uppercased().compactMap { Self.font[$0] }
-        let textWidth = max(1, letters.count * 6 - 1)
+        let lines = PixelFont.lines(text, maxWidth: Self.maxTextWidth, maxLines: Self.maxLines)
+        let textWidth = max(9, lines.map(PixelFont.width(of:)).max() ?? 0)
+        let textHeight = lines.count * PixelFont.height + max(0, lines.count - 1) * PixelFont.lineGap
         // Wolke: Körper plus Beulen oben, unten und an den Seiten
-        let cloudW = textWidth + 10, cloudH = 13
+        let cloudW = textWidth + 10, cloudH = max(1, textHeight) + 8
         let w = cloudW + 8, h = cloudH + 9      // Rand für die Platz-Wölkchen, unten Platz für die Punkte
         width = w
         height = h
@@ -97,15 +90,20 @@ struct BubbleFrames {
         }
         // Körper
         for y in (oy + 3)...(oy + cloudH - 4) { for x in (ox + 2)...(ox + cloudW - 3) { mask[y][x] = true } }
-        // Beulen
+        // Beulen oben und unten
         var bx = Double(ox) + 4.5
         while bx < Double(ox + cloudW) - 3 {
             circle(bx, Double(oy) + 3.6, 3.3)
             circle(bx + 3, Double(oy + cloudH) - 4.2, 2.8)
             bx += 6.5
         }
-        circle(Double(ox) + 2.8, Double(oy) + Double(cloudH) / 2 - 0.5, 3.4)
-        circle(Double(ox + cloudW) - 3.4, Double(oy) + Double(cloudH) / 2 - 0.5, 3.4)
+        // Beulen an den Seiten – bei mehreren Zeilen übereinander
+        var sy = Double(oy) + 6
+        repeat {
+            circle(Double(ox) + 2.8, min(sy, Double(oy + cloudH) - 6), 3.4)
+            circle(Double(ox + cloudW) - 3.4, min(sy, Double(oy + cloudH) - 6), 3.4)
+            sy += 6
+        } while sy < Double(oy + cloudH) - 5
 
         // Gedankenpunkte zum Kopf (unten in der Mitte)
         let mid = w / 2
@@ -130,11 +128,18 @@ struct BubbleFrames {
                 if near { out[y][x] = "K" }
             } }
             if text {
-                let tx = ox + (cloudW - textWidth) / 2, ty = oy + (cloudH - 5) / 2
-                for (i, letter) in letters.enumerated() {
-                    for (row, line) in letter.enumerated() {
-                        for (col, c) in line.enumerated() where c == "#" { out[ty + row][tx + i * 6 + col] = "T" }
+                // Jede Zeile mittig, der ganze Block mittig in der Wolke
+                var ty = oy + (cloudH - textHeight) / 2
+                for line in lines {
+                    var tx = ox + (cloudW - PixelFont.width(of: line)) / 2
+                    for character in line {
+                        let top = ty - PixelFont.ascent(of: character)
+                        for (row, pattern) in (PixelFont.glyph(character) ?? []).enumerated() {
+                            for (col, c) in pattern.enumerated() where c == "#" { out[top + row][tx + col] = "T" }
+                        }
+                        tx += PixelFont.width(of: character) + PixelFont.letterGap
                     }
+                    ty += PixelFont.height + PixelFont.lineGap
                 }
             }
             return out
