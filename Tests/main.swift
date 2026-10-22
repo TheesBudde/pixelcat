@@ -92,6 +92,105 @@ MainActor.assumeIsolated {
     scenario("Korb verschwindet aus dem Dock, während sie drin liegt", seconds: 40, endsInBed: false,
              [bedOn, at(20, "Korb weg") { _, bed in bed.x = nil }, breakStarts(25)])
 
+    // MARK: Kleine Erinnerungen
+
+    @MainActor func check(_ name: String, _ ok: Bool, _ detail: @autoclosure () -> String = "") {
+        print(ok ? "✓ \(name)" : "✗ \(name)\n    \(detail())")
+        if !ok { failed += 1 }
+    }
+
+    /// Lässt die Katze laufen und merkt sich, wie lange sie in welcher Phase war und wo sie dabei stand
+    @MainActor func run(_ b: CatBrain, seconds: Double, every: Double = 1.0 / 30, _ step: ((Double) -> Void)? = nil)
+        -> (phases: [String: Double], firstAt: [String: CGFloat]) {
+        var phases: [String: Double] = [:], firstAt: [String: CGFloat] = [:]
+        var t = 0.0
+        while t < seconds {
+            step?(t)
+            b.update(dt: every)
+            t += every
+            let name = "\(b.phase)"
+            phases[name, default: 0] += every
+            if firstAt[name] == nil { firstAt[name] = b.x + CGFloat(Layout.canvasWidth) / 2 * b.scale }
+        }
+        return (phases, firstAt)
+    }
+    @MainActor func freshBrain() -> CatBrain {
+        let b = CatBrain()
+        b.clock = { afternoon }
+        b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 300
+        return b
+    }
+
+    print("\nTrinken")
+    do {
+        let b = freshBrain()
+        let bowl = Bowl(x: 900, water: true)
+        b.bowl = bowl
+        b.noticeSomething()
+        let result = run(b, seconds: 60)
+        let drank = result.phases["drinking"] ?? 0
+        check("trinkt 20–30 Sekunden am Wassernapf", drank >= 20 && drank <= 31, "trank \(drank) s")
+        let mouth = result.firstAt["drinking"] ?? 0
+        check("steht dabei am Napf", abs(mouth - 900) < 40, "Mitte bei \(mouth), Napf bei 900")
+        check("Napf ist danach leer (wird weggeräumt)", bowl.food <= 0, "Füllstand \(bowl.food)")
+    }
+    do {
+        // Im Körbchen: Sie kommt heraus, trinkt und legt sich danach wieder hinein
+        let b = freshBrain()
+        b.useBasket = true
+        b.locateBasket = { b.basketX = 1200; b.basketFloorY = 27 }
+        b.roaming = true
+        _ = run(b, seconds: 25)
+        let bowl = Bowl(x: 500, water: true)
+        b.bowl = bowl
+        b.startErrandVisit(for: 300)
+        var ended = false
+        let result = run(b, seconds: 120) { _ in
+            if bowl.food <= 0, !ended { ended = true; b.bowl = nil; b.endErrandVisit() }
+        }
+        check("Körbchen: kommt zum Trinken heraus", (result.phases["leavingBasket"] ?? 0) > 0)
+        check("Körbchen: trinkt", (result.phases["drinking"] ?? 0) >= 20, "\(result.phases["drinking"] ?? 0) s")
+        check("Körbchen: liegt danach wieder im Korb", b.isAway, "Phase \(b.phase)")
+    }
+    do {
+        // Streifzug ohne Körbchen: von der Seite herein und wieder hinaus
+        let b = freshBrain()
+        b.roaming = true
+        _ = run(b, seconds: 25)
+        let bowl = Bowl(x: 700, water: true)
+        b.bowl = bowl
+        b.startErrandVisit(for: 300)
+        var ended = false
+        let result = run(b, seconds: 140) { _ in
+            if bowl.food <= 0, !ended { ended = true; b.bowl = nil; b.endErrandVisit() }
+        }
+        check("Streifzug: trinkt", (result.phases["drinking"] ?? 0) >= 20)
+        check("Streifzug: ist danach wieder draußen", b.isAway, "Phase \(b.phase)")
+    }
+
+    print("\nWarteschlange")
+    do {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let s = ErrandScheduler()
+        s.random = { 0.5 } // ohne Zufallsschwankung
+        s.configure(.drink, every: 30, now: start)
+        s.configure(.lookout, every: 20, now: start)
+        s.collectDue(now: start.addingTimeInterval(19 * 60))
+        check("vor der Zeit ist nichts fällig", s.queue.isEmpty)
+        s.collectDue(now: start.addingTimeInterval(31 * 60))
+        check("beide fällig, Augenpause zuerst", s.queue.map(\.kind) == [.lookout, .drink] || s.queue.map(\.kind) == [.drink, .lookout],
+              "\(s.queue.map(\.kind))")
+        s.collectDue(now: start.addingTimeInterval(32 * 60))
+        check("jede Art nur einmal in der Schlange", s.queue.count == 2, "\(s.queue.count)")
+        _ = s.popNext(); _ = s.popNext()
+        check("Schlange danach leer", s.popNext() == nil)
+        s.configure(.drink, every: nil, now: start)
+        s.collectDue(now: start.addingTimeInterval(200 * 60))
+        check("ausgeschaltet kommt nichts mehr", !s.queue.contains { $0.kind == .drink })
+        s.requestNow(.drink)
+        check("„Jetzt zeigen“ kommt sofort", s.popNext()?.kind == .drink)
+    }
+
     print(failed == 0 ? "\nAlle Szenarien bestanden." : "\n\(failed) Szenario(s) fehlgeschlagen.")
     exit(failed == 0 ? 0 : 1)
 }

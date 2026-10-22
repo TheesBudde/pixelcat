@@ -109,11 +109,16 @@ final class Ball {
 @MainActor
 final class Bowl {
     let x: CGFloat
+    /// Wassernapf (Trink-Erinnerung) statt Futter
+    let water: Bool
     /// 1 = voll, 0 = leer
     var food = 1.0
     var emptyFor = 0.0
 
-    init(x: CGFloat) { self.x = x }
+    init(x: CGFloat, water: Bool = false) {
+        self.x = x
+        self.water = water
+    }
 }
 
 // MARK: - Verhalten
@@ -125,6 +130,8 @@ final class CatBrain {
     enum Phase {
         case standing, walking, fleeing, sittingDown, lyingDown, sleeping, wakingUp, startled, petted
         case stretching, yawning, grooming, headWashing, backRolling, eating, chasing, batting, watching
+        /// Aus dem Wassernapf schlabbern
+        case drinking
         /// Sitzen und mit langsamem Blinzeln anschauen
         case slowBlinking
         /// Hinlegen, auf den Rücken rollen, mit den Pfoten zappeln, wieder aufstehen
@@ -237,6 +244,10 @@ final class CatBrain {
     }
     /// Restzeit eines Pausenbesuchs (unendlich: bis die Pomodoro-Pause vorbei ist)
     private var visitTimeLeft = 0.0
+    /// Der Besuch gilt einer kleinen Erinnerung (trinken, Fenster, Aufgabe) – nicht der Pause in der Mitte
+    private var visitIsErrand = false
+    /// Wie lange sie am Wassernapf trinkt (Sekunden)
+    var drinkLength = 25.0
     private var isVisiting: Bool { visitTimeLeft > 0 }
     /// Läuft gerade aus dem Bild hinaus oder herein – dann gelten die Bildschirmgrenzen nicht
     private var offscreenAllowed = false
@@ -449,6 +460,10 @@ final class CatBrain {
         case .eating:
             bowl?.food = max(0, 1 - phaseTime / phaseDuration)
             if phaseTime >= phaseDuration { phaseFinished() }
+        case .drinking:
+            // Der Wasserstand sinkt ein wenig – ganz leer wird der Napf nicht
+            bowl?.food = max(0.35, 1 - 0.65 * phaseTime / phaseDuration)
+            if phaseTime >= phaseDuration { phaseFinished() }
         case .watching:
             if let ball {
                 if abs(ball.x - center) > 4 * scale { facingRight = ball.x > center }
@@ -629,6 +644,9 @@ final class CatBrain {
             enter(.standing, for: .random(in: 0.3...0.8))
         case .eating:
             enter(.grooming, for: .random(in: 3...5))
+        case .drinking:
+            bowl?.food = 0 // fertig getrunken – der Napf wird weggeräumt
+            enter(.headWashing, for: .random(in: 3...4)) // Schnäuzchen putzen
         case .batting:
             batBall()
             batsUntilRest -= 1
@@ -709,7 +727,11 @@ final class CatBrain {
         case .bowl:
             if let bowl, bowl.food > 0 {
                 facingRight = bowl.x > center
-                enter(.eating, for: 7)
+                if bowl.water {
+                    enter(.drinking, for: drinkLength)
+                } else {
+                    enter(.eating, for: 7)
+                }
             } else {
                 enter(.standing, for: 0.5)
             }
@@ -975,6 +997,7 @@ final class CatBrain {
     private func startVisit(for duration: Double) {
         guard !suppressVisits else { return }
         visitTimeLeft = duration
+        visitIsErrand = false
         reminderPending = false
         guard !isAirborne, perchID == nil else { return }
         let toCenter = { [unowned self] in
@@ -990,6 +1013,45 @@ final class CatBrain {
             x = offscreenX(left: entrySideIsLeft())
         }
         toCenter()
+    }
+
+    /// Kleiner Besuch für eine Erinnerung (trinken, Fenster, Aufgabe): Sie kommt herein und kümmert sich
+    /// um das, was da ist (Napf, Fenster) – nicht in die Bildschirmmitte wie zur Pause.
+    func startErrandVisit(for duration: Double) {
+        guard roaming, !suppressVisits else { return }
+        if isVisiting, !visitIsErrand { return } // gerade ohnehin Pause – dabei wird es mit erledigt
+        visitTimeLeft = duration
+        visitIsErrand = true
+        reminderPending = false
+        guard !isAirborne, perchID == nil else { return }
+        let comeIn = { [unowned self] in
+            offscreenAllowed = true
+            goal = .comeBack
+            let middle = (minX + maxX) / 2, span = (maxX - minX) * 0.2
+            walk(to: .random(in: middle - span...middle + span), speed: 60 * unit)
+        }
+        switch phase {
+        case .away:
+            if useBasket {
+                requestEmerge(then: comeIn)
+                return
+            }
+            x = offscreenX(left: entrySideIsLeft())
+            comeIn()
+        case .walking:
+            // War auf dem Weg hinaus: umdrehen
+            goal = .wander
+            enter(.standing, for: 0.3)
+        default:
+            break
+        }
+    }
+
+    /// Die Erinnerung ist erledigt: Im Streifzug geht sie danach wieder.
+    func endErrandVisit() {
+        guard visitIsErrand else { return }
+        visitIsErrand = false
+        visitTimeLeft = 0
     }
 
     /// Aus dem Körbchen kommen – wenn nötig erst nach kurzem Warten, damit sie die Stelle sicher kennt.
@@ -1085,7 +1147,7 @@ final class CatBrain {
         if !roaming {
             returnToScreen()
         } else if isVisiting {
-            startVisit(for: visitTimeLeft)
+            if visitIsErrand { startErrandVisit(for: visitTimeLeft) } else { startVisit(for: visitTimeLeft) }
         } else if mode == .focusBreak || awaitingAcknowledgement {
             startVisit(for: .infinity)
         }
@@ -1633,6 +1695,8 @@ final class CatBrain {
             look.sprite = alternate(Frames.rollA, Frames.rollB, every: 0.5)
         case .eating:
             look.sprite = alternate(Frames.eatA, Frames.eatB, every: 0.25)
+        case .drinking:
+            look.sprite = alternate(Frames.drinkA, Frames.drinkB, every: 0.22)
         case .batting:
             look.sprite = Frames.bat
         case .climbingUp:

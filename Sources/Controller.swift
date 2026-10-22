@@ -186,8 +186,16 @@ final class CatController {
 
     /// Welches Miau beim nächsten Pausen-Strecken kommt (und seit wann es aussteht)
     private var pendingMeow: (kind: Meow.Kind, since: Date)?
-    /// Gedankenblase „Pause“ über der Katze, solange sie an eine Pause erinnert
+    /// Gedankenblase über der Katze („Pause“ oder eine kleine Erinnerung)
     private var bubble: ThoughtBubble?
+
+    /// Kleine Erinnerungen (trinken, Fenster, Aufgaben, Feierabend): geplant und nacheinander abgearbeitet
+    private let errands = ErrandScheduler()
+    private var activeErrand: (errand: Errand, since: Date)?
+    /// Kurze Atempause zwischen zwei Erinnerungen
+    private var nextErrandAllowed = Date.distantPast
+    /// Die Blase der laufenden Erinnerung (wird sie von der Pausenblase ersetzt, ist sie weg)
+    private weak var errandBubble: ThoughtBubble?
 
     /// Ein Programm im Vollbild: Dann ist kein Dock da, und sie läuft am unteren Bildschirmrand
     private(set) var isFullscreen = false
@@ -240,6 +248,10 @@ final class CatController {
         get { brain.breakVisitLength }
         set { brain.breakVisitLength = newValue }
     }
+    /// Trink-Erinnerung: alle so viele Minuten (nil = aus)
+    var drinkMinutes: Int? {
+        didSet { if drinkMinutes != oldValue { errands.configure(.drink, every: drinkMinutes.map(Double.init), now: Date()) } }
+    }
 
     /// Streifzug: Die Katze ist draußen und kommt nur zu Pausen vorbei.
     var roaming: Bool {
@@ -267,6 +279,7 @@ final class CatController {
         breakMinutes = settings.pomodoroBreak
         reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
         breakLength = TimeInterval(settings.breakLength * 60)
+        drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
     }
@@ -354,25 +367,44 @@ final class CatController {
     func goToSleep() { brain.goToSleep() }
 
     func feed() {
-        guard let frame = screen?.frame, !isInFocus, !brain.isAway else { return }
+        guard !isInFocus, !brain.isAway else { return }
         if let bowl, bowl.food > 0 { return }
-        // Irgendwo ins mittlere Drittel bis Fünftel, nicht direkt unter die Katze
+        placeBowl(water: false)
+        brain.noticeSomething()
+    }
+
+    /// Napf hinstellen – irgendwo ins mittlere Drittel bis Fünftel, nicht direkt unter die Katze.
+    private func placeBowl(water: Bool) {
+        guard let frame = screen?.frame else { return }
         var x = frame.minX
         for _ in 0..<10 {
             x = .random(in: frame.minX + frame.width * 0.15...frame.maxX - frame.width * 0.15)
             if abs(x - catCenter) > 150 { break }
         }
         removeBowl()
-        let bowl = Bowl(x: x)
+        let bowl = Bowl(x: x, water: water)
         let window = PropWindow(columns: 14, rows: 6, scale: scale)
         self.bowl = bowl
         bowlWindow = window
         brain.bowl = bowl
+        updateBowlWindow()
         if isVisible {
             window.panel.orderFrontRegardless()
-            panel.orderFrontRegardless()
+            if panel.isVisible { panel.orderFrontRegardless() }
         }
-        brain.noticeSomething()
+    }
+
+    private func updateBowlWindow() {
+        guard let bowl, let bowlWindow else { return }
+        if bowl.water {
+            let ripple = Int(CACurrentMediaTime() / 0.6) % 2 == 0
+            bowlWindow.view.sprite = bowl.food > 0.7 ? (ripple ? Frames.waterFullA : Frames.waterFullB)
+                : bowl.food > 0 ? Frames.waterHalf : Frames.waterEmpty
+        } else {
+            bowlWindow.view.sprite = bowl.food > 0.5 ? Frames.bowlFull
+                : bowl.food > 0 ? Frames.bowlHalf : Frames.bowlEmpty
+        }
+        bowlWindow.place(centerX: bowl.x, bottom: ground)
     }
 
     func setPlaying(_ playing: Bool) {
@@ -933,6 +965,75 @@ final class CatController {
         return (value * factor).rounded() / factor
     }
 
+    // MARK: Kleine Erinnerungen
+
+    /// Aus den Einstellungen („Jetzt zeigen“): gleich als Nächstes zeigen.
+    func showErrandNow(_ kind: ErrandKind) {
+        errands.requestNow(kind)
+        nextErrandAllowed = .distantPast
+    }
+
+    /// Fällige Erinnerungen einsammeln; läuft keine, die nächste starten – sobald die Katze frei ist.
+    private func updateErrands(now: Date) {
+        errands.collectDue(now: now)
+        if let active = activeErrand {
+            if errandFinished(active.errand, since: active.since, now: now) { finishErrand(now: now) }
+            return
+        }
+        guard now >= nextErrandAllowed, canRunErrand, let errand = errands.popNext() else { return }
+        startErrand(errand, now: now)
+    }
+
+    /// Frei für eine Erinnerung: sichtbar, nicht im Videocall, kein Fokus/Timer, keine Pause, nichts zu fressen
+    /// oder zu spielen, nicht gerade beim Hinein- oder Herausklettern.
+    private var canRunErrand: Bool {
+        isVisible && hiddenBecause == nil && brain.mode == .normal && pomodoro == nil && timer == nil
+            && bubble == nil && bowl == nil && ball == nil && !brain.isAboveDock && !brain.awaitingAcknowledgement
+    }
+
+    private func startErrand(_ errand: Errand, now: Date) {
+        activeErrand = (errand, now)
+        switch errand.kind {
+        case .drink:
+            placeBowl(water: true)
+            showErrandBubble(L10n.s("Trinken", "Drink"), for: 4 * 60)
+        case .lookout, .task, .quittingTime:
+            break
+        }
+        // Im Streifzug oder im Körbchen kommt sie dafür herein, sonst wird sie aufmerksam
+        if brain.isOutAndAbout {
+            brain.startErrandVisit(for: 5 * 60)
+        } else {
+            brain.noticeSomething()
+        }
+    }
+
+    private func errandFinished(_ errand: Errand, since: Date, now: Date) -> Bool {
+        switch errand.kind {
+        case .drink:
+            // Fertig getrunken: Die Blase platzt; erledigt, sobald der Napf weggeräumt ist
+            if let bowl, bowl.water, bowl.food <= 0 { errandBubble?.pop() }
+            return bowl?.water != true || now.timeIntervalSince(since) > 4 * 60
+        case .lookout, .task, .quittingTime:
+            return true
+        }
+    }
+
+    private func finishErrand(now: Date) {
+        if let bowl, bowl.water { removeBowl() }
+        errandBubble?.pop()
+        brain.endErrandVisit()
+        activeErrand = nil
+        nextErrandAllowed = now.addingTimeInterval(15)
+    }
+
+    private func showErrandBubble(_ text: String, for seconds: TimeInterval) {
+        bubble?.remove()
+        let new = ThoughtBubble(text: text, ends: Date().addingTimeInterval(seconds), scale: scale)
+        bubble = new
+        errandBubble = new
+    }
+
     // MARK: Gedankenblase
 
     /// Blase „Pause“ über der Katze zeigen, bis die Pause vorbei ist (eine eventuelle alte verschwindet).
@@ -1043,6 +1144,8 @@ final class CatController {
             scheduleReminder()
         }
 
+        updateErrands(now: date)
+
         checkStroking()
         updatePointer(dt: dt)
         brain.update(dt: dt)
@@ -1054,7 +1157,7 @@ final class CatController {
             ball.update(dt: dt, minX: frame.minX + radius, maxX: frame.maxX - radius,
                         maxY: frame.height - 9 * scale, unit: scale / 3)
         }
-        if let bowl, bowl.food <= 0, brain.phase != .eating {
+        if let bowl, bowl.food <= 0, brain.phase != .eating, brain.phase != .drinking {
             bowl.emptyFor += dt
             if bowl.emptyFor > 12 { removeBowl() }
         }
@@ -1068,7 +1171,9 @@ final class CatController {
         // liegengebliebenes Spielzeug wird weggeräumt
         if brain.isAway {
             if ball != nil { setPlaying(false) }
-            if bowl != nil { removeBowl() }
+            // (der Wassernapf einer Erinnerung bleibt – sie kommt ja gleich)
+            if bowl != nil, activeErrand == nil { removeBowl() }
+            updateBowlWindow()
             if panel.isVisible { panel.orderOut(nil) }
             return
         }
@@ -1096,11 +1201,7 @@ final class CatController {
         let look = brain.look
         if look != view.look { view.look = look }
 
-        if let bowl, let bowlWindow {
-            bowlWindow.view.sprite = bowl.food > 0.5 ? Frames.bowlFull
-                : bowl.food > 0 ? Frames.bowlHalf : Frames.bowlEmpty
-            bowlWindow.place(centerX: bowl.x, bottom: ground)
-        }
+        updateBowlWindow()
         if let ball, let ballWindow {
             ballWindow.view.sprite = Int(ball.rolled / (3 * scale)) % 2 == 0 ? Frames.yarnA : Frames.yarnB
             ballWindow.place(centerX: ball.x, bottom: ground + ball.y)

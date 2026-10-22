@@ -2,7 +2,7 @@ import AppKit
 
 /// Fellfarben. Die Pixelraster benutzen Platzhalter-Buchstaben, jede Fellfarbe legt fest,
 /// wie sie aussehen: "K" Umriss, "O" Fell, "h" Glanz, "s" Streifen, "W" Brust/Pfoten,
-/// "E" Augen, "c" geschlossene Augen, "P" Nase/Ohren, "w" Schnurrhaare. "." ist durchsichtig.
+/// "E" Augen, "c" geschlossene Augen, "P" Nase/Ohren, "w" Schnurrhaare, "t" Zunge. "." ist durchsichtig.
 enum Coat: String, CaseIterable {
     case orange, black, gray
 
@@ -24,17 +24,17 @@ enum Coat: String, CaseIterable {
 
     private static let orangeColors = rgbPalette([
         "K": 0x2B1D16, "O": 0xF2A14B, "h": 0xF6B263, "s": 0xC96F2E, "W": 0xFFF4E2,
-        "E": 0x2E5E2A, "c": 0x2B1D16, "P": 0xF49AAE,
+        "E": 0x2E5E2A, "c": 0x2B1D16, "P": 0xF49AAE, "t": 0xE8768E,
     ])
 
     private static let blackColors = rgbPalette([
         "K": 0x0B0A0F, "O": 0x26232E, "h": 0x4B4659, "s": 0x26232E, "W": 0x26232E,
-        "E": 0x7BC95A, "c": 0x6A6480, "P": 0x7A7584, "w": 0x8E889C,
+        "E": 0x7BC95A, "c": 0x6A6480, "P": 0x7A7584, "w": 0x8E889C, "t": 0xD9667F,
     ])
 
     private static let grayColors = rgbPalette([
         "K": 0x1E1F25, "O": 0x8D9099, "h": 0xA8ABB3, "s": 0x6A6D76, "W": 0xEDEEF1,
-        "E": 0xE3AE45, "c": 0x3E4048, "P": 0xD9A0AD, "w": 0xEDEEF1,
+        "E": 0xE3AE45, "c": 0x3E4048, "P": 0xD9A0AD, "w": 0xEDEEF1, "t": 0xE8768E,
     ])
 }
 
@@ -48,6 +48,11 @@ enum PropColors {
         "f": 0x6E4826, // Futter, dunkel
         "R": 0xE7698F, // Wolle
         "r": 0xB23C68, // Wolle, Fäden
+        "N": 0x5E86B0, // Wassernapf
+        "n": 0x3F6189, // Wassernapf, Schatten
+        "A": 0x7FCBF2, // Wasser
+        "a": 0x4FA3D6, // Wasser, Welle
+        "L": 0xE3F6FF, // Wasser, Glanz
     ])
 }
 
@@ -210,6 +215,12 @@ enum Frames {
         "...KWK.KWK..KWK.........",
         "...KKK.KKK..KKK.........",
     ])
+
+    /// Trinken: Kopf unten im Wassernapf, die Zunge schlabbert (A: Zunge im Wasser, B: Zunge wieder drin).
+    static let drinkA = Sprite(eatRows.enumerated().map { i, row in
+        i == 11 ? "...KWK.KWK..KWK.KWKtt..." : row
+    })
+    static let drinkB = Sprite(eatRows)
 
     /// Kopf unten im Napf, Augen zu.
     private static let eatRows = [
@@ -494,6 +505,36 @@ enum Frames {
         ".KKKKKKKKKK.",
         "KBBBBBBBBBBK",
         ".KBBBBBBbbK.",
+        "..KKKKKKKK..",
+    ])
+
+    /// Wassernapf: voll mit Wellen (A/B im Wechsel), halb, leer
+    static let waterFullA = Sprite([
+        "............",
+        ".KALAAaAAAK.",
+        "KNNNNNNNNNNK",
+        ".KNNNNNNnnK.",
+        "..KKKKKKKK..",
+    ])
+    static let waterFullB = Sprite([
+        "............",
+        ".KAAaAALAAK.",
+        "KNNNNNNNNNNK",
+        ".KNNNNNNnnK.",
+        "..KKKKKKKK..",
+    ])
+    static let waterHalf = Sprite([
+        "............",
+        ".KKKAaALKKK.",
+        "KNNNNNNNNNNK",
+        ".KNNNNNNnnK.",
+        "..KKKKKKKK..",
+    ])
+    static let waterEmpty = Sprite([
+        "............",
+        ".KKKKKKKKKK.",
+        "KNNNNNNNNNNK",
+        ".KNNNNNNnnK.",
         "..KKKKKKKK..",
     ])
 

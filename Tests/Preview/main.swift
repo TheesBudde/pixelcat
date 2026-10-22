@@ -31,5 +31,9 @@ MainActor.assumeIsolated {
     }
     sheet("schrift", ["ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "ÄÖÜ ß 0123456789", ".,!?:;-+'\"()/&%#@=*_…"]
         .map { (BubbleFrames(text: $0).whole, BubbleFrames.colors) })
+    sheet("trinken", [(Frames.drinkA, Coat.orange.colors), (Frames.drinkB, Coat.orange.colors),
+                      (Frames.drinkA, Coat.black.colors), (Frames.drinkA, Coat.gray.colors),
+                      (Frames.waterFullA, PropColors.colors), (Frames.waterFullB, PropColors.colors),
+                      (Frames.waterHalf, PropColors.colors), (Frames.waterEmpty, PropColors.colors)], scale: 6)
     print("Vorschau in \(out)")
 }

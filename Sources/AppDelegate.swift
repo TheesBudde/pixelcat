@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Restzeit von Pomodoro oder Timer bzw. warum die Katze gerade versteckt ist
     private var infoItem: NSMenuItem!
     private var reminderItem: NSMenuItem!
+    private var drinkItem: NSMenuItem!
     private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
@@ -35,6 +36,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             cat.apply(settings)
             buildMenu() // Sprache könnte sich geändert haben
             buildMainMenu()
+        }
+        // „Jetzt zeigen“ in den Einstellungen
+        settings.onPreview = { [weak self] kind in
+            guard let self else { return }
+            cat.show()
+            cat.showErrandNow(kind)
         }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
@@ -99,6 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(infoItem)
         reminderItem = item(t("Pausen-Erinnerung", "Break reminder"), #selector(toggleReminders))
         menu.addItem(reminderItem)
+        drinkItem = item(t("Trink-Erinnerung", "Drink reminder"), #selector(toggleDrinking))
+        menu.addItem(drinkItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
         if settings.basketInDock {
             roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming))
@@ -210,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         reminderItem.state = settings.breakReminders ? .on : .off
         reminderItem.isEnabled = cat.pomodoro == nil
+        drinkItem.state = settings.drinkReminders ? .on : .off
         roamItem.state = settings.awayMode ? .on : .off
 
         // Schläft sie fest oder ist sie draußen, gibt es nichts zu füttern oder zu spielen
@@ -284,6 +294,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleReminders() {
         settings.breakReminders.toggle()
+    }
+
+    @objc private func toggleDrinking() {
+        settings.drinkReminders.toggle()
     }
 
     @objc private func toggleRoaming() {

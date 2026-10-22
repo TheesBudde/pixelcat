@@ -29,6 +29,21 @@ final class AppSettings: ObservableObject {
     @Published var reminderMin: Int { didSet { if reminderMax < reminderMin { reminderMax = reminderMin }; changed() } }
     @Published var reminderMax: Int { didSet { if reminderMin > reminderMax { reminderMin = reminderMax }; changed() } }
     @Published var breakLength: Int { didSet { changed() } }
+    /// Pausen-Erinnerung nach echter Aktivität (Tippen, Klicken) statt in festen Abständen
+    @Published var breakByActivity: Bool { didSet { changed() } }
+    @Published var activityMinutes: Int { didSet { changed() } }
+    // Kleine Erinnerungen
+    @Published var drinkReminders: Bool { didSet { changed() } }
+    @Published var drinkInterval: Int { didSet { changed() } }
+    @Published var eyeBreaks: Bool { didSet { changed() } }
+    @Published var eyeInterval: Int { didSet { changed() } }
+    @Published var quittingTimeEnabled: Bool { didSet { changed() } }
+    /// Feierabend als Minuten nach Mitternacht
+    @Published var quittingTime: Int { didSet { changed() } }
+    @Published var quittingWeekdaysOnly: Bool { didSet { changed() } }
+    @Published var taskReminders: Bool { didSet { changed() } }
+    @Published var taskInterval: Int { didSet { changed() } }
+    @Published var taskItems: [String] { didSet { changed() } }
     // Ton & Rücksicht
     @Published var sounds: Bool { didSet { changed() } }
     @Published var purring: Bool { didSet { changed() } }
@@ -45,6 +60,8 @@ final class AppSettings: ObservableObject {
 
     /// Wird nach jeder Änderung aufgerufen
     var onChange: (() -> Void)?
+    /// Knopf „Jetzt zeigen“: diese Erinnerung sofort vorführen
+    var onPreview: ((ErrandKind) -> Void)?
     private var loading = true
 
     private let defaults = UserDefaults.standard
@@ -55,6 +72,10 @@ final class AppSettings: ObservableObject {
             "climbing": false, "chaseCursor": true, "multiScreen": true, "roaming": false, "basketInDock": false,
             "breakReminders": false,
             "pomodoroFocus": 25, "pomodoroBreak": 5, "reminderMin": 45, "reminderMax": 55, "breakLength": 5,
+            "breakByActivity": false, "activityMinutes": 50,
+            "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
+            "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
+            "taskReminders": false, "taskInterval": 30, "taskItems": [String](),
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -74,6 +95,18 @@ final class AppSettings: ObservableObject {
         reminderMin = defaults.integer(forKey: "reminderMin")
         reminderMax = defaults.integer(forKey: "reminderMax")
         breakLength = defaults.integer(forKey: "breakLength")
+        breakByActivity = defaults.bool(forKey: "breakByActivity")
+        activityMinutes = defaults.integer(forKey: "activityMinutes")
+        drinkReminders = defaults.bool(forKey: "drinkReminders")
+        drinkInterval = defaults.integer(forKey: "drinkInterval")
+        eyeBreaks = defaults.bool(forKey: "eyeBreaks")
+        eyeInterval = defaults.integer(forKey: "eyeInterval")
+        quittingTimeEnabled = defaults.bool(forKey: "quittingTimeEnabled")
+        quittingTime = defaults.integer(forKey: "quittingTime")
+        quittingWeekdaysOnly = defaults.bool(forKey: "quittingWeekdaysOnly")
+        taskReminders = defaults.bool(forKey: "taskReminders")
+        taskInterval = defaults.integer(forKey: "taskInterval")
+        taskItems = defaults.stringArray(forKey: "taskItems") ?? []
         sounds = defaults.bool(forKey: "sounds")
         purring = defaults.bool(forKey: "purring")
         hideDuringCalls = defaults.bool(forKey: "hideDuringCalls")
@@ -91,6 +124,12 @@ final class AppSettings: ObservableObject {
             "roaming": roaming, "basketInDock": basketInDock, "basketNap": basketNap, "breakReminders": breakReminders,
             "pomodoroFocus": pomodoroFocus, "pomodoroBreak": pomodoroBreak,
             "reminderMin": reminderMin, "reminderMax": reminderMax, "breakLength": breakLength,
+            "breakByActivity": breakByActivity, "activityMinutes": activityMinutes,
+            "drinkReminders": drinkReminders, "drinkInterval": drinkInterval,
+            "eyeBreaks": eyeBreaks, "eyeInterval": eyeInterval,
+            "quittingTimeEnabled": quittingTimeEnabled, "quittingTime": quittingTime,
+            "quittingWeekdaysOnly": quittingWeekdaysOnly,
+            "taskReminders": taskReminders, "taskInterval": taskInterval, "taskItems": taskItems,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue,
         ]
@@ -144,6 +183,7 @@ struct SettingsView: View {
             behaviorSection
             pomodoroSection
             reminderSection
+            drinkSection
             soundSection
             considerateSection
             languageSection
@@ -232,6 +272,19 @@ struct SettingsView: View {
         }
     }
 
+    private var drinkSection: some View {
+        Section(t("Trinken", "Drinking")) {
+            Toggle(t("Trink-Erinnerung", "Drink reminder"), isOn: $settings.drinkReminders)
+            minutesSlider(t("Ungefähr alle", "About every"), value: $settings.drinkInterval, range: 10...120, step: 5)
+            HStack {
+                hint(t("Sie stellt einen Wassernapf hin und trinkt eine Weile – darüber steht „Trinken“. Ein Klick lässt die Blase platzen.",
+                       "She puts down a water bowl and drinks for a while, with “Drink” above her head. A click pops the bubble."))
+                Spacer()
+                previewButton(.drink)
+            }
+        }
+    }
+
     // MARK: Ton & Rücksicht
 
     private var soundSection: some View {
@@ -295,6 +348,11 @@ struct SettingsView: View {
     }
 
     // MARK: Bausteine
+
+    /// Führt eine Erinnerung sofort vor
+    private func previewButton(_ kind: ErrandKind) -> some View {
+        Button(t("Jetzt zeigen", "Show now")) { settings.onPreview?(kind) }
+    }
 
     private func hint(_ text: String) -> some View {
         Text(text).font(.caption).foregroundStyle(.secondary)
