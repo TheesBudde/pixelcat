@@ -41,6 +41,12 @@ final class AppSettings: ObservableObject {
     /// Feierabend als Minuten nach Mitternacht
     @Published var quittingTime: Int { didSet { changed() } }
     @Published var quittingWeekdaysOnly: Bool { didSet { changed() } }
+    /// Schlafmütze ab der Schlafenszeit (Minuten nach Mitternacht)
+    @Published var bedtimeEnabled: Bool { didSet { changed() } }
+    @Published var bedtime: Int { didSet { changed() } }
+    /// Morgen-Outfit bis zu dieser Uhrzeit
+    @Published var morningOutfit: Bool { didSet { changed() } }
+    @Published var morningEnd: Int { didSet { changed() } }
     @Published var taskReminders: Bool { didSet { changed() } }
     @Published var taskInterval: Int { didSet { changed() } }
     @Published var taskItems: [String] { didSet { changed() } }
@@ -75,6 +81,7 @@ final class AppSettings: ObservableObject {
             "breakByActivity": false, "activityMinutes": 50,
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
+            "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
             "taskReminders": false, "taskInterval": 30, "taskItems": [String](),
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
@@ -104,6 +111,10 @@ final class AppSettings: ObservableObject {
         quittingTimeEnabled = defaults.bool(forKey: "quittingTimeEnabled")
         quittingTime = defaults.integer(forKey: "quittingTime")
         quittingWeekdaysOnly = defaults.bool(forKey: "quittingWeekdaysOnly")
+        bedtimeEnabled = defaults.bool(forKey: "bedtimeEnabled")
+        bedtime = defaults.integer(forKey: "bedtime")
+        morningOutfit = defaults.bool(forKey: "morningOutfit")
+        morningEnd = defaults.integer(forKey: "morningEnd")
         taskReminders = defaults.bool(forKey: "taskReminders")
         taskInterval = defaults.integer(forKey: "taskInterval")
         taskItems = defaults.stringArray(forKey: "taskItems") ?? []
@@ -129,6 +140,7 @@ final class AppSettings: ObservableObject {
             "eyeBreaks": eyeBreaks, "eyeInterval": eyeInterval,
             "quittingTimeEnabled": quittingTimeEnabled, "quittingTime": quittingTime,
             "quittingWeekdaysOnly": quittingWeekdaysOnly,
+            "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskInterval": taskInterval, "taskItems": taskItems,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue,
@@ -190,6 +202,7 @@ struct SettingsView: View {
             drinkSection
             eyeSection
             quittingSection
+            outfitSection
             taskSection
             soundSection
             considerateSection
@@ -328,24 +341,45 @@ struct SettingsView: View {
             }
             Toggle(t("Nur Montag bis Freitag", "Only Monday to Friday"), isOn: $settings.quittingWeekdaysOnly)
             HStack {
-                hint(t("Sie setzt ihre Schlafmütze auf, kommt in die Mitte und denkt „Feierabend“. Die Mütze trägt sie bis zum nächsten Morgen.",
-                       "She puts on her nightcap, comes to the middle and thinks “Off work”. She keeps the cap on until the next morning."))
+                hint(t("Sie setzt Zylinder und Fliege auf, kommt in die Mitte und denkt „Feierabend“. Den Zylinder trägt sie bis zur Schlafenszeit.",
+                       "She puts on her top hat and bow tie, comes to the middle and thinks “Off work”. She keeps them on until bedtime."))
                 Spacer()
                 previewButton(.quittingTime)
             }
         }
     }
 
+    private var outfitSection: some View {
+        Section(t("Outfits", "Outfits")) {
+            Toggle(t("Schlafmütze zur Schlafenszeit", "Nightcap at bedtime"), isOn: $settings.bedtimeEnabled)
+            LabeledContent(t("Schlafenszeit", "Bedtime")) {
+                DatePicker("", selection: clock($settings.bedtime), displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+            }
+            Toggle(t("Morgen-Outfit (Schlafmaske auf der Stirn)", "Morning outfit (sleep mask on her forehead)"),
+                   isOn: $settings.morningOutfit)
+            LabeledContent(t("Morgens bis", "Mornings until")) {
+                DatePicker("", selection: clock($settings.morningEnd), displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+            }
+            hint(t("Die Schlafmütze trägt sie bis 5 Uhr, danach beginnt der Morgen. Nach Feierabend trägt sie Zylinder und Fliege.",
+                   "She wears the nightcap until 5 am, then morning begins. After work she wears a top hat and bow tie."))
+        }
+    }
+
     /// Die Feierabend-Uhrzeit als Datum für den Zeitwähler (nur Stunde und Minute zählen)
-    private var quittingClock: Binding<Date> {
+    private var quittingClock: Binding<Date> { clock($settings.quittingTime) }
+
+    /// Minuten nach Mitternacht als Datum für einen Zeitwähler (nur Stunde und Minute zählen)
+    private func clock(_ minutes: Binding<Int>) -> Binding<Date> {
         Binding(
             get: {
-                Calendar.current.date(bySettingHour: settings.quittingTime / 60, minute: settings.quittingTime % 60,
+                Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60,
                                       second: 0, of: Date()) ?? Date()
             },
             set: { date in
                 let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-                settings.quittingTime = (parts.hour ?? 17) * 60 + (parts.minute ?? 30)
+                minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
             })
     }
 

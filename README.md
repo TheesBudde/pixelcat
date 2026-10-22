@@ -42,8 +42,10 @@ Schwanzspitze.
 - **Augenpause:** Ungefähr alle 20 Minuten (einstellbar) ploppt ein kleines Fenster auf – Himmel, Sonne,
   Hügel und eine vorbeiziehende Wolke. Sie setzt sich davor aufs Fensterbrett und schaut eine halbe Minute
   hinaus (von hinten zu sehen, der Schwanz zuckt). Schau mit ihr in die Ferne; danach verschwindet das Fenster.
-- **Feierabend:** Zur eingestellten Uhrzeit (wahlweise nur werktags) setzt sie eine Schlafmütze mit Sternen
-  auf, kommt in die Mitte, streckt sich und denkt „Feierabend“. Die Mütze trägt sie bis zum nächsten Morgen.
+- **Feierabend:** Zur eingestellten Uhrzeit (wahlweise nur werktags) setzt sie Zylinder und Fliege auf, kommt in
+  die Mitte, streckt sich und denkt „Feierabend“. Den Anzug-Look trägt sie bis zur Schlafenszeit.
+- **Outfits nach Tageszeit (Einstellung):** Ab der Schlafenszeit eine Schlafmütze mit Sternen (bis 5 Uhr), morgens
+  bis zur eingestellten Uhrzeit eine hochgeschobene Schlafmaske auf der Stirn.
 - **Aufgaben-Erinnerung:** In den Einstellungen trägst du Stichworte ein („Mama anrufen“). In einstellbaren
   Abständen denkt sie an einen davon – in zufälliger Reihenfolge, jede einmal, dann wieder von vorn. Lange
   Einträge werden auf bis zu drei Zeilen umbrochen.
@@ -119,6 +121,7 @@ Das Menü enthält nur, was man oft braucht:
   oder nach Aktivität (Minuten Arbeit am Stück), Länge einer Pause
 - **Trinken, Augen:** an/aus, ungefähre Abstände, „Jetzt zeigen“
 - **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
+- **Outfits:** Schlafmütze ab Schlafenszeit, Morgen-Outfit bis zu einer Uhrzeit
 - **Aufgaben:** an/aus, Abstand, Liste zum Eintragen und Entfernen
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English

@@ -149,6 +149,10 @@ final class Sprite {
         return nil
     }()
 
+    /// Wo eine Fliege sitzt: Mitte und oberste Zeile – direkt unter dem Maul. nil, wenn es keinen Hals zu sehen
+    /// gibt (Kopf unten im Napf, von hinten, auf dem Rücken).
+    lazy var collarAnchor: (center: Int, row: Int)? = earAnchor.map { ($0.center, $0.row + 5) }
+
     /// Zeichnet das Bild; `x`/`y` sind die linke untere Ecke in Pixeleinheiten.
     func draw(in ctx: CGContext, x: CGFloat, y: CGFloat, scale: CGFloat, colors: [Character: CGColor]) {
         for row in 0..<height {
@@ -217,10 +221,16 @@ enum Frames {
     ])
 
     /// Trinken: Kopf unten im Wassernapf, die Zunge schlabbert (A: Zunge im Wasser, B: Zunge wieder drin).
-    static let drinkA = Sprite(eatRows.enumerated().map { i, row in
+    static let drinkA = headDown(Sprite(eatRows.enumerated().map { i, row in
         i == 11 ? "...KWK.KWK..KWK.KWKtt..." : row
-    })
-    static let drinkB = Sprite(eatRows)
+    }))
+    static let drinkB = headDown(Sprite(eatRows))
+
+    /// Kopf unten im Napf: Eine Fliege würde an den Pfoten hängen – also keine
+    private static func headDown(_ sprite: Sprite) -> Sprite {
+        sprite.collarAnchor = nil
+        return sprite
+    }
 
     /// Kopf unten im Napf, Augen zu.
     private static let eatRows = [
@@ -238,10 +248,10 @@ enum Frames {
         "...KWK.KWK..KWK.KWK.....",
         "...KKK.KKK..KKK.KKK.....",
     ]
-    static let eatA = Sprite(eatRows)
-    static let eatB = Sprite(eatRows.enumerated().map { i, row in
+    static let eatA = headDown(Sprite(eatRows))
+    static let eatB = headDown(Sprite(eatRows.enumerated().map { i, row in
         i == 8 ? "..KOWWWWWWWWWWOKOWKKWOKw" : row // kauen
-    })
+    }))
 
     // Strecken in mehreren Bildern: vorne absenken → tief strecken (wippen, Schwanz pendelt)
     // → aufrichten → Hinterbein nach hinten. Augen genüsslich zu.
@@ -535,10 +545,12 @@ enum Frames {
         default: return row
         }
     })
-    /// Von hinten sieht man keine Ohr-Innenseiten – wo der Hut sitzt, steht deshalb hier
+    /// Von hinten sieht man keine Ohr-Innenseiten – wo der Hut sitzt, steht deshalb hier: so tief,
+    /// dass er die Ohren bedeckt. Eine Fliege sieht man von hinten nicht.
     private static func backSprite(_ rows: [String]) -> Sprite {
         let sprite = Sprite(rows)
-        sprite.earAnchor = (center: 5, row: 0)
+        sprite.earAnchor = (center: 5, row: 2)
+        sprite.collarAnchor = nil
         return sprite
     }
 
@@ -604,7 +616,32 @@ enum Frames {
         "..KKKKKKKK..",
     ])
 
-    /// Schlafmütze mit Sternen und Bommel (Feierabend, bis zum nächsten Morgen)
+    /// Zylinder (Feierabend – zusammen mit der Fliege)
+    static let topHat = Sprite([
+        ".KKKKKKK.",
+        ".KDDDDDK.",
+        ".KDdDDDK.",
+        ".KDdDDDK.",
+        ".KRRRRRK.",
+        "KKKKKKKKK",
+    ])
+
+    /// Rote Fliege unter dem Maul (Feierabend)
+    static let bowTie = Sprite([
+        "KK.KK",
+        "FFKFF",
+        "KK.KK",
+    ])
+
+    /// Hochgeschobene Schlafmaske auf der Stirn (Morgen-Outfit) – die Ohren schauen oben heraus
+    static let sleepMask = Sprite([
+        "KKKKKKKK",
+        "KMMMMMMK",
+        "KMcMMcMK",
+        "KKKKKKKK",
+    ])
+
+    /// Schlafmütze mit Sternen und Bommel (zur Schlafenszeit)
     static let nightCap = Sprite([
         "........KK...",
         ".......KNNKKK",
@@ -646,6 +683,7 @@ enum Frames {
     static let accessoryColors = rgbPalette([
         "K": 0x2B1D16, "R": 0xD7263D, "W": 0xFFFFFF, "B": 0x3E7BD6, "Y": 0xF5C542, "G": 0xFFF3B0,
         "U": 0xF28C28, "u": 0xC2611B, "T": 0x4F8A3C, "N": 0x4357B5, "n": 0x2C3A85,
+        "D": 0x26262E, "d": 0x50505E, "F": 0xC0283B, "M": 0xC6B3EC, "c": 0x5B4A86,
     ])
 
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.

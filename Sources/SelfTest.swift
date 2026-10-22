@@ -150,7 +150,7 @@ final class SelfTest {
         section("Feierabend")
         let hatBefore = cat.snapshot().hat
         cat.showErrandNow(.quittingTime)
-        await waitUntil("setzt die Schlafmütze auf", 5) { $0.hat == "Schlafmütze" || $0.hat == "Feiertagshut" }
+        await waitUntil("setzt Zylinder und Fliege auf", 5) { $0.hat == "Zylinder" || $0.hat == "Feiertagshut" }
         await waitUntil("Blase „Feierabend“ über der Katze", 10) { self.bubbleAboveCat($0) }
         await waitUntil("streckt sich in der Mitte", 60) { $0.phase == "stretching" }
         if let screen = NSScreen.screens.first {
@@ -160,7 +160,7 @@ final class SelfTest {
         }
         await waitUntil("erledigt", 75) { $0.errand == nil }
         await pause(3)
-        log("   Mütze vorher: \(hatBefore ?? "keine"), jetzt: \(cat.snapshot().hat ?? "keine") (vor der Feierabend-Uhrzeit ohne Mütze)")
+        log("   Outfit vorher: \(hatBefore ?? "keins"), jetzt: \(cat.snapshot().hat ?? "keins")")
     }
 
     // MARK: Werkzeuge

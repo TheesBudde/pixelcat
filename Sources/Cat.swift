@@ -1793,9 +1793,17 @@ final class CatView: NSView {
     var coat: Coat = .black {
         didSet { needsDisplay = true }
     }
-    /// Verkleidung auf dem Kopf (Weihnachtsmütze, Partyhut) oder nil
+    /// Verkleidung auf dem Kopf (Weihnachtsmütze, Partyhut, Zylinder …) oder nil
     var accessory: Sprite? {
         didSet { if accessory !== oldValue { needsDisplay = true } }
+    }
+    /// So viele Pixel tiefer als sonst sitzt die Verkleidung (z. B. Schlafmaske auf der Stirn)
+    var accessoryDrop = 0 {
+        didSet { if accessoryDrop != oldValue { needsDisplay = true } }
+    }
+    /// Etwas am Hals (Fliege) oder nil
+    var collar: Sprite? {
+        didSet { if collar !== oldValue { needsDisplay = true } }
     }
     var onClick: (() -> Void)?
     /// Vorderer Rand des Körbchens (Lage in Bildpixeln) – beim Hinein- und Heraussteigen
@@ -1846,8 +1854,14 @@ final class CatView: NSView {
         // Hut zwischen die Ohren setzen (nur wenn der Kopf aufrecht ist)
         if let accessory, let ears = look.sprite.earAnchor {
             let x = look.drawX + ears.center - accessory.width / 2
-            let y = look.hop + look.sprite.height - 1 - ears.row
+            let y = look.hop + look.sprite.height - 1 - ears.row - accessoryDrop
             accessory.draw(in: ctx, x: CGFloat(x), y: CGFloat(y), scale: scale, colors: Frames.accessoryColors)
+        }
+        // Fliege direkt unter dem Maul (oberste Zeile an der Ankerstelle)
+        if let collar, let neck = look.sprite.collarAnchor {
+            let x = look.drawX + neck.center - collar.width / 2
+            let y = look.hop + look.sprite.height - neck.row - collar.height
+            collar.draw(in: ctx, x: CGFloat(x), y: CGFloat(y), scale: scale, colors: Frames.accessoryColors)
         }
         ctx.restoreGState()
         if let front = basketFront {

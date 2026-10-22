@@ -268,8 +268,12 @@ final class CatController {
         didSet {
             errands.configureQuittingTime(hour: (quittingTime?.minutes ?? 0) / 60, minute: (quittingTime?.minutes ?? 0) % 60,
                                           weekdaysOnly: quittingTime?.weekdaysOnly ?? true, enabled: quittingTime != nil)
-            updateOutfit()
+            outfitTimes.quitting = quittingTime
         }
+    }
+    /// Wann sie was trägt (Feierabend, Schlafenszeit, Morgen)
+    var outfitTimes = OutfitTimes() {
+        didSet { updateOutfit() }
     }
     /// Aufgaben-Erinnerung: alle so viele Minuten (nil = aus) und woran
     var taskMinutes: Int? {
@@ -320,6 +324,12 @@ final class CatController {
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
             quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
+        }
+        let bedtime = settings.bedtimeEnabled ? settings.bedtime : nil
+        let morningEnd = settings.morningOutfit ? settings.morningEnd : nil
+        if bedtime != outfitTimes.bedtime || morningEnd != outfitTimes.morningEnd {
+            outfitTimes.bedtime = bedtime
+            outfitTimes.morningEnd = morningEnd
         }
         if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
@@ -738,22 +748,33 @@ final class CatController {
         brain.calm = focusActive
     }
 
-    /// Verkleidung an Feiertagen: Kürbis an Halloween, Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1.
-    /// Sonst nach Feierabend (bis zum nächsten Morgen) die Schlafmütze.
+    /// Verkleidung an Feiertagen: Kürbis an Halloween, Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1. –
+    /// die gehen immer vor. Sonst je nach Tageszeit: Zylinder und Fliege nach Feierabend, Schlafmütze ab der
+    /// Schlafenszeit, Schlafmaske auf der Stirn am Morgen.
     private func updateOutfit() {
-        if let outfitOverride {
-            view.accessory = outfitOverride
-            return
-        }
+        var hat: Sprite?, drop = 0, collar: Sprite?
         let day = Calendar.current.dateComponents([.month, .day], from: Date())
-        switch (day.month, day.day) {
-        case (10, 31): view.accessory = Frames.pumpkinHat
-        case (12, 24), (12, 25): view.accessory = Frames.santaHat
-        case (12, 31), (1, 1): view.accessory = Frames.partyHat
-        default:
-            let quitting = errands.isAfterQuittingTime(Date()) || activeErrand?.errand.kind == .quittingTime
-            view.accessory = quitting ? Frames.nightCap : nil
+        if let outfitOverride {
+            hat = outfitOverride
+        } else {
+            switch (day.month, day.day) {
+            case (10, 31): hat = Frames.pumpkinHat
+            case (12, 24), (12, 25): hat = Frames.santaHat
+            case (12, 31), (1, 1): hat = Frames.partyHat
+            default:
+                // Während der Feierabend-Ankündigung (auch beim Vorführen) immer im Anzug
+                let outfit = activeErrand?.errand.kind == .quittingTime ? .evening : outfitTimes.outfit(at: Date())
+                switch outfit {
+                case .evening: hat = Frames.topHat; collar = Frames.bowTie
+                case .night: hat = Frames.nightCap
+                case .morning: hat = Frames.sleepMask; drop = 2
+                case nil: break
+                }
+            }
         }
+        if view.accessory !== hat { view.accessory = hat }
+        view.accessoryDrop = drop
+        if view.collar !== collar { view.collar = collar }
     }
 
     /// Streicheln: Die Maus bewegt sich über der Katze, ohne zu klicken.
@@ -1071,7 +1092,9 @@ final class CatController {
         var hat: String?
         switch view.accessory {
         case nil: hat = nil
+        case let a where a === Frames.topHat: hat = "Zylinder"
         case let a where a === Frames.nightCap: hat = "Schlafmütze"
+        case let a where a === Frames.sleepMask: hat = "Schlafmaske"
         default: hat = "Feiertagshut"
         }
         var catAbove = false
@@ -1263,7 +1286,7 @@ final class CatController {
             let sprite = look.sprite
             let column = CGFloat(look.drawX) + CGFloat(sprite.earAnchor?.center ?? sprite.width / 2) + 0.5
             let canvasX = look.facingRight ? column : CGFloat(Layout.canvasWidth) - column
-            let hat = sprite.earAnchor != nil ? max(0, (view.accessory?.height ?? 0) - 2) : 0
+            let hat = sprite.earAnchor != nil ? max(0, (view.accessory?.height ?? 0) - 2 - view.accessoryDrop) : 0
             head = CGPoint(x: brain.x.rounded() + canvasX * scale,
                            y: brain.y.rounded() + CGFloat(look.hop + sprite.height + hat + 1) * scale)
         }

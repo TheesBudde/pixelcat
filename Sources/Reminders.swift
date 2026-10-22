@@ -86,16 +86,6 @@ final class ErrandScheduler {
         queue.insert(Errand(kind: kind), at: 0)
     }
 
-    /// Ist heute (zu `date`) schon Feierabend – für das Feierabend-Outfit bis zum frühen Morgen?
-    func isAfterQuittingTime(_ date: Date) -> Bool {
-        guard let quittingTime else { return false }
-        let minutes = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
-        // Bis 4 Uhr morgens gilt noch der Abend davor
-        let day = minutes < 4 * 60 ? calendar.date(byAdding: .day, value: -1, to: date) ?? date : date
-        guard isWorkday(day) || !quittingTime.weekdaysOnly else { return false }
-        return minutes >= quittingTime.minutes || minutes < 4 * 60
-    }
-
     // MARK: Intern
 
     private func enqueue(_ kind: ErrandKind) {
@@ -125,6 +115,41 @@ final class ErrandScheduler {
             day = next
         }
         return nil
+    }
+}
+
+/// Was sie zu welcher Tageszeit trägt: nach Feierabend Zylinder und Fliege, ab der Schlafenszeit die Schlafmütze,
+/// morgens die hochgeschobene Schlafmaske. (Feiertage gehen vor – das regelt der Controller.)
+enum DayOutfit: Equatable {
+    case evening, night, morning
+}
+
+struct OutfitTimes {
+    /// Feierabend (Minuten nach Mitternacht) und ob nur werktags – nil = aus
+    var quitting: (minutes: Int, weekdaysOnly: Bool)?
+    /// Schlafenszeit – nil = keine Schlafmütze
+    var bedtime: Int?
+    /// Morgen-Outfit bis zu dieser Uhrzeit – nil = keins
+    var morningEnd: Int?
+    /// Um 5 Uhr endet die Nacht und beginnt der Morgen
+    static let morningStart = 5 * 60
+
+    func outfit(at date: Date, calendar: Calendar = .current) -> DayOutfit? {
+        let minutes = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
+        if let bedtime, Self.contains(minutes, from: bedtime, to: Self.morningStart) { return .night }
+        if let morningEnd, Self.contains(minutes, from: Self.morningStart, to: morningEnd) { return .morning }
+        if let quitting, Self.contains(minutes, from: quitting.minutes, to: bedtime ?? Self.morningStart) {
+            // Nach Mitternacht zählt noch der Tag davor
+            let day = minutes < quitting.minutes ? calendar.date(byAdding: .day, value: -1, to: date) ?? date : date
+            let weekday = calendar.component(.weekday, from: day)
+            if !quitting.weekdaysOnly || (weekday != 1 && weekday != 7) { return .evening }
+        }
+        return nil
+    }
+
+    /// Liegt `minutes` in [from, to) – auch über Mitternacht hinweg?
+    private static func contains(_ minutes: Int, from: Int, to: Int) -> Bool {
+        from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to
     }
 }
 

@@ -286,18 +286,12 @@ MainActor.assumeIsolated {
         check("läuft das Programm bis Samstag weiter: Freitag zählt", s.popNext()?.kind == .quittingTime)
         s.collectDue(now: at(24, 17, 31))
         check("samstags nicht (nur werktags)", s.queue.isEmpty)
-        check("Mütze nach Feierabend", s.isAfterQuittingTime(at(22, 18, 0)))
-        check("Mütze noch um 3 Uhr nachts", s.isAfterQuittingTime(at(23, 3, 0)))
-        check("morgens um 8 keine Mütze", !s.isAfterQuittingTime(at(23, 8, 0)))
-        check("tagsüber keine Mütze", !s.isAfterQuittingTime(at(22, 15, 0)))
-        check("Samstagabend keine Mütze (nur werktags)", !s.isAfterQuittingTime(at(24, 19, 0)))
 
         let late = ErrandScheduler()
         late.configureQuittingTime(hour: 17, minute: 30, weekdaysOnly: false, enabled: true)
         late.collectDue(now: at(22, 19, 0))
         late.collectDue(now: at(22, 19, 1))
         check("erst abends gestartet: keine nachträgliche Ankündigung", late.queue.isEmpty)
-        check("aber schon mit Mütze", late.isAfterQuittingTime(at(22, 19, 1)))
         late.collectDue(now: at(24, 17, 31))
         check("über Nacht weiterlaufend: am nächsten Tag wieder (auch am Wochenende, wenn so eingestellt)",
               late.popNext()?.kind == .quittingTime)
@@ -336,6 +330,34 @@ MainActor.assumeIsolated {
         check("langer Text wird an Wortgrenzen umbrochen", lines == ["STEUERERKLÄRUNG", "BIS FREITAG", "ABGEBEN!"], "\(lines)")
         let long = PixelFont.lines(String(repeating: "Wort ", count: 30), maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
         check("zu langer Text endet nach drei Zeilen mit …", long.count == 3 && long[2].hasSuffix("…"), "\(long)")
+    }
+
+    print("\nOutfits nach Tageszeit")
+    do {
+        let cal = Calendar.current
+        func at(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
+            cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+        }
+        var times = OutfitTimes()
+        check("ohne Einstellungen kein Outfit", times.outfit(at: at(22, 20, 0)) == nil)
+        times.quitting = (17 * 60 + 30, true)
+        check("nach Feierabend Zylinder", times.outfit(at: at(22, 18, 0)) == .evening)
+        check("vor Feierabend nichts", times.outfit(at: at(22, 15, 0)) == nil)
+        check("ohne Schlafenszeit Zylinder bis in die Nacht", times.outfit(at: at(23, 2, 0)) == .evening)
+        check("Samstagabend kein Zylinder (nur werktags)", times.outfit(at: at(24, 19, 0)) == nil)
+        check("Freitagnacht nach Mitternacht noch Zylinder", times.outfit(at: at(24, 1, 0)) == .evening)
+        times.bedtime = 22 * 60 + 30
+        check("ab Schlafenszeit Schlafmütze", times.outfit(at: at(22, 22, 45)) == .night)
+        check("vorher noch Zylinder", times.outfit(at: at(22, 22, 0)) == .evening)
+        check("nachts Schlafmütze", times.outfit(at: at(23, 3, 0)) == .night)
+        check("Schlafmütze auch am Wochenende", times.outfit(at: at(24, 23, 0)) == .night)
+        check("ab 5 Uhr keine Schlafmütze mehr", times.outfit(at: at(23, 5, 30)) == nil)
+        times.morningEnd = 9 * 60
+        check("morgens Schlafmaske", times.outfit(at: at(23, 7, 0)) == .morning)
+        check("ab 9 Uhr nichts mehr", times.outfit(at: at(23, 9, 0)) == nil)
+        times.bedtime = 0 * 60 + 30
+        check("Schlafenszeit nach Mitternacht: um 23 Uhr noch Zylinder", times.outfit(at: at(22, 23, 0)) == .evening)
+        check("um 0:45 Schlafmütze", times.outfit(at: at(23, 0, 45)) == .night)
     }
 
     print("\nWarteschlange")

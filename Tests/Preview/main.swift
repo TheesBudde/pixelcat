@@ -57,6 +57,43 @@ MainActor.assumeIsolated {
         }
         try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(out)/fenster-katze.png"))
     }
+    // Alle Posen mit Outfit – so, wie CatView sie zeichnet
+    @MainActor func outfitSheet(_ name: String, hat: Sprite?, drop: Int = 0, collar: Sprite?) {
+        let scale: CGFloat = 5
+        let poses: [Sprite] = Frames.all + [Frames.drinkA, Frames.sitBackA, Frames.sleepA, Frames.groomA, Frames.yawn]
+        let columns = 8
+        let cellW = 32 * scale, cellH = 26 * scale
+        let rows = (poses.count + columns - 1) / columns
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(cellW) * columns, pixelsHigh: Int(cellH) * rows,
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSColor(white: 0.62, alpha: 1).setFill()
+        NSRect(x: 0, y: 0, width: cellW * CGFloat(columns), height: cellH * CGFloat(rows)).fill()
+        for (i, sprite) in poses.enumerated() {
+            let view = CatView(frame: NSRect(x: 0, y: 0, width: cellW, height: cellH))
+            view.scale = scale
+            view.coat = [Coat.orange, .black, .gray][i % 3]
+            view.accessory = hat
+            view.accessoryDrop = drop
+            view.collar = collar
+            var look = CatLook(sprite: sprite, facingRight: true)
+            if sprite === Frames.sitBackA { look.drawX = (32 - sprite.width) / 2 }
+            view.look = look
+            let ctx = NSGraphicsContext.current!.cgContext
+            ctx.saveGState()
+            ctx.translateBy(x: CGFloat(i % columns) * cellW, y: CGFloat(rows - 1 - i / columns) * cellH)
+            view.draw(view.bounds)
+            ctx.restoreGState()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(out)/\(name).png"))
+    }
+    outfitSheet("outfit-feierabend", hat: Frames.topHat, collar: Frames.bowTie)
+    outfitSheet("outfit-morgen", hat: Frames.sleepMask, drop: 2, collar: nil)
+    outfitSheet("outfit-nacht", hat: Frames.nightCap, collar: nil)
+
     // Feierabend: Katze mit Schlafmütze (wie in CatView gezeichnet)
     do {
         let scale: CGFloat = 6
@@ -71,7 +108,8 @@ MainActor.assumeIsolated {
             let view = CatView(frame: NSRect(x: 0, y: 0, width: 32 * scale, height: 26 * scale))
             view.scale = scale
             view.coat = coat
-            view.accessory = Frames.nightCap
+            view.accessory = Frames.topHat
+            view.collar = Frames.bowTie
             var look = CatLook(sprite: sprite, facingRight: true)
             if sprite === Frames.sitBackA { look.drawX = (32 - sprite.width) / 2 }
             view.look = look
