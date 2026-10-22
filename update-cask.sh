@@ -10,11 +10,12 @@ TAP="${TAP:-../homebrew-pixelcat}"
 CASK="$TAP/Casks/pixelcat.rb"
 URL="https://github.com/TheesBudde/pixelcat/releases/download/$VERSION/Pixelcat-$VERSION.zip"
 
-# Prüfsumme der tatsächlich veröffentlichten Datei
-TMP=$(mktemp -d)
-curl -fsSL -o "$TMP/Pixelcat.zip" "$URL"
-SHA=$(shasum -a 256 "$TMP/Pixelcat.zip" | cut -d' ' -f1)
-rm -rf "$TMP"
+# Prüfsumme der tatsächlich veröffentlichten Datei (heruntergeladen nach build/, das gibt es immer)
+mkdir -p build
+DOWNLOAD="build/cask-download.zip"
+curl -fsSL -o "$DOWNLOAD" "$URL"
+SHA=$(shasum -a 256 "$DOWNLOAD" | cut -d' ' -f1)
+rm -f "$DOWNLOAD"
 
 sed -i '' -E "s/^  version \".*\"/  version \"$NUMBER\"/; s/^  sha256 \".*\"/  sha256 \"$SHA\"/" "$CASK"
 git -C "$TAP" commit -qam "Pixelcat $NUMBER"
