@@ -50,6 +50,8 @@ final class AppSettings: ObservableObject {
     @Published var taskReminders: Bool { didSet { changed() } }
     @Published var taskInterval: Int { didSet { changed() } }
     @Published var taskItems: [String] { didSet { changed() } }
+    /// An Aufgaben auch während Videocalls bzw. bei eingeschaltetem Mikrofon erinnern (nur die Blase)
+    @Published var tasksDuringCalls: Bool { didSet { changed() } }
     // Ton & Rücksicht
     @Published var sounds: Bool { didSet { changed() } }
     @Published var purring: Bool { didSet { changed() } }
@@ -82,7 +84,7 @@ final class AppSettings: ObservableObject {
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "taskInterval": 30, "taskItems": [String](),
+            "taskReminders": false, "taskInterval": 30, "taskItems": [String](), "tasksDuringCalls": false,
             "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -118,6 +120,7 @@ final class AppSettings: ObservableObject {
         taskReminders = defaults.bool(forKey: "taskReminders")
         taskInterval = defaults.integer(forKey: "taskInterval")
         taskItems = defaults.stringArray(forKey: "taskItems") ?? []
+        tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
         sounds = defaults.bool(forKey: "sounds")
         purring = defaults.bool(forKey: "purring")
         hideDuringCalls = defaults.bool(forKey: "hideDuringCalls")
@@ -142,6 +145,7 @@ final class AppSettings: ObservableObject {
             "quittingWeekdaysOnly": quittingWeekdaysOnly,
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskInterval": taskInterval, "taskItems": taskItems,
+            "tasksDuringCalls": tasksDuringCalls,
             "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue,
         ]
@@ -411,6 +415,12 @@ struct SettingsView: View {
                 Button(t("Hinzufügen", "Add"), action: addTask)
                     .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            Toggle(t("Auch während Videocalls erinnern", "Also remind me during video calls"), isOn: $settings.tasksDuringCalls)
+            hint(settings.hideDuringCalls
+                 ? t("Bei Kamera oder Mikrofon bleibt die Katze versteckt – nur die Blase erscheint unten am Dock. Während der Bildschirm geteilt wird, nie.",
+                     "While the camera or microphone is on, the cat stays hidden – only the bubble shows up at the Dock. Never while the screen is shared.")
+                 : t("Gilt nur, wenn sie sich bei Videocalls versteckt (unter „Rücksicht“) – sonst erinnert sie ohnehin.",
+                     "Only matters if she hides during video calls (see “Being considerate”) – otherwise she reminds you anyway."))
             HStack {
                 hint(t("Sie denkt in zufälliger Reihenfolge an deine Einträge – erst an alle einmal, dann wieder von vorn. Im Körbchen oder auf Streifzug kommt sie dafür herein.",
                        "She thinks of your entries in random order – each once, then all over again. In her bed or while roaming she comes in for it."))

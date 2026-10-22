@@ -381,6 +381,14 @@ MainActor.assumeIsolated {
         check("ausgeschaltet kommt nichts mehr", !s.queue.contains { $0.kind == .drink })
         s.requestNow(.drink)
         check("„Jetzt zeigen“ kommt sofort", s.popNext()?.kind == .drink)
+        // Im Videocall nur Aufgaben: Die anderen warten in der Schlange
+        s.configureTasks(["Mama anrufen"])
+        s.requestNow(.task)
+        s.requestNow(.lookout)
+        let inCall = s.popNext(where: { $0 == .task })
+        check("im Call kommt nur die Aufgabe dran", inCall?.kind == .task && inCall?.text == "Mama anrufen")
+        check("die Augenpause wartet bis nach dem Call", s.queue.map(\.kind) == [.lookout], "\(s.queue.map(\.kind))")
+        check("im Call ohne Aufgaben-Erlaubnis: nichts", s.popNext(where: { _ in false }) == nil && s.queue.count == 1)
     }
 
     print(failed == 0 ? "\nAlle Szenarien bestanden." : "\n\(failed) Szenario(s) fehlgeschlagen.")

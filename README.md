@@ -48,7 +48,9 @@ Schwanzspitze.
   bis zur eingestellten Uhrzeit eine hochgeschobene Schlafmaske auf der Stirn.
 - **Aufgaben-Erinnerung:** In den Einstellungen trägst du Stichworte ein („Mama anrufen“). In einstellbaren
   Abständen denkt sie an einen davon – in zufälliger Reihenfolge, jede einmal, dann wieder von vorn. Lange
-  Einträge werden auf bis zu drei Zeilen umbrochen.
+  Einträge werden auf bis zu drei Zeilen umbrochen. Wahlweise **auch während Videocalls** (Kamera oder Mikrofon
+  an): Die Katze bleibt dann versteckt, nur die Blase erscheint über dem Katzenkorb im Dock bzw. unten rechts –
+  nie, während der Bildschirm geteilt wird.
 - **Kleine Erinnerungen, nacheinander:** Trinken, Augenpause, Aufgaben und Feierabend warten aufeinander und
   auf Pausen, Pomodoro und Timer – nie zwei auf einmal. Im Streifzug oder Katzenkorb kommt sie dafür herein und
   geht danach wieder. Jede lässt sich in den Einstellungen mit „Jetzt zeigen“ vorführen.
@@ -122,7 +124,7 @@ Das Menü enthält nur, was man oft braucht:
 - **Trinken, Augen:** an/aus, ungefähre Abstände, „Jetzt zeigen“
 - **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
 - **Outfits:** Schlafmütze ab Schlafenszeit, Morgen-Outfit bis zu einer Uhrzeit
-- **Aufgaben:** an/aus, Abstand, Liste zum Eintragen und Entfernen
+- **Aufgaben:** an/aus, Abstand, auch während Videocalls, Liste zum Eintragen und Entfernen
 - **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English
 

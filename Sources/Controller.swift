@@ -282,6 +282,8 @@ final class CatController {
     var taskItems: [String] = [] {
         didSet { if taskItems != oldValue { errands.configureTasks(taskItems) } }
     }
+    /// An Aufgaben auch während Videocalls erinnern – die Katze bleibt dann versteckt, nur die Blase erscheint
+    var tasksDuringCalls = false
     /// Augenpause: alle so viele Minuten (nil = aus)
     var eyeBreakMinutes: Int? {
         didSet {
@@ -320,6 +322,7 @@ final class CatController {
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
         taskItems = settings.taskItems
+        tasksDuringCalls = settings.tasksDuringCalls
         taskMinutes = settings.taskReminders && !settings.taskItems.isEmpty ? settings.taskInterval : nil
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
@@ -1141,15 +1144,29 @@ final class CatController {
             if errandFinished(active.errand, since: active.since, now: now) { finishErrand(now: now) }
             return
         }
-        guard now >= nextErrandAllowed, canRunErrand, let errand = errands.popNext() else { return }
+        guard now >= nextErrandAllowed, canRunErrand else { return }
+        // Im Videocall nur Aufgaben (falls so eingestellt) – und nie, während der Bildschirm geteilt wird
+        let allowed: (ErrandKind) -> Bool = hiddenBecause == nil ? { _ in true }
+            : { [tasksDuringCalls] kind in kind == .task && tasksDuringCalls && !CallDetector.screenIsShared() }
+        guard let errand = errands.popNext(where: allowed) else { return }
         startErrand(errand, now: now)
     }
 
-    /// Frei für eine Erinnerung: sichtbar, nicht im Videocall, kein Fokus/Timer, keine Pause, nichts zu fressen
-    /// oder zu spielen, nicht gerade beim Hinein- oder Herausklettern.
+    /// Frei für eine Erinnerung: sichtbar, kein Fokus/Timer, keine Pause, nichts zu fressen oder zu spielen,
+    /// nicht gerade beim Hinein- oder Herausklettern. (Was im Videocall erlaubt ist, entscheidet `updateErrands`.)
     private var canRunErrand: Bool {
-        isVisible && hiddenBecause == nil && brain.mode == .normal && pomodoro == nil && timer == nil
+        isVisible && brain.mode == .normal && pomodoro == nil && timer == nil
             && bubble == nil && bowl == nil && ball == nil && !brain.isAboveDock && !brain.awaitingAcknowledgement
+    }
+
+    /// Im Videocall ist die Katze versteckt: Dann steht die Aufgaben-Blase über dem Katzenkorb im Dock
+    /// bzw. unten rechts am Bildschirm.
+    private var bubbleAnchorWithoutCat: CGPoint? {
+        guard isVisible, let frame = (dockScreen ?? screen)?.frame else { return nil }
+        if basketInDock, brain.useBasket || brain.basketX != nil, let basketX = brain.basketX {
+            return CGPoint(x: basketX, y: ground)
+        }
+        return CGPoint(x: frame.maxX - 70 * scale / 3, y: ground + 2 * scale)
     }
 
     private func startErrand(_ errand: Errand, now: Date) {
@@ -1169,6 +1186,8 @@ final class CatController {
             return
         case .task:
             // Nur die Blase – sie wird dafür nicht geweckt; im Streifzug oder Körbchen kommt sie herein
+            // (im Videocall bleibt sie versteckt, die Blase steht dann über dem Korb im Dock)
+            if hiddenBecause != nil, basketInDock { locateBasket() }
             showErrandBubble(errand.text ?? "", for: 35)
             if brain.isOutAndAbout { brain.startErrandVisit(for: 5 * 60) }
             return
@@ -1289,6 +1308,8 @@ final class CatController {
             let hat = sprite.earAnchor != nil ? max(0, (view.accessory?.height ?? 0) - 2 - view.accessoryDrop) : 0
             head = CGPoint(x: brain.x.rounded() + canvasX * scale,
                            y: brain.y.rounded() + CGFloat(look.hop + sprite.height + hat + 1) * scale)
+        } else if hiddenBecause != nil, bubble === errandBubble {
+            head = bubbleAnchorWithoutCat
         }
         bubble.update(dt: dt, head: head)
         if bubble.isGone {
@@ -1363,6 +1384,8 @@ final class CatController {
             updateFocus()
             updateOutfit()
             if isActivityBreakDue() { remindToTakeBreak(now: date) }
+            // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
+            if hiddenBecause != nil, activeErrand?.errand.kind == .task, CallDetector.screenIsShared() { errandBubble?.pop() }
         }
         updatePomodoro(now: date)
         updateTimer(now: date)

@@ -68,12 +68,13 @@ final class ErrandScheduler {
         quittingCheckedUntil = now
     }
 
-    /// Die nächste Erinnerung aus der Warteschlange – Aufgaben bekommen dabei ihren Text.
-    func popNext() -> Errand? {
-        guard !queue.isEmpty else { return nil }
-        var errand = queue.removeFirst()
+    /// Die nächste Erinnerung aus der Warteschlange, die gerade erlaubt ist – Aufgaben bekommen dabei ihren Text.
+    /// Nicht erlaubte bleiben in der Schlange und kommen später.
+    func popNext(where allowed: (ErrandKind) -> Bool = { _ in true }) -> Errand? {
+        guard let index = queue.firstIndex(where: { allowed($0.kind) }) else { return nil }
+        var errand = queue.remove(at: index)
         if errand.kind == .task {
-            guard let text = tasks.next(random: random) else { return popNext() }
+            guard let text = tasks.next(random: random) else { return popNext(where: allowed) }
             errand.text = text
         }
         return errand
