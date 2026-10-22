@@ -60,6 +60,18 @@ Schwanzspitze.
   Nickerchen. Morgens und abends ist sie gemütlich. Nachts (23–6 Uhr) schläft sie lange und
   legt sich nach dem Aufscheuchen sofort wieder hin.
 
+## Installieren
+
+Mit [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask theesbudde/pixelcat/pixelcat
+```
+
+Aktualisieren mit `brew upgrade --cask pixelcat`. Ohne Homebrew: die ZIP vom neuesten
+[Release](https://github.com/TheesBudde/pixelcat/releases/latest) laden, entpacken, `Pixelcat.app` in den
+Programme-Ordner ziehen und beim ersten Start per Rechtsklick → Öffnen starten.
+
 ## Starten
 
 ```bash
@@ -195,4 +207,12 @@ erst zeigt das Dock-Symbol die schlafende Katze, nach 6 s liegt stattdessen das 
 ```
 
 Das baut die App für Apple Silicon und Intel und legt `build/Pixelcat-v4.1.zip` an.
-Die Datei dann auf GitHub unter *Releases → Draft a new release* hochladen.
+Die Datei dann auf GitHub unter *Releases → Draft a new release* hochladen. Danach Homebrew nachziehen:
+
+```bash
+./update-cask.sh v4.1
+```
+
+Das lädt die veröffentlichte ZIP, trägt Version und Prüfsumme in den Tap
+([homebrew-pixelcat](https://github.com/TheesBudde/homebrew-pixelcat), liegt als Nachbarordner `../homebrew-pixelcat`)
+ein, committet und pusht.
