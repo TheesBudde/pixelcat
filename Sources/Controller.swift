@@ -830,6 +830,7 @@ final class CatController {
         // (nicht bei automatisch ausgeblendetem Dock oder im Vollbild)
         let dockHeight = dock.visibleFrame.minY - dock.frame.minY
         brain.useBasket = edge == .bottom && dockHeight > 20 && screen?.displayID == dock.displayID && !isFullscreen
+        if Self.debug { locateBasket() }
     }
 
     /// Genau jetzt nachsehen, wo das Körbchen im Dock sitzt und wie groß das Symbol ist.

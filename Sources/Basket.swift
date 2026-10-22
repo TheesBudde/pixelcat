@@ -265,13 +265,20 @@ enum DockLocator {
         let pinnedWidth = pinned.reduce(0) { $0 + width($1) }
         let appCount = 1 + pinnedWidth + CGFloat(running)              // Finder + angeheftete + laufende
         // Wie viele Symbolbreiten links von Pixelcat liegen
+        // Laufende Apps, die vor Pixelcat gestartet wurden, stehen links davon
+        let myLaunch = NSRunningApplication.current.launchDate ?? .distantFuture
+        let startedEarlier = CGFloat(runningApps.filter {
+            $0.processIdentifier != NSRunningApplication.current.processIdentifier
+                && ($0.launchDate ?? .distantPast) < myLaunch
+        }.count)
         let before: CGFloat
         if let index = pinned.firstIndex(where: { bundleID($0) == Bundle.main.bundleIdentifier }) {
             before = 1 + pinned[..<index].reduce(0) { $0 + width($1) }
+                // Mit „Im Dock behalten“ angeheftet, bleibt das Symbol, wo es war – hinter den laufenden Apps,
+                // die schon da waren. Gespeichert wird es trotzdem als letzte angeheftete App.
+                + (index == pinned.count - 1 ? startedEarlier : 0)
         } else {
-            let me = NSRunningApplication.current.processIdentifier
-            let index = runningApps.firstIndex { $0.processIdentifier == me } ?? max(0, running - 1)
-            before = 1 + pinnedWidth + CGFloat(index)
+            before = 1 + pinnedWidth + startedEarlier
         }
         let rightCount = CGFloat(others + 1 + recents)                 // Ordner, Papierkorb, zuletzt benutzte
         let separators: CGFloat = recents > 0 ? 2 : 1
