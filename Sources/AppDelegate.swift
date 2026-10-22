@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var drinkItem: NSMenuItem!
     private var eyeItem: NSMenuItem!
     private var taskItem: NSMenuItem!
+    private var selfTest: SelfTest?
     private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
@@ -48,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
+        // Start mit --selftest: alle Erinnerungen auf dem Bildschirm durchspielen und prüfen
+        if CommandLine.arguments.contains("--selftest") {
+            selfTest = SelfTest(cat: cat, settings: settings)
+            selfTest?.start()
+        }
         // Start mit --outfit pumpkin|santa|party: Verkleidung vorführen
         if let i = CommandLine.arguments.firstIndex(of: "--outfit"), i + 1 < CommandLine.arguments.count {
             switch CommandLine.arguments[i + 1] {

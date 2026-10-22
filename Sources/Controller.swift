@@ -1050,6 +1050,59 @@ final class CatController {
         return (value * factor).rounded() / factor
     }
 
+    // MARK: Selbsttest
+
+    /// Was gerade los ist – für den Selbsttest (Start mit --selftest)
+    struct Snapshot {
+        var phase: String
+        var catCenter: CGFloat
+        var catFrame: NSRect?
+        var isAway: Bool
+        var errand: ErrandKind?
+        var bowl: (x: CGFloat, water: Bool, food: Double, frame: NSRect?)?
+        var lookout: (x: CGFloat, frame: NSRect?, alpha: CGFloat, catAbove: Bool)?
+        var bubble: (frame: NSRect?, popping: Bool)?
+        var hat: String?
+        var scale: CGFloat
+        var idleSeconds: Double
+    }
+
+    func snapshot() -> Snapshot {
+        var hat: String?
+        switch view.accessory {
+        case nil: hat = nil
+        case let a where a === Frames.nightCap: hat = "Schlafmütze"
+        default: hat = "Feiertagshut"
+        }
+        var catAbove = false
+        if let lookoutWindow, panel.isVisible, lookoutWindow.panel.isVisible {
+            // Reihenfolge der eigenen Fenster: vorne zuerst
+            let order = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? [])
+                .compactMap { $0[kCGWindowNumber as String] as? Int }
+            if let cat = order.firstIndex(of: panel.windowNumber), let window = order.firstIndex(of: lookoutWindow.panel.windowNumber) {
+                catAbove = cat < window
+            }
+        }
+        return Snapshot(
+            phase: "\(brain.phase)", catCenter: catCenter, catFrame: panel.isVisible ? panel.frame : nil,
+            isAway: brain.isAway, errand: activeErrand?.errand.kind,
+            bowl: bowl.map { ($0.x, $0.water, $0.food, bowlWindow?.panel.isVisible == true ? bowlWindow?.panel.frame : nil) },
+            lookout: lookoutWindow.map { (lookoutX, $0.panel.isVisible ? $0.panel.frame : nil,
+                                         $0.panel.alphaValue, catAbove) },
+            bubble: bubble.map { ($0.visibleFrame, $0.isPopping) },
+            hat: hat, scale: scale, idleSeconds: Self.secondsSinceInput)
+    }
+
+    /// Selbsttest: Aufgaben vorübergehend setzen (die Einstellungen bleiben unberührt)
+    func selfTestTasks(_ items: [String]) {
+        errands.configureTasks(items)
+    }
+
+    /// Selbsttest: wie ein Klick auf die Blase
+    func selfTestPopBubble() {
+        bubble?.pop()
+    }
+
     // MARK: Kleine Erinnerungen
 
     /// Aus den Einstellungen („Jetzt zeigen“): gleich als Nächstes zeigen.

@@ -49,6 +49,9 @@ final class ThoughtBubble {
         if !window.panel.isVisible { window.panel.orderFrontRegardless() }
     }
 
+    /// Wo die Blase gerade auf dem Bildschirm ist (nil = nicht zu sehen) – für den Selbsttest
+    var visibleFrame: NSRect? { window.panel.isVisible ? window.panel.frame : nil }
+
     func remove() {
         window.panel.orderOut(nil)
     }
