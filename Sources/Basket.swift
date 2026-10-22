@@ -211,7 +211,8 @@ enum DockLocator {
     }
 
     /// Schätzung: Das Dock ist zentriert; laufende, nicht angeheftete Apps stehen hinter den angehefteten,
-    /// rechts folgen Trennstrich, Ordner und Papierkorb. Pixelcat sitzt meist als letzte laufende App.
+    /// rechts folgen Trennstrich, Ordner und Papierkorb. Wurde Pixelcat im Dock behalten (und vielleicht
+    /// verschoben), steht es an seinem Platz unter den angehefteten, sonst unter den laufenden Apps.
     /// Die Symbole stehen dicht an dicht; an beiden Enden und am Trennstrich ist je knapp ein halbes Symbol Luft
     /// (nachgemessen am echten Dock).
     private static func estimatedTile(screen: NSScreen) -> Tile? {
@@ -219,15 +220,33 @@ enum DockLocator {
         guard (prefs?.string(forKey: "orientation") ?? "bottom") == "bottom" else { return nil }
         let tile = CGFloat(prefs?.double(forKey: "tilesize") ?? 0) > 0 ? CGFloat(prefs!.double(forKey: "tilesize")) : 48
         let pinned = (prefs?.array(forKey: "persistent-apps") as? [[String: Any]]) ?? []
-        let pinnedIDs = Set(pinned.compactMap { (($0["tile-data"] as? [String: Any])?["bundle-identifier"] as? String) })
+        func bundleID(_ entry: [String: Any]) -> String? {
+            (entry["tile-data"] as? [String: Any])?["bundle-identifier"] as? String
+        }
+        /// Platzbedarf eines angehefteten Eintrags: Abstandshalter sind halb bzw. ganz so breit wie ein Symbol
+        func width(_ entry: [String: Any]) -> CGFloat {
+            entry["tile-type"] as? String == "small-spacer-tile" ? 0.5 : 1
+        }
+        let pinnedIDs = Set(pinned.compactMap(bundleID))
         let others = (prefs?.array(forKey: "persistent-others") as? [Any])?.count ?? 0
-        let running = NSWorkspace.shared.runningApplications.filter {
+        let runningApps = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && !pinnedIDs.contains($0.bundleIdentifier ?? "") && $0.bundleIdentifier != "com.apple.finder"
-        }.count
+        }
+        let running = runningApps.count
         let showRecents = prefs?.object(forKey: "show-recents") as? Bool ?? true
         let recents = showRecents ? ((prefs?.array(forKey: "recent-apps") as? [Any])?.count ?? 0) : 0
 
-        let appCount = CGFloat(1 + pinned.count + running)            // Finder + angeheftete + laufende
+        let pinnedWidth = pinned.reduce(0) { $0 + width($1) }
+        let appCount = 1 + pinnedWidth + CGFloat(running)              // Finder + angeheftete + laufende
+        // Wie viele Symbolbreiten links von Pixelcat liegen
+        let before: CGFloat
+        if let index = pinned.firstIndex(where: { bundleID($0) == Bundle.main.bundleIdentifier }) {
+            before = 1 + pinned[..<index].reduce(0) { $0 + width($1) }
+        } else {
+            let me = NSRunningApplication.current.processIdentifier
+            let index = runningApps.firstIndex { $0.processIdentifier == me } ?? max(0, running - 1)
+            before = 1 + pinnedWidth + CGFloat(index)
+        }
         let rightCount = CGFloat(others + 1 + recents)                 // Ordner, Papierkorb, zuletzt benutzte
         let separators: CGFloat = recents > 0 ? 2 : 1
         let pad: CGFloat = 0.47, gap: CGFloat = 0.45                   // Luft am Rand bzw. am Trennstrich (in Symbolen)
@@ -235,7 +254,7 @@ enum DockLocator {
         // Wird das Dock zu breit, verkleinert macOS die Symbole
         let size = min(tile, screen.frame.width * 0.98 / slots)
         let left = screen.frame.midX - slots * size / 2
-        let x = left + (pad + appCount - 0.5) * size
+        let x = left + (pad + before + 0.5) * size
         let dockHeight = screen.visibleFrame.minY - screen.frame.minY
         return Tile(center: CGPoint(x: min(max(x, screen.frame.minX + size), screen.frame.maxX - size),
                                     y: screen.frame.minY + dockHeight / 2),
