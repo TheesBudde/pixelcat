@@ -265,6 +265,41 @@ MainActor.assumeIsolated {
               late.popNext()?.kind == .quittingTime)
     }
 
+    print("\nAufgaben")
+    do {
+        var seed: UInt64 = 42
+        let random: () -> Double = {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Double(seed >> 11) / Double(1 << 53)
+        }
+        let bag = TaskBag()
+        bag.items = ["Mama anrufen", "Steuer", "Blumen gießen", "Sport"]
+        var seen: [String] = []
+        for _ in 0..<40 { seen.append(bag.next(random: random)!) }
+        let rounds = stride(from: 0, to: 40, by: 4).map { Set(seen[$0..<$0 + 4]) }
+        check("jede Runde enthält jede Aufgabe genau einmal", rounds.allSatisfy { $0.count == 4 })
+        check("nie zweimal dieselbe hintereinander", zip(seen, seen.dropFirst()).allSatisfy { $0 != $1 })
+        check("Reihenfolge ist gemischt (nicht jede Runde gleich)", Set(stride(from: 0, to: 40, by: 4).map { seen[$0] }).count > 1)
+        bag.items = ["Nur eins"]
+        check("eine einzige Aufgabe kommt immer wieder", bag.next(random: random) == "Nur eins" && bag.next(random: random) == "Nur eins")
+
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let s = ErrandScheduler()
+        s.random = { 0.5 }
+        s.configure(.task, every: 10, now: start)
+        s.collectDue(now: start.addingTimeInterval(11 * 60))
+        check("ohne Einträge keine Aufgaben-Erinnerung", s.popNext() == nil)
+        s.configureTasks(["  Mama anrufen  ", "", "Sport"])
+        s.collectDue(now: start.addingTimeInterval(22 * 60))
+        let errand = s.popNext()
+        check("mit Einträgen: Erinnerung mit Text", errand?.kind == .task && ["Mama anrufen", "Sport"].contains(errand?.text ?? ""),
+              "\(String(describing: errand))")
+        let lines = PixelFont.lines("Steuererklärung bis Freitag abgeben!", maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
+        check("langer Text wird an Wortgrenzen umbrochen", lines == ["STEUERERKLÄRUNG", "BIS FREITAG", "ABGEBEN!"], "\(lines)")
+        let long = PixelFont.lines(String(repeating: "Wort ", count: 30), maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
+        check("zu langer Text endet nach drei Zeilen mit …", long.count == 3 && long[2].hasSuffix("…"), "\(long)")
+    }
+
     print("\nWarteschlange")
     do {
         let start = Date(timeIntervalSince1970: 1_800_000_000)

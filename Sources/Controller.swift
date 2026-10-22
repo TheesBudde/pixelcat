@@ -271,6 +271,13 @@ final class CatController {
             updateOutfit()
         }
     }
+    /// Aufgaben-Erinnerung: alle so viele Minuten (nil = aus) und woran
+    var taskMinutes: Int? {
+        didSet { if taskMinutes != oldValue { errands.configure(.task, every: taskMinutes.map(Double.init), now: Date()) } }
+    }
+    var taskItems: [String] = [] {
+        didSet { if taskItems != oldValue { errands.configureTasks(taskItems) } }
+    }
     /// Augenpause: alle so viele Minuten (nil = aus)
     var eyeBreakMinutes: Int? {
         didSet {
@@ -308,6 +315,8 @@ final class CatController {
         breakLength = TimeInterval(settings.breakLength * 60)
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
+        taskItems = settings.taskItems
+        taskMinutes = settings.taskReminders && !settings.taskItems.isEmpty ? settings.taskInterval : nil
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
             quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
@@ -1083,7 +1092,10 @@ final class CatController {
             brain.callToCenter(visitLength: 75)
             return
         case .task:
-            break
+            // Nur die Blase – sie wird dafür nicht geweckt; im Streifzug oder Körbchen kommt sie herein
+            showErrandBubble(errand.text ?? "", for: 35)
+            if brain.isOutAndAbout { brain.startErrandVisit(for: 5 * 60) }
+            return
         }
         // Im Streifzug oder im Körbchen kommt sie dafür herein, sonst wird sie aufmerksam
         if brain.isOutAndAbout {
@@ -1101,10 +1113,8 @@ final class CatController {
             return bowl?.water != true || now.timeIntervalSince(since) > 4 * 60
         case .lookout:
             return lookoutWindow == nil || now.timeIntervalSince(since) > 4 * 60
-        case .quittingTime:
+        case .quittingTime, .task:
             return errandBubble == nil
-        case .task:
-            return true
         }
     }
 

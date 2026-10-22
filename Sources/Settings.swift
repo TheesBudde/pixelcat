@@ -174,6 +174,10 @@ final class SettingsWindow {
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var focus: FocusMonitor
+    /// Eingabefeld für eine neue Aufgabe
+    @State private var newTask = ""
+    /// Länger passt nicht gut in die Gedankenblase (drei Zeilen)
+    private static let maxTaskLength = 45
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -186,6 +190,7 @@ struct SettingsView: View {
             drinkSection
             eyeSection
             quittingSection
+            taskSection
             soundSection
             considerateSection
             languageSection
@@ -342,6 +347,48 @@ struct SettingsView: View {
                 let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
                 settings.quittingTime = (parts.hour ?? 17) * 60 + (parts.minute ?? 30)
             })
+    }
+
+    private var taskSection: some View {
+        Section(t("Aufgaben", "Tasks")) {
+            Toggle(t("An Aufgaben erinnern", "Remind me of tasks"), isOn: $settings.taskReminders)
+            minutesSlider(t("Ungefähr alle", "About every"), value: $settings.taskInterval, range: 5...120, step: 5)
+            ForEach(Array(settings.taskItems.enumerated()), id: \.offset) { index, task in
+                HStack {
+                    Text(task)
+                    Spacer()
+                    Button {
+                        settings.taskItems.remove(at: index)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(t("Entfernen", "Remove"))
+                }
+            }
+            HStack {
+                TextField(t("Neue Aufgabe, z. B. „Mama anrufen“", "New task, e.g. “Call mom”"), text: $newTask)
+                    .onSubmit(addTask)
+                    .onChange(of: newTask) { value in
+                        if value.count > Self.maxTaskLength { newTask = String(value.prefix(Self.maxTaskLength)) }
+                    }
+                Button(t("Hinzufügen", "Add"), action: addTask)
+                    .disabled(newTask.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            HStack {
+                hint(t("Sie denkt in zufälliger Reihenfolge an deine Einträge – erst an alle einmal, dann wieder von vorn. Im Körbchen oder auf Streifzug kommt sie dafür herein.",
+                       "She thinks of your entries in random order – each once, then all over again. In her bed or while roaming she comes in for it."))
+                Spacer()
+                previewButton(.task).disabled(settings.taskItems.isEmpty)
+            }
+        }
+    }
+
+    private func addTask() {
+        let task = newTask.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !task.isEmpty else { return }
+        settings.taskItems.append(task)
+        newTask = ""
     }
 
     // MARK: Ton & Rücksicht

@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var reminderItem: NSMenuItem!
     private var drinkItem: NSMenuItem!
     private var eyeItem: NSMenuItem!
+    private var taskItem: NSMenuItem!
     private var roamItem: NSMenuItem!
     private var feedItem: NSMenuItem!
     private var playItem: NSMenuItem!
@@ -111,6 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(drinkItem)
         eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks))
         menu.addItem(eyeItem)
+        taskItem = item(t("Aufgaben-Erinnerung", "Task reminder"), #selector(toggleTasks))
+        taskItem.toolTip = t("Die Aufgaben trägst du in den Einstellungen ein.", "Add your tasks in the settings.")
+        menu.addItem(taskItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
         if settings.basketInDock {
             roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming))
@@ -224,6 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reminderItem.isEnabled = cat.pomodoro == nil
         drinkItem.state = settings.drinkReminders ? .on : .off
         eyeItem.state = settings.eyeBreaks ? .on : .off
+        taskItem.state = settings.taskReminders ? .on : .off
         roamItem.state = settings.awayMode ? .on : .off
 
         // Schläft sie fest oder ist sie draußen, gibt es nichts zu füttern oder zu spielen
@@ -306,6 +311,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleEyeBreaks() {
         settings.eyeBreaks.toggle()
+    }
+
+    @objc private func toggleTasks() {
+        settings.taskReminders.toggle()
+        // Noch keine Aufgaben eingetragen: gleich die Einstellungen zeigen
+        if settings.taskReminders, settings.taskItems.isEmpty { openSettings() }
     }
 
     @objc private func toggleRoaming() {
