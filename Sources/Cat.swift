@@ -586,10 +586,13 @@ final class CatBrain {
     /// Zeit für eine Pause (Erinnerung, abgelaufener Timer): aufwachen, in die Bildschirmmitte
     /// laufen, strecken und gähnen. Im Streifzug kommt sie dafür 5 Minuten herein.
     /// `untilAcknowledged`: Sie bleibt in der Mitte, bis man sie streichelt oder anklickt.
-    func callToCenter(untilAcknowledged: Bool = false) {
+    /// `visitLength`: Im Streifzug so lange bleiben (sonst so lang wie eine Pause).
+    func callToCenter(untilAcknowledged: Bool = false, visitLength: Double? = nil) {
         if untilAcknowledged { awaitingAcknowledgement = true }
         if roaming {
-            if untilAcknowledged || !isVisiting { startVisit(for: untilAcknowledged ? .infinity : breakVisitLength) }
+            if untilAcknowledged || !isVisiting {
+                startVisit(for: untilAcknowledged ? .infinity : visitLength ?? breakVisitLength)
+            }
             return
         }
         reminderPending = true

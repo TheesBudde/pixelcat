@@ -229,6 +229,42 @@ MainActor.assumeIsolated {
         check("5 Minuten weg zählt als Pause (von vorne)", tracker.activeSeconds == 0, "\(tracker.activeSeconds)")
     }
 
+    print("\nFeierabend")
+    do {
+        let cal = Calendar.current
+        func at(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
+            cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+        }
+        // 22.10.2026 ist ein Donnerstag, der 24. ein Samstag
+        let s = ErrandScheduler()
+        s.configureQuittingTime(hour: 17, minute: 30, weekdaysOnly: true, enabled: true)
+        s.collectDue(now: at(22, 17, 29))
+        check("vor 17:30 nichts", s.queue.isEmpty)
+        s.collectDue(now: at(22, 17, 31))
+        check("um 17:30 kommt der Feierabend", s.popNext()?.kind == .quittingTime)
+        s.collectDue(now: at(22, 22, 0))
+        check("am selben Abend nur einmal", s.queue.isEmpty)
+        s.collectDue(now: at(24, 17, 29))
+        check("läuft das Programm bis Samstag weiter: Freitag zählt", s.popNext()?.kind == .quittingTime)
+        s.collectDue(now: at(24, 17, 31))
+        check("samstags nicht (nur werktags)", s.queue.isEmpty)
+        check("Mütze nach Feierabend", s.isAfterQuittingTime(at(22, 18, 0)))
+        check("Mütze noch um 3 Uhr nachts", s.isAfterQuittingTime(at(23, 3, 0)))
+        check("morgens um 8 keine Mütze", !s.isAfterQuittingTime(at(23, 8, 0)))
+        check("tagsüber keine Mütze", !s.isAfterQuittingTime(at(22, 15, 0)))
+        check("Samstagabend keine Mütze (nur werktags)", !s.isAfterQuittingTime(at(24, 19, 0)))
+
+        let late = ErrandScheduler()
+        late.configureQuittingTime(hour: 17, minute: 30, weekdaysOnly: false, enabled: true)
+        late.collectDue(now: at(22, 19, 0))
+        late.collectDue(now: at(22, 19, 1))
+        check("erst abends gestartet: keine nachträgliche Ankündigung", late.queue.isEmpty)
+        check("aber schon mit Mütze", late.isAfterQuittingTime(at(22, 19, 1)))
+        late.collectDue(now: at(24, 17, 31))
+        check("über Nacht weiterlaufend: am nächsten Tag wieder (auch am Wochenende, wenn so eingestellt)",
+              late.popNext()?.kind == .quittingTime)
+    }
+
     print("\nWarteschlange")
     do {
         let start = Date(timeIntervalSince1970: 1_800_000_000)

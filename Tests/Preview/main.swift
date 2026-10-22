@@ -57,5 +57,31 @@ MainActor.assumeIsolated {
         }
         try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(out)/fenster-katze.png"))
     }
+    // Feierabend: Katze mit Schlafmütze (wie in CatView gezeichnet)
+    do {
+        let scale: CGFloat = 6
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(32 * scale * 3), pixelsHigh: Int(26 * scale),
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSColor(white: 0.55, alpha: 1).setFill()
+        NSRect(x: 0, y: 0, width: 32 * scale * 3, height: 26 * scale).fill()
+        for (i, (coat, sprite)) in [(Coat.orange, Frames.sit), (.black, Frames.stand), (.gray, Frames.sitBackA)].enumerated() {
+            let view = CatView(frame: NSRect(x: 0, y: 0, width: 32 * scale, height: 26 * scale))
+            view.scale = scale
+            view.coat = coat
+            view.accessory = Frames.nightCap
+            var look = CatLook(sprite: sprite, facingRight: true)
+            if sprite === Frames.sitBackA { look.drawX = (32 - sprite.width) / 2 }
+            view.look = look
+            NSGraphicsContext.current?.cgContext.saveGState()
+            NSGraphicsContext.current?.cgContext.translateBy(x: CGFloat(i) * 32 * scale, y: 0)
+            view.draw(view.bounds)
+            NSGraphicsContext.current?.cgContext.restoreGState()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(out)/feierabend.png"))
+    }
     print("Vorschau in \(out)")
 }

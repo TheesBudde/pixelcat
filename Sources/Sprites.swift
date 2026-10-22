@@ -604,6 +604,19 @@ enum Frames {
         "..KKKKKKKK..",
     ])
 
+    /// Schlafmütze mit Sternen und Bommel (Feierabend, bis zum nächsten Morgen)
+    static let nightCap = Sprite([
+        "........KK...",
+        ".......KNNKKK",
+        "......KNNKWWK",
+        ".....KNYNKWWK",
+        "....KNNNNNKK.",
+        "...KNNNNYNK..",
+        "..KNYNNNNNK..",
+        ".KnnnnnnnnnK.",
+        "..KKKKKKKKK..",
+    ])
+
     /// Partyhut (31. Dezember und 1. Januar)
     static let partyHat = Sprite([
         "...Y...",
@@ -632,7 +645,7 @@ enum Frames {
 
     static let accessoryColors = rgbPalette([
         "K": 0x2B1D16, "R": 0xD7263D, "W": 0xFFFFFF, "B": 0x3E7BD6, "Y": 0xF5C542, "G": 0xFFF3B0,
-        "U": 0xF28C28, "u": 0xC2611B, "T": 0x4F8A3C,
+        "U": 0xF28C28, "u": 0xC2611B, "T": 0x4F8A3C, "N": 0x4357B5, "n": 0x2C3A85,
     ])
 
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.

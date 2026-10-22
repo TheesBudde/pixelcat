@@ -263,6 +263,14 @@ final class CatController {
     var drinkMinutes: Int? {
         didSet { if drinkMinutes != oldValue { errands.configure(.drink, every: drinkMinutes.map(Double.init), now: Date()) } }
     }
+    /// Feierabend: Uhrzeit (Minuten nach Mitternacht), nur werktags? (nil = aus)
+    var quittingTime: (minutes: Int, weekdaysOnly: Bool)? {
+        didSet {
+            errands.configureQuittingTime(hour: (quittingTime?.minutes ?? 0) / 60, minute: (quittingTime?.minutes ?? 0) % 60,
+                                          weekdaysOnly: quittingTime?.weekdaysOnly ?? true, enabled: quittingTime != nil)
+            updateOutfit()
+        }
+    }
     /// Augenpause: alle so viele Minuten (nil = aus)
     var eyeBreakMinutes: Int? {
         didSet {
@@ -300,6 +308,10 @@ final class CatController {
         breakLength = TimeInterval(settings.breakLength * 60)
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
+        let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
+        if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
+            quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
+        }
         if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
     }
@@ -718,6 +730,7 @@ final class CatController {
     }
 
     /// Verkleidung an Feiertagen: Kürbis an Halloween, Weihnachtsmütze am 24./25.12., Partyhut am 31.12. und 1.1.
+    /// Sonst nach Feierabend (bis zum nächsten Morgen) die Schlafmütze.
     private func updateOutfit() {
         if let outfitOverride {
             view.accessory = outfitOverride
@@ -728,7 +741,9 @@ final class CatController {
         case (10, 31): view.accessory = Frames.pumpkinHat
         case (12, 24), (12, 25): view.accessory = Frames.santaHat
         case (12, 31), (1, 1): view.accessory = Frames.partyHat
-        default: view.accessory = nil
+        default:
+            let quitting = errands.isAfterQuittingTime(Date()) || activeErrand?.errand.kind == .quittingTime
+            view.accessory = quitting ? Frames.nightCap : nil
         }
     }
 
@@ -1060,7 +1075,14 @@ final class CatController {
             showErrandBubble(L10n.s("Trinken", "Drink"), for: 4 * 60)
         case .lookout:
             placeLookout()
-        case .task, .quittingTime:
+        case .quittingTime:
+            // Mit Schlafmütze in die Mitte, strecken und „Feierabend“ denken
+            showErrandBubble(L10n.s("Feierabend", "Off work"), for: 60)
+            updateOutfit()
+            if soundsAllowed { pendingMeow = (.breakStarts, now) }
+            brain.callToCenter(visitLength: 75)
+            return
+        case .task:
             break
         }
         // Im Streifzug oder im Körbchen kommt sie dafür herein, sonst wird sie aufmerksam
@@ -1079,7 +1101,9 @@ final class CatController {
             return bowl?.water != true || now.timeIntervalSince(since) > 4 * 60
         case .lookout:
             return lookoutWindow == nil || now.timeIntervalSince(since) > 4 * 60
-        case .task, .quittingTime:
+        case .quittingTime:
+            return errandBubble == nil
+        case .task:
             return true
         }
     }

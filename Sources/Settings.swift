@@ -185,6 +185,7 @@ struct SettingsView: View {
             reminderSection
             drinkSection
             eyeSection
+            quittingSection
             soundSection
             considerateSection
             languageSection
@@ -311,6 +312,36 @@ struct SettingsView: View {
                 previewButton(.lookout)
             }
         }
+    }
+
+    private var quittingSection: some View {
+        Section(t("Feierabend", "End of the workday")) {
+            Toggle(t("An den Feierabend erinnern", "Remind me to call it a day"), isOn: $settings.quittingTimeEnabled)
+            LabeledContent(t("Uhrzeit", "Time")) {
+                DatePicker("", selection: quittingClock, displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+            }
+            Toggle(t("Nur Montag bis Freitag", "Only Monday to Friday"), isOn: $settings.quittingWeekdaysOnly)
+            HStack {
+                hint(t("Sie setzt ihre Schlafmütze auf, kommt in die Mitte und denkt „Feierabend“. Die Mütze trägt sie bis zum nächsten Morgen.",
+                       "She puts on her nightcap, comes to the middle and thinks “Off work”. She keeps the cap on until the next morning."))
+                Spacer()
+                previewButton(.quittingTime)
+            }
+        }
+    }
+
+    /// Die Feierabend-Uhrzeit als Datum für den Zeitwähler (nur Stunde und Minute zählen)
+    private var quittingClock: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: settings.quittingTime / 60, minute: settings.quittingTime % 60,
+                                      second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                settings.quittingTime = (parts.hour ?? 17) * 60 + (parts.minute ?? 30)
+            })
     }
 
     // MARK: Ton & Rücksicht
