@@ -184,6 +184,7 @@ struct SettingsView: View {
             pomodoroSection
             reminderSection
             drinkSection
+            eyeSection
             soundSection
             considerateSection
             languageSection
@@ -281,6 +282,19 @@ struct SettingsView: View {
                        "She puts down a water bowl and drinks for a while, with “Drink” above her head. A click pops the bubble."))
                 Spacer()
                 previewButton(.drink)
+            }
+        }
+    }
+
+    private var eyeSection: some View {
+        Section(t("Augen", "Eyes")) {
+            Toggle(t("Augenpause", "Eye break"), isOn: $settings.eyeBreaks)
+            minutesSlider(t("Ungefähr alle", "About every"), value: $settings.eyeInterval, range: 10...90, step: 5)
+            HStack {
+                hint(t("Ein Fenster ploppt auf, sie setzt sich davor und schaut eine halbe Minute hinaus – schau mit ihr in die Ferne.",
+                       "A window pops up, she sits down in front of it and looks out for half a minute – look into the distance with her."))
+                Spacer()
+                previewButton(.lookout)
             }
         }
     }

@@ -196,6 +196,11 @@ final class CatController {
     private var nextErrandAllowed = Date.distantPast
     /// Die Blase der laufenden Erinnerung (wird sie von der Pausenblase ersetzt, ist sie weg)
     private weak var errandBubble: ThoughtBubble?
+    /// Fenster der Augenpause: wo es steht, wie weit es eingeblendet ist (0…1) und ob es gerade verschwindet
+    private var lookoutWindow: PropWindow?
+    private var lookoutX: CGFloat = 0
+    private var lookoutAppear = 0.0
+    private var lookoutLeaving = false
 
     /// Ein Programm im Vollbild: Dann ist kein Dock da, und sie läuft am unteren Bildschirmrand
     private(set) var isFullscreen = false
@@ -252,6 +257,12 @@ final class CatController {
     var drinkMinutes: Int? {
         didSet { if drinkMinutes != oldValue { errands.configure(.drink, every: drinkMinutes.map(Double.init), now: Date()) } }
     }
+    /// Augenpause: alle so viele Minuten (nil = aus)
+    var eyeBreakMinutes: Int? {
+        didSet {
+            if eyeBreakMinutes != oldValue { errands.configure(.lookout, every: eyeBreakMinutes.map(Double.init), now: Date()) }
+        }
+    }
 
     /// Streifzug: Die Katze ist draußen und kommt nur zu Pausen vorbei.
     var roaming: Bool {
@@ -280,6 +291,7 @@ final class CatController {
         reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
         breakLength = TimeInterval(settings.breakLength * 60)
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
+        eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
         if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
     }
@@ -349,6 +361,7 @@ final class CatController {
         }
         tick()
         bowlWindow?.panel.orderFrontRegardless()
+        lookoutWindow?.panel.orderFrontRegardless()
         if !brain.isAway { panel.orderFrontRegardless() }
         ballWindow?.panel.orderFrontRegardless()
     }
@@ -358,6 +371,7 @@ final class CatController {
         isVisible = false
         panel.orderOut(nil)
         bowlWindow?.panel.orderOut(nil)
+        lookoutWindow?.panel.orderOut(nil)
         ballWindow?.panel.orderOut(nil)
     }
 
@@ -433,6 +447,7 @@ final class CatController {
 
     func startPomodoro() {
         guard timer == nil else { return }
+        cancelErrand()
         pomodoro = Pomodoro(stage: .focus, ends: Date().addingTimeInterval(Double(focusMinutes) * 60))
         setPlaying(false)
         removeBowl()
@@ -450,6 +465,7 @@ final class CatController {
 
     func startTimer(minutes: Double) {
         guard pomodoro == nil else { return }
+        cancelErrand()
         timer = CatTimer(ends: Date().addingTimeInterval(minutes * 60))
         setPlaying(false)
         removeBowl()
@@ -584,6 +600,7 @@ final class CatController {
         view.scale = scale
         brain.scale = scale
         bowlWindow?.scale = scale
+        lookoutWindow?.scale = scale
         ballWindow?.scale = scale
         bubble?.scale = scale
         updateBounds()
@@ -997,7 +1014,9 @@ final class CatController {
         case .drink:
             placeBowl(water: true)
             showErrandBubble(L10n.s("Trinken", "Drink"), for: 4 * 60)
-        case .lookout, .task, .quittingTime:
+        case .lookout:
+            placeLookout()
+        case .task, .quittingTime:
             break
         }
         // Im Streifzug oder im Körbchen kommt sie dafür herein, sonst wird sie aufmerksam
@@ -1014,17 +1033,78 @@ final class CatController {
             // Fertig getrunken: Die Blase platzt; erledigt, sobald der Napf weggeräumt ist
             if let bowl, bowl.water, bowl.food <= 0 { errandBubble?.pop() }
             return bowl?.water != true || now.timeIntervalSince(since) > 4 * 60
-        case .lookout, .task, .quittingTime:
+        case .lookout:
+            return lookoutWindow == nil || now.timeIntervalSince(since) > 4 * 60
+        case .task, .quittingTime:
             return true
         }
     }
 
     private func finishErrand(now: Date) {
         if let bowl, bowl.water { removeBowl() }
+        removeLookout()
         errandBubble?.pop()
         brain.endErrandVisit()
         activeErrand = nil
         nextErrandAllowed = now.addingTimeInterval(15)
+    }
+
+    /// Pomodoro oder Timer beginnt: laufende Erinnerung abbrechen (Napf und Fenster weg)
+    private func cancelErrand() {
+        guard activeErrand != nil else { return }
+        finishErrand(now: Date())
+    }
+
+    /// Augenpause: Fenster aufploppen lassen – irgendwo in der Mitte, nicht direkt bei der Katze.
+    private func placeLookout() {
+        guard let frame = screen?.frame else { return }
+        var x = frame.midX
+        for _ in 0..<10 {
+            x = .random(in: frame.minX + frame.width * 0.2...frame.maxX - frame.width * 0.2)
+            if abs(x - catCenter) > 120 { break }
+        }
+        removeLookout()
+        let window = PropWindow(columns: LookoutArt.width, rows: LookoutArt.height, scale: scale)
+        window.view.colors = LookoutArt.colors
+        window.view.sprite = LookoutArt.frames[0]
+        window.panel.alphaValue = 0
+        lookoutWindow = window
+        lookoutX = x
+        lookoutAppear = 0
+        lookoutLeaving = false
+        window.place(centerX: x, bottom: ground)
+        if isVisible {
+            window.panel.orderFrontRegardless()
+            if panel.isVisible { panel.order(.above, relativeTo: window.panel.windowNumber) }
+        }
+        brain.lookout = x
+        brain.onLookoutDone = { [weak self] in self?.lookoutLeaving = true }
+    }
+
+    /// Einblenden mit kleinem Federn, Wolke ziehen lassen, nach dem Hinausschauen ausblenden.
+    private func updateLookoutWindow(dt: Double) {
+        guard let window = lookoutWindow else { return }
+        if lookoutLeaving {
+            lookoutAppear -= dt / 0.6
+            if lookoutAppear <= 0 { return removeLookout() }
+        } else {
+            lookoutAppear = min(1, lookoutAppear + dt / 0.45)
+        }
+        let t = lookoutAppear
+        // Etwas über die volle Größe hinaus und zurück („ploppt auf“)
+        let pop = lookoutLeaving ? 0.85 + 0.15 * t : 1 + 0.12 * sin(t * .pi) - 0.4 * (1 - t) * (1 - t)
+        let size = scale * CGFloat(pop)
+        if abs(window.scale - size) > 0.01 { window.scale = size }
+        window.panel.alphaValue = CGFloat(min(1, t * 1.6))
+        window.view.sprite = LookoutArt.frames[Int(CACurrentMediaTime() / 1.6) % LookoutArt.frames.count]
+        window.place(centerX: lookoutX, bottom: ground)
+    }
+
+    private func removeLookout() {
+        lookoutWindow?.panel.orderOut(nil)
+        lookoutWindow = nil
+        lookoutLeaving = false
+        brain.lookout = nil
     }
 
     private func showErrandBubble(_ text: String, for seconds: TimeInterval) {
@@ -1073,7 +1153,7 @@ final class CatController {
         if !isVisible || brain.isAway {
             interval = 0.5
         } else if brain.needsSmoothMotion || ball != nil || mouseNearCat || brain.isBeingPetted
-                    || bubble?.isPopping == true {
+                    || bubble?.isPopping == true || (lookoutWindow != nil && (lookoutAppear < 1 || lookoutLeaving)) {
             interval = 1.0 / 30
         } else {
             interval = 1.0 / 8
@@ -1174,6 +1254,7 @@ final class CatController {
             // (der Wassernapf einer Erinnerung bleibt – sie kommt ja gleich)
             if bowl != nil, activeErrand == nil { removeBowl() }
             updateBowlWindow()
+            updateLookoutWindow(dt: dt)
             if panel.isVisible { panel.orderOut(nil) }
             return
         }
@@ -1202,6 +1283,7 @@ final class CatController {
         if look != view.look { view.look = look }
 
         updateBowlWindow()
+        updateLookoutWindow(dt: dt)
         if let ball, let ballWindow {
             ballWindow.view.sprite = Int(ball.rolled / (3 * scale)) % 2 == 0 ? Frames.yarnA : Frames.yarnB
             ballWindow.place(centerX: ball.x, bottom: ground + ball.y)

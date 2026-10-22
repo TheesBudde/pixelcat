@@ -508,6 +508,40 @@ enum Frames {
         "..KKKKKKKK..",
     ])
 
+    /// Von hinten: sitzt am Fenster und schaut hinaus. Der Schwanz liegt seitlich und zuckt ab und zu (A/B).
+    private static let backRows = [
+        "..K......K......",
+        ".KOK....KOK.....",
+        ".KOOKKKKOOK.....",
+        "KOOOOOOOOOOK....",
+        "KOhOOOOOOhOK....",
+        "KOOOOOOOOOOK....",
+        ".KOOOOOOOOK.....",
+        "..KKOOOOKK......",
+        ".KOOOOOOOOK.....",
+        "KOOsOOOOsOOK....",
+        "KOOOsOOsOOOK.KK.",
+        "KOOOOOOOOOOK.KOK",
+        "KOOOOOOOOOOKKOK.",
+        "KOOOOOOOOOOOOK..",
+        ".KKKKKKKKKKKKK..",
+    ]
+    static let sitBackA = backSprite(backRows)
+    static let sitBackB = backSprite(backRows.enumerated().map { i, row in
+        switch i {
+        case 10: return "KOOOsOOsOOOK...."
+        case 11: return "KOOOOOOOOOOK.KK."
+        case 12: return "KOOOOOOOOOOKKOOK"
+        default: return row
+        }
+    })
+    /// Von hinten sieht man keine Ohr-Innenseiten – wo der Hut sitzt, steht deshalb hier
+    private static func backSprite(_ rows: [String]) -> Sprite {
+        let sprite = Sprite(rows)
+        sprite.earAnchor = (center: 5, row: 0)
+        return sprite
+    }
+
     /// Wassernapf: voll mit Wellen (A/B im Wechsel), halb, leer
     static let waterFullA = Sprite([
         "............",

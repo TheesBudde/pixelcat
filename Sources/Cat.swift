@@ -132,6 +132,8 @@ final class CatBrain {
         case stretching, yawning, grooming, headWashing, backRolling, eating, chasing, batting, watching
         /// Aus dem Wassernapf schlabbern
         case drinking
+        /// Augenpause: von hinten auf dem Fensterbrett sitzen und hinausschauen
+        case gazing
         /// Sitzen und mit langsamem Blinzeln anschauen
         case slowBlinking
         /// Hinlegen, auf den Rücken rollen, mit den Pfoten zappeln, wieder aufstehen
@@ -183,6 +185,8 @@ final class CatBrain {
 
     private enum Goal {
         case wander, bowl, center
+        /// zum Fenster der Augenpause
+        case lookout
         /// Streifzug: aus dem Bild hinaus bzw. zurück aufs Dock
         case exit, comeBack
         /// Zum Nachbarbildschirm hinüberlaufen (true = links)
@@ -248,6 +252,12 @@ final class CatBrain {
     private var visitIsErrand = false
     /// Wie lange sie am Wassernapf trinkt (Sekunden)
     var drinkLength = 25.0
+    /// Augenpause: Mitte des Fensters (Bildschirm-x), solange es dasteht und sie noch nicht hinausgeschaut hat
+    var lookout: CGFloat?
+    /// Wie lange sie hinausschaut (Sekunden)
+    var gazeLength = 25.0
+    /// Meldet, dass sie genug hinausgeschaut hat – dann verschwindet das Fenster
+    var onLookoutDone: (() -> Void)?
     private var isVisiting: Bool { visitTimeLeft > 0 }
     /// Läuft gerade aus dem Bild hinaus oder herein – dann gelten die Bildschirmgrenzen nicht
     private var offscreenAllowed = false
@@ -644,6 +654,11 @@ final class CatBrain {
             enter(.standing, for: .random(in: 0.3...0.8))
         case .eating:
             enter(.grooming, for: .random(in: 3...5))
+        case .gazing:
+            lookout = nil
+            onLookoutDone?()
+            facingRight = Bool.random()
+            enter(.stretching, for: Self.stretchLength) // nach dem Hinausschauen recken
         case .drinking:
             bowl?.food = 0 // fertig getrunken – der Napf wird weggeräumt
             enter(.headWashing, for: .random(in: 3...4)) // Schnäuzchen putzen
@@ -681,7 +696,8 @@ final class CatBrain {
             leaveScreen()
             return
         }
-        let needsDock = (bowl?.food ?? 0) > 0 || reminderPending || ball != nil || awaitingAcknowledgement
+        let needsDock = (bowl?.food ?? 0) > 0 || lookout != nil || reminderPending || ball != nil
+            || awaitingAcknowledgement
         if mode == .focus {
             enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
         } else if perchID != nil, needsDock || !mayClimb {
@@ -690,6 +706,9 @@ final class CatBrain {
             waitAtCenter()
         } else if let bowl, bowl.food > 0 {
             walk(mouthTo: bowl.x, goal: .bowl, speed: 70 * unit)
+        } else if let lookout {
+            goal = .lookout
+            walk(to: lookout - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
         } else if reminderPending {
             reminderPending = false
             goal = .center
@@ -739,6 +758,12 @@ final class CatBrain {
             offscreenAllowed = false
             breakRoutine = true
             enter(.stretching, for: Self.stretchLength)
+        case .lookout:
+            if let lookout, abs(center - lookout) < 4 * scale {
+                enter(.gazing, for: gazeLength)
+            } else {
+                enter(.standing, for: 0.3) // Fenster weg oder nicht ganz angekommen: neu entscheiden
+            }
         case .exit:
             enter(.away, for: .infinity)
         case .intoBasket:
@@ -1697,6 +1722,12 @@ final class CatBrain {
             look.sprite = alternate(Frames.eatA, Frames.eatB, every: 0.25)
         case .drinking:
             look.sprite = alternate(Frames.drinkA, Frames.drinkB, every: 0.22)
+        case .gazing:
+            // Von hinten, mitten auf dem Fensterbrett; der Schwanz zuckt ab und zu
+            look.sprite = animTime.truncatingRemainder(dividingBy: 5) > 4.2 ? Frames.sitBackB : Frames.sitBackA
+            look.facingRight = true
+            look.drawX = (Layout.canvasWidth - look.sprite.width) / 2
+            look.hop = LookoutArt.sillTop
         case .batting:
             look.sprite = Frames.bat
         case .climbingUp:

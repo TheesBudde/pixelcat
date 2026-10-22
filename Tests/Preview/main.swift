@@ -35,5 +35,27 @@ MainActor.assumeIsolated {
                       (Frames.drinkA, Coat.black.colors), (Frames.drinkA, Coat.gray.colors),
                       (Frames.waterFullA, PropColors.colors), (Frames.waterFullB, PropColors.colors),
                       (Frames.waterHalf, PropColors.colors), (Frames.waterEmpty, PropColors.colors)], scale: 6)
+    sheet("fenster", [(LookoutArt.frames[0], LookoutArt.colors), (LookoutArt.frames[5], LookoutArt.colors),
+                      (Frames.sitBackA, Coat.orange.colors), (Frames.sitBackB, Coat.black.colors),
+                      (Frames.sitBackA, Coat.gray.colors)], scale: 6)
+    // Katze auf dem Fensterbrett, wie es auf dem Bildschirm aussieht
+    do {
+        let scale: CGFloat = 6
+        let w = CGFloat(LookoutArt.width) * scale, h = CGFloat(LookoutArt.height + 6) * scale
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(w * 3 + 40), pixelsHigh: Int(h),
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let ctx = NSGraphicsContext(bitmapImageRep: rep)!.cgContext
+        ctx.setFillColor(gray: 0.55, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: w * 3 + 40, height: h))
+        for (i, coat) in [Coat.orange, .black, .gray].enumerated() {
+            let ox = CGFloat(i) * (w + 20) / scale
+            LookoutArt.frames[3].draw(in: ctx, x: ox, y: 0, scale: scale, colors: LookoutArt.colors)
+            let cat = i == 1 ? Frames.sitBackB : Frames.sitBackA
+            cat.draw(in: ctx, x: ox + CGFloat(LookoutArt.width - cat.width) / 2, y: CGFloat(LookoutArt.sillTop),
+                     scale: scale, colors: coat.colors)
+        }
+        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "\(out)/fenster-katze.png"))
+    }
     print("Vorschau in \(out)")
 }

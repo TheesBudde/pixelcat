@@ -168,6 +168,54 @@ MainActor.assumeIsolated {
         check("Streifzug: ist danach wieder draußen", b.isAway, "Phase \(b.phase)")
     }
 
+    print("\nAugenpause")
+    do {
+        let b = freshBrain()
+        var done = false
+        var backPose = false
+        b.lookout = 800
+        b.onLookoutDone = { done = true }
+        b.noticeSomething()
+        let result = run(b, seconds: 50) { _ in
+            if b.phase == .gazing {
+                let look = b.look
+                backPose = (look.sprite === Frames.sitBackA || look.sprite === Frames.sitBackB) && look.hop == LookoutArt.sillTop
+            }
+        }
+        let gazed = result.phases["gazing"] ?? 0
+        check("schaut 25 Sekunden aus dem Fenster", gazed >= 24 && gazed <= 26, "schaute \(gazed) s")
+        let at = result.firstAt["gazing"] ?? 0
+        check("sitzt dabei mittig vor dem Fenster", abs(at - 800) < 4 * b.scale, "Mitte bei \(at), Fenster bei 800")
+        check("meldet danach „fertig“ (Fenster verschwindet)", done && b.lookout == nil)
+        check("Pose: von hinten, auf dem Fensterbrett", backPose)
+    }
+    do {
+        // Im Körbchen: heraus, hinausschauen, zurück in den Korb
+        let b = freshBrain()
+        b.useBasket = true
+        b.locateBasket = { b.basketX = 1200; b.basketFloorY = 27 }
+        b.roaming = true
+        _ = run(b, seconds: 25)
+        b.lookout = 600
+        b.onLookoutDone = { b.endErrandVisit() }
+        b.startErrandVisit(for: 300)
+        let result = run(b, seconds: 120)
+        check("Körbchen: schaut hinaus", (result.phases["gazing"] ?? 0) >= 24, "\(result.phases["gazing"] ?? 0) s")
+        check("Körbchen: liegt danach wieder im Korb", b.isAway, "Phase \(b.phase)")
+    }
+    do {
+        // Gestreichelt mitten im Hinausschauen: danach geht sie wieder hin
+        let b = freshBrain()
+        b.lookout = 700
+        b.noticeSomething()
+        var petted = false
+        let result = run(b, seconds: 80) { _ in
+            if !petted, b.phase == .gazing { petted = true; b.stroke() }
+        }
+        check("nach Streicheln schaut sie weiter hinaus", (result.phases["gazing"] ?? 0) >= 24 && b.lookout == nil,
+              "\(result.phases["gazing"] ?? 0) s")
+    }
+
     print("\nWarteschlange")
     do {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
