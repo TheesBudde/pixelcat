@@ -138,8 +138,10 @@ final class SelfTest {
 
     private func drinking(roaming: Bool) async {
         section(roaming ? "Trinken (Streifzug/Korb)" : "Trinken")
+        let meowsBefore = cat.snapshot().meows
         cat.showErrandNow(.drink)
         await waitUntil("Wassernapf steht", 10) { $0.errand == .drink && $0.bowl?.water == true && $0.bowl?.frame != nil }
+        checkMeow("miaut zum Trinken", before: meowsBefore, expected: true)
         if let bowl = cat.snapshot().bowl, let frame = bowl.frame {
             check("Napf steht an seiner Stelle", abs(frame.midX - bowl.x) < 2, "Fenster \(frame.midX), Napf \(bowl.x)")
         }
@@ -163,8 +165,10 @@ final class SelfTest {
 
     private func lookout() async {
         section("Augenpause")
+        let meowsBefore = cat.snapshot().meows
         cat.showErrandNow(.lookout)
         await waitUntil("Fenster ploppt auf", 10) { $0.lookout?.frame != nil }
+        checkMeow("miaut zur Augenpause", before: meowsBefore, expected: true)
         await waitUntil("Fenster ganz eingeblendet", 5) { ($0.lookout?.alpha ?? 0) >= 0.99 }
         await waitUntil("setzt sich davor und schaut hinaus", 60) { $0.phase == "gazing" }
         await pause(0.5)
@@ -190,8 +194,11 @@ final class SelfTest {
     private func task() async {
         section("Aufgabe")
         cat.selfTestTasks([TaskItem(text: "Selbsttest: Mama anrufen", minutes: 30)])
+        let meowsBefore = cat.snapshot().meows
         cat.showErrandNow(.task)
         await waitUntil("Blase mit der Aufgabe über der Katze", 10) { self.bubbleAboveCat($0) }
+        checkMeow(settings.meowForTasks ? "miaut bei der Aufgabe (eingestellt)" : "miaut nicht bei der Aufgabe (eingestellt)",
+                  before: meowsBefore, expected: settings.meowForTasks)
         await waitUntil("Blase verschwindet von selbst", 45) { $0.bubble == nil }
         await waitUntil("erledigt", 5) { $0.errand == nil }
         await pause(3)
@@ -259,6 +266,16 @@ final class SelfTest {
 
     private func pause(_ seconds: Double) async {
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+    /// Miauen prüfen – nur wenn es gerade erlaubt ist (Töne an, kein Fokus, kein Call)
+    private func checkMeow(_ label: String, before: Int, expected: Bool) {
+        guard cat.soundsAllowed else {
+            log("   – \(label): übersprungen (Miauen gerade aus, Fokus oder Call)")
+            return
+        }
+        let meowed = cat.snapshot().meows > before
+        check(label, meowed == expected, meowed ? "hat miaut" : "still")
     }
 
     private func check(_ label: String, _ ok: Bool, _ detail: String = "") {

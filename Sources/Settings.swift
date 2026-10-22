@@ -55,6 +55,8 @@ final class AppSettings: ObservableObject {
     // Ton & Rücksicht
     @Published var sounds: Bool { didSet { changed() } }
     @Published var purring: Bool { didSet { changed() } }
+    /// Auch bei Aufgaben-Erinnerungen miauen
+    @Published var meowForTasks: Bool { didSet { changed() } }
     @Published var hideDuringCalls: Bool { didSet { changed() } }
     @Published var respectFocus: Bool { didSet { changed() } }
     // Allgemein
@@ -89,7 +91,7 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
             "taskReminders": false, "tasksDuringCalls": false,
-            "sounds": true, "purring": true, "hideDuringCalls": true, "respectFocus": true,
+            "sounds": true, "purring": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
         coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
@@ -132,6 +134,7 @@ final class AppSettings: ObservableObject {
         tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
         sounds = defaults.bool(forKey: "sounds")
         purring = defaults.bool(forKey: "purring")
+        meowForTasks = defaults.bool(forKey: "meowForTasks")
         hideDuringCalls = defaults.bool(forKey: "hideDuringCalls")
         respectFocus = defaults.bool(forKey: "respectFocus")
         language = Language(rawValue: defaults.string(forKey: "language") ?? "") ?? .system
@@ -155,7 +158,7 @@ final class AppSettings: ObservableObject {
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "tasksDuringCalls": tasksDuringCalls,
-            "sounds": sounds, "purring": purring, "hideDuringCalls": hideDuringCalls,
+            "sounds": sounds, "purring": purring, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue,
         ]
         for (key, value) in values { defaults.set(value, forKey: key) }
@@ -409,7 +412,11 @@ struct SettingsView: View {
 
     private var soundSection: some View {
         Section(t("Töne", "Sounds")) {
-            Toggle(t("Miauen (Pausen, Timer, Feierabend)", "Meow (breaks, timer, end of the workday)"), isOn: $settings.sounds)
+            Toggle(t("Miauen", "Meow"), isOn: $settings.sounds)
+            hint(t("Leise, echte Katzenlaute: wenn die Pomodoro-Pause beginnt und endet, wenn der Timer abläuft, zur Pausen-Erinnerung, zum Trinken, zur Augenpause und zum Feierabend. Im Videocall und bei macOS-Fokus nie.",
+                   "Soft, real cat sounds: when the Pomodoro break starts and ends, when the timer runs out, for the break reminder, drinking, the eye break and the end of the workday. Never during video calls or a macOS Focus."))
+            Toggle(t("Auch bei Aufgaben miauen", "Also meow for tasks"), isOn: $settings.meowForTasks)
+                .disabled(!settings.sounds)
             Toggle(t("Schnurren beim Streicheln", "Purr while petting"), isOn: $settings.purring)
         }
     }

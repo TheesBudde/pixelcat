@@ -23,8 +23,9 @@ Schwanzspitze.
   sich, miaut und bummelt dort 5 Minuten herum. Für die kleinen Erinnerungen (Trinken, Augenpause, Aufgaben,
   Feierabend) kommt sie ebenfalls herein. Danach geht sie wieder. Ohne Streifzug ist sie
   wie gewohnt die ganze Zeit da.
-- **Miauen:** Leise, echte Katzenlaute zu Beginn der Pomodoro-Pause, zurück an die Arbeit und
-  bei der Pausen-Erinnerung, außerdem zum Feierabend. In den Einstellungen unter „Töne“ ganz abschaltbar.
+- **Miauen:** Leise, echte Katzenlaute zu Beginn und am Ende der Pomodoro-Pause, wenn der Timer abläuft, bei der
+  Pausen-Erinnerung, zum Trinken, zur Augenpause und zum Feierabend – bei Aufgaben nur, wenn eingestellt. Im
+  Videocall und bei macOS-Fokus nie. In den Einstellungen unter „Töne“ ganz abschaltbar.
 - **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
   oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
   Bildschirmmitte, streckt sich, miaut und sucht dort dezent Aufmerksamkeit – strecken, dich
@@ -129,7 +130,8 @@ Das Menü enthält nur, was man oft braucht:
 - **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
 - **Outfits:** Schlafmütze ab Schlafenszeit, Morgen-Outfit bis zu einer Uhrzeit
 - **Aufgaben:** Knopf zum Aufgabenfenster (dort: an/aus, auch während Videocalls, Liste mit Abstand je Aufgabe)
-- **Töne & Rücksicht:** Miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken, Fokus berücksichtigen
+- **Töne & Rücksicht:** Miauen, auch bei Aufgaben miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken,
+  Fokus berücksichtigen
 - **Sprache:** wie macOS, Deutsch, English
 
 Startest du die App erneut, während sie ausgeblendet ist, kommt die Katze zurück.

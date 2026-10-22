@@ -323,6 +323,7 @@ final class CatController {
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
         taskList = settings.taskItems
         tasksDuringCalls = settings.tasksDuringCalls
+        meowForTasks = settings.meowForTasks
         tasksEnabled = settings.taskReminders
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
@@ -343,7 +344,18 @@ final class CatController {
     var isOutAndAbout: Bool { brain.isOutAndAbout }
     /// Die Katze schläft fest (Pomodoro-Fokus oder laufender Timer).
     var isInFocus: Bool { brain.mode == .focus }
-    private var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil }
+    /// Miauen erlaubt: eingeschaltet, kein macOS-Fokus, kein Videocall
+    var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil }
+    /// Auch bei Aufgaben-Erinnerungen miauen
+    var meowForTasks = false
+    /// Wie oft sie schon miaut hat (für den Selbsttest)
+    private(set) var meowCount = 0
+
+    private func meow(_ kind: Meow.Kind) {
+        guard soundsAllowed else { return }
+        Meow.play(kind)
+        meowCount += 1
+    }
 
     /// Beim Start im Streifzug gleich draußen sein, statt erst hinauszulaufen.
     func startRoamingOutside() {
@@ -376,7 +388,7 @@ final class CatController {
         brain.onBreakStretch = { [weak self] in
             guard let self, let meow = pendingMeow else { return }
             pendingMeow = nil
-            if soundsAllowed, Date().timeIntervalSince(meow.since) < 120 { Meow.play(meow.kind) }
+            if Date().timeIntervalSince(meow.since) < 120 { self.meow(meow.kind) }
         }
         // Gestreichelt oder angeklickt: abgelaufener Timer ist erledigt
         brain.onAcknowledged = { [weak self] in
@@ -918,7 +930,7 @@ final class CatController {
             setPlaying(false)
             removeBowl()
             brain.mode = .focus
-            if soundsAllowed { Meow.play(.backToWork) }
+            meow(.backToWork)
         }
         self.pomodoro = pomodoro
     }
@@ -1090,6 +1102,7 @@ final class CatController {
         var scale: CGFloat
         var idleSeconds: Double
         var queued: [ErrandKind]
+        var meows: Int
     }
 
     func snapshot() -> Snapshot {
@@ -1117,7 +1130,7 @@ final class CatController {
             lookout: lookoutWindow.map { (lookoutX, $0.panel.isVisible ? $0.panel.frame : nil,
                                          $0.panel.alphaValue, catAbove) },
             bubble: bubble.map { ($0.visibleFrame, $0.isPopping) },
-            hat: hat, scale: scale, idleSeconds: Self.secondsSinceInput, queued: errands.queuedKinds)
+            hat: hat, scale: scale, idleSeconds: Self.secondsSinceInput, queued: errands.queuedKinds, meows: meowCount)
     }
 
     /// Selbsttest: Aufgaben vorübergehend setzen (die Einstellungen bleiben unberührt)
@@ -1201,8 +1214,10 @@ final class CatController {
         case .drink:
             placeBowl(water: true)
             showErrandBubble(L10n.s("Trinken", "Drink"), for: 4 * 60)
+            meow(.reminder)
         case .lookout:
             placeLookout()
+            meow(.reminder)
         case .quittingTime:
             // Mit Schlafmütze in die Mitte, strecken und „Feierabend“ denken
             showErrandBubble(L10n.s("Feierabend", "Off work"), for: 60)
@@ -1215,6 +1230,7 @@ final class CatController {
             // (im Videocall bleibt sie versteckt, die Blase steht dann über dem Korb im Dock)
             if hiddenBecause != nil, basketInDock { locateBasket() }
             showErrandBubble(errand.text ?? "", for: 35)
+            if meowForTasks { meow(.reminder) } // (im Videocall nie – dann ist sie still)
             if brain.isOutAndAbout { brain.startErrandVisit(for: 5 * 60) }
             return
         }
