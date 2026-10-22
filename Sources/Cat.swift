@@ -315,6 +315,8 @@ final class CatBrain {
 
     private var stalkWiggle = 0.0
     private var pounceFollowUp = false
+    /// Auf dem Weg zum Körbchen: wann sie zuletzt nachgesehen hat, wo es steht
+    private var basketCheck = 0.0
 
     /// Körbchen-Modus: Statt hinauszulaufen, hüpft sie ins Körbchen im Dock (Bildschirm-x der Körbchenmitte).
     var basketX: CGFloat?
@@ -380,7 +382,20 @@ final class CatBrain {
         }
         lastDockY = dockY
         // Auf dem Weg zum Körbchen kam das Vollbild: dann seitlich hinaus wie im Streifzug
-        if case .intoBasket = goal, phase == .walking, !useBasket || basketX == nil { leaveScreen() }
+        if case .intoBasket = goal, phase == .walking {
+            if !useBasket || basketX == nil {
+                leaveScreen()
+            } else {
+                // Unterwegs jede Sekunde nachsehen – wird das Körbchen im Dock verschoben, läuft sie zur neuen Stelle
+                basketCheck += dt
+                if basketCheck >= 1 {
+                    basketCheck = 0
+                    locateBasket?()
+                    if let basketX { targetX = clampX(basketX - CGFloat(Layout.canvasWidth) / 2 * scale) }
+                    facingRight = targetX >= x
+                }
+            }
+        }
         if !isAirborne {
             if let perch = currentPerch {
                 y = perch.y
@@ -889,6 +904,7 @@ final class CatBrain {
         if useBasket, case .intoBasket = goal, phase == .walking { return }
         if basketReady(), let basketX {
             goal = .intoBasket
+            basketCheck = 0
             walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
             return
         }
