@@ -9,12 +9,15 @@ final class BasketTileView: NSView {
     var coat: Coat = .black { didSet { needsDisplay = true } }
     var breathIn = false { didSet { if breathIn != oldValue { needsDisplay = true } } }
     var tailUp = false { didSet { if tailUp != oldValue { needsDisplay = true } } }
+    /// Nur zum Nachmessen: gar nichts zeichnen
+    var blank = false { didSet { needsDisplay = true } }
 
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
+        guard !blank else { return }
         ctx.setShouldAntialias(false)
         let art = BasketArt.shared
         let scale = art.scale(forTile: min(bounds.width, bounds.height))
@@ -190,7 +193,12 @@ enum DockLocator {
     }
 
     static func basketTile(appName: String, screen: NSScreen) -> Tile? {
-        exactTile(appName: appName) ?? estimatedTile(screen: screen)
+        guard let slot = exactTile(appName: appName) ?? estimatedTile(screen: screen) else { return nil }
+        // Am Bildschirmfoto nachgemessen (Dock-Größe 44): Das Dock zeichnet das Symbol etwas kleiner als
+        // seinen Platz (36,8 statt 38,5 pt), knapp über der Mitte des Dock-Streifens
+        let size = slot.size * 0.955
+        let dockHeight = screen.visibleFrame.minY - screen.frame.minY
+        return Tile(center: CGPoint(x: slot.center.x, y: screen.frame.minY + dockHeight / 2 + 0.054 * size), size: size)
     }
 
     /// Für die Fehlersuche: was die Bedienungshilfen und die Schätzung sagen
@@ -222,10 +230,9 @@ enum DockLocator {
                 if let sizeValue { AXValueGetValue(sizeValue as! AXValue, .cgSize, &size) }
                 // Gerade erst aufgetaucht (Symbol wächst noch)? Dann lieber schätzen
                 guard size.width > 16 else { return nil }
-                // Bedienungshilfen zählen y von oben
+                // Bedienungshilfen zählen y von oben; der Rahmen ist so breit wie der Platz des Symbols
                 let bottom = top - (position.y + size.height)
-                // Der Rahmen reicht unten 1 pt und oben ein gutes Stück über das Symbol hinaus (nachgemessen)
-                return Tile(center: CGPoint(x: position.x + size.width / 2, y: bottom + 1 + size.width / 2),
+                return Tile(center: CGPoint(x: position.x + size.width / 2, y: bottom + size.height / 2),
                             size: size.width)
             }
         }
@@ -266,19 +273,18 @@ enum DockLocator {
 
         let pinnedWidth = pinned.reduce(0) { $0 + width($1) }
         let appCount = 1 + pinnedWidth + CGFloat(running)              // Finder + angeheftete + laufende
-        // Wie viele Symbolbreiten links von Pixelcat liegen
-        // Laufende Apps, die vor Pixelcat gestartet wurden, stehen links davon
+        // Wie viele Symbolbreiten links von Pixelcat liegen.
+        // Laufende Apps stehen in Startreihenfolge hinter den angehefteten.
         let myLaunch = NSRunningApplication.current.launchDate ?? .distantFuture
-        let startedEarlier = CGFloat(runningApps.filter {
-            $0.processIdentifier != NSRunningApplication.current.processIdentifier
-                && ($0.launchDate ?? .distantPast) < myLaunch
-        }.count)
+        let otherApps = runningApps.filter { $0.processIdentifier != NSRunningApplication.current.processIdentifier }
+        let startedEarlier = CGFloat(otherApps.filter { ($0.launchDate ?? .distantPast) < myLaunch }.count)
         let before: CGFloat
         if let index = pinned.firstIndex(where: { bundleID($0) == Bundle.main.bundleIdentifier }) {
+            // Steht Pixelcat als letzte angeheftete App gespeichert, ist es meist ganz nach rechts gezogen oder mit
+            // „Im Dock behalten“ dort geblieben – dann hinter den laufenden Apps. (Nur nach einem Neustart des Docks
+            // stünde es davor; die Bedienungshilfen kennen die genaue Stelle.)
             before = 1 + pinned[..<index].reduce(0) { $0 + width($1) }
-                // Mit „Im Dock behalten“ angeheftet, bleibt das Symbol, wo es war – hinter den laufenden Apps,
-                // die schon da waren. Gespeichert wird es trotzdem als letzte angeheftete App.
-                + (index == pinned.count - 1 ? startedEarlier : 0)
+                + (index == pinned.count - 1 ? CGFloat(otherApps.count) : 0)
         } else {
             before = 1 + pinnedWidth + startedEarlier
         }
@@ -290,10 +296,7 @@ enum DockLocator {
         let size = min(tile, screen.frame.width * 0.98 / slots)
         let left = screen.frame.midX - slots * size / 2
         let x = left + (pad + before + 0.5) * size
-        // Die Symbole sitzen knapp über der Mitte des Dock-Streifens (am Bildschirmfoto nachgemessen)
-        let dockHeight = screen.visibleFrame.minY - screen.frame.minY
-        return Tile(center: CGPoint(x: min(max(x, screen.frame.minX + size), screen.frame.maxX - size),
-                                    y: screen.frame.minY + dockHeight / 2 + 0.045 * size),
+        return Tile(center: CGPoint(x: min(max(x, screen.frame.minX + size), screen.frame.maxX - size), y: 0),
                     size: size)
     }
 }

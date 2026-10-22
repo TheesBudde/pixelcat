@@ -853,7 +853,7 @@ final class CatController {
 
     /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
     private func updateBasketTile(dt: Double) {
-        guard basketInDock else { return }
+        guard basketInDock, !calibrating else { return }
         let inside = brain.isInBasketPicture
         // Frisch hineingelegt: ausgeatmet und Schwanz unten anfangen – wie das letzte Bild der Katze davor
         tileClock = inside && !basketTile.catInside ? 0 : tileClock + dt
@@ -867,6 +867,74 @@ final class CatController {
             basketTile.coat = coat
             NSApp.dockTile.display()
         }
+    }
+
+    // MARK: Nachmessen (Start mit PIXELCAT_CALIBRATE=1)
+
+    private var calibrating = false
+    private var calibrationPanel: NSPanel?
+
+    /// Zum Nachmessen, ob die Animation genau auf dem Dock-Symbol liegt: erst zeigt nur das Symbol die schlafende
+    /// Katze (A), dann ist das Symbol leer und darüber liegt das letzte Bild der Animation – genau so berechnet
+    /// wie beim Hineinlegen (B). Zwei Bildschirmfotos zeigen jede Abweichung.
+    func runCalibration() {
+        calibrating = true
+        hide()
+        basketTile.blank = false
+        basketTile.catInside = true
+        basketTile.breathIn = false
+        basketTile.tailUp = false
+        basketTile.coat = coat
+        NSApp.dockTile.display()
+        print("Kalibrierung A: Symbol mit Katze"); fflush(stdout)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            MainActor.assumeIsolated { self?.calibrationOverlay() }
+        }
+    }
+
+    private func calibrationOverlay() {
+        locateBasket()
+        guard let basketX = brain.basketX, let floor = brain.basketFloorY else {
+            print("Kalibrierung: Korb nicht gefunden"); fflush(stdout)
+            return
+        }
+        let drawScale = basketCatScale
+        let size = NSSize(width: CGFloat(Layout.canvasWidth) * drawScale, height: CGFloat(Layout.canvasHeight) * drawScale)
+        // wie in updateCatWindow: Fenster auf ganze Bildschirmpixel, Rand relativ dazu
+        let origin = NSPoint(x: pixelRound(basketX - CGFloat(Layout.canvasWidth) / 2 * drawScale), y: pixelRound(floor))
+        let art = BasketArt.shared
+        let catView = CatView(frame: NSRect(origin: .zero, size: size))
+        catView.scale = drawScale
+        catView.coat = coat
+        catView.look = CatLook(sprite: Frames.sleepA, facingRight: true)
+        catView.basketFront = CGPoint(x: (basketX - CGFloat(art.width) / 2 * drawScale - origin.x) / drawScale,
+                                      y: (floor - CGFloat(art.catY) * drawScale - origin.y) / drawScale)
+        let panel = makeOverlayPanel()
+        panel.level = Self.aboveDockLevel
+        panel.ignoresMouseEvents = true
+        panel.contentView = catView
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.orderFrontRegardless()
+        calibrationPanel = panel
+        basketTile.blank = true
+        NSApp.dockTile.display()
+        let reserved = (dockScreen.map { $0.visibleFrame.minY - $0.frame.minY }) ?? 0
+        print("Kalibrierung B: Schätzung Mitte x=\(basketX) y=\(floor - BasketArt.shared.catBottom(fromCenterOfTile: dockTileSize)) "
+              + "Kachel=\(dockTileSize) Dockhöhe=\(reserved)")
+        fflush(stdout)
+        // C: beides weg – der Hintergrund allein
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.calibrationPanel?.orderOut(nil)
+                print("Kalibrierung C: nur Hintergrund"); fflush(stdout)
+            }
+        }
+    }
+
+    /// Auf ganze Bildschirmpixel runden (auf Retina-Bildschirmen halbe Punkte)
+    private func pixelRound(_ value: CGFloat) -> CGFloat {
+        let factor = (screen ?? primaryScreen)?.backingScaleFactor ?? 1
+        return (value * factor).rounded() / factor
     }
 
     // MARK: Gedankenblase
@@ -1019,7 +1087,7 @@ final class CatController {
         let level: NSWindow.Level = brain.isAboveDock ? Self.aboveDockLevel : .floating
         if panel.level != level { panel.level = level }
         let half = CGFloat(Layout.canvasWidth) / 2
-        let origin = NSPoint(x: (brain.x + half * scale - half * drawScale).rounded(), y: brain.y.rounded())
+        let origin = NSPoint(x: pixelRound(brain.x + half * scale - half * drawScale), y: pixelRound(brain.y))
         panel.setFrameOrigin(origin)
         // Im Körbchen: dessen vorderen Rand vor die Katze legen – genau wie im Dock-Symbol
         var front: CGPoint?

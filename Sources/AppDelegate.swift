@@ -55,7 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.toolTip = "Pixelcat"
         buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
-        cat.show()
+        if ProcessInfo.processInfo.environment["PIXELCAT_CALIBRATE"] != nil {
+            cat.runCalibration()
+        } else {
+            cat.show()
+        }
     }
 
     /// Wird die App erneut geöffnet (z. B. Doppelklick im Finder), kommt die Katze zurück.
