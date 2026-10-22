@@ -832,7 +832,6 @@ final class CatController {
         // (nicht bei automatisch ausgeblendetem Dock oder im Vollbild)
         let dockHeight = dock.visibleFrame.minY - dock.frame.minY
         brain.useBasket = edge == .bottom && dockHeight > 20 && screen?.displayID == dock.displayID && !isFullscreen
-        if Self.debug { locateBasket() }
     }
 
     /// Genau jetzt nachsehen, wo das Körbchen im Dock sitzt und wie groß das Symbol ist.
@@ -846,14 +845,7 @@ final class CatController {
             // Genau dort, wo die Katze im Dock-Symbol liegt
             brain.basketFloorY = tile.center.y + BasketArt.shared.catBottom(fromCenterOfTile: tile.size)
         }
-        if Self.debug {
-            print("Korb:", DockLocator.debugDescription(appName: name, screen: dock),
-                  "boden=\(brain.basketFloorY ?? -1) kachel=\(dockTileSize) phase=\(brain.phase) "
-                  + "katze=\(brain.x + CGFloat(Layout.canvasWidth) / 2 * scale) \(Date())")
-            fflush(stdout)
-        }
     }
-    private static let debug = ProcessInfo.processInfo.environment["PIXELCAT_DEBUG"] != nil
 
     /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
     private func updateBasketTile(dt: Double) {
@@ -1101,9 +1093,6 @@ final class CatController {
                             y: (floor - CGFloat(art.catY) * drawScale - origin.y) / drawScale)
         }
         if view.basketFront != front { view.basketFront = front }
-        if Self.debug, brain.isAboveDock {
-            print("Katze: \(brain.phase) fenster=\(panel.frame) mitte=\(panel.frame.midX) korbX=\(brain.basketX ?? -1)")
-        }
         let look = brain.look
         if look != view.look { view.look = look }
 

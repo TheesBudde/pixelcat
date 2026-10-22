@@ -201,12 +201,6 @@ enum DockLocator {
         return Tile(center: CGPoint(x: slot.center.x, y: screen.frame.minY + dockHeight / 2 + 0.054 * size), size: size)
     }
 
-    /// Für die Fehlersuche: was die Bedienungshilfen und die Schätzung sagen
-    static func debugDescription(appName: String, screen: NSScreen) -> String {
-        "trusted=\(isTrusted) ax=\(exactTile(appName: appName).map { "\($0)" } ?? "nil") "
-            + "schätzung=\(estimatedTile(screen: screen).map { "\($0)" } ?? "nil")"
-    }
-
     /// Über die Bedienungshilfen: das Dock-Element mit unserem Namen suchen. Sein Rahmen ist so breit wie
     /// das Symbol und reicht oben ein Stück darüber hinaus – das Symbol sitzt unten darin.
     private static func exactTile(appName: String) -> Tile? {
