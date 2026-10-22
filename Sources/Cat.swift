@@ -369,6 +369,8 @@ final class CatBrain {
             beginGroundChange(from: last)
         }
         lastDockY = dockY
+        // Auf dem Weg zum Körbchen kam das Vollbild: dann seitlich hinaus wie im Streifzug
+        if case .intoBasket = goal, phase == .walking, !useBasket || basketX == nil { leaveScreen() }
         if !isAirborne {
             if let perch = currentPerch {
                 y = perch.y
@@ -671,6 +673,8 @@ final class CatBrain {
         case .exit:
             enter(.away, for: .infinity)
         case .intoBasket:
+            // Inzwischen Vollbild (kein Dock, kein Körbchen)? Dann nicht ins Leere steigen, sondern hinaus
+            guard useBasket, basketX != nil else { return leaveScreen() }
             // ins Körbchen steigen und es sich gemütlich machen
             enter(.enteringBasket, for: 3.3)
         case .otherScreen(let left):
