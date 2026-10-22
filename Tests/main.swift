@@ -216,6 +216,19 @@ MainActor.assumeIsolated {
               "\(result.phases["gazing"] ?? 0) s")
     }
 
+    print("\nPausen nach Aktivität")
+    do {
+        var tracker = ActivityTracker()
+        for _ in 0..<(30 * 30) { tracker.update(dt: 2, idle: 3) }          // 30 Minuten tippen
+        check("zählt aktive Zeit", abs(tracker.activeSeconds - 1800) < 1, "\(tracker.activeSeconds)")
+        for _ in 0..<60 { tracker.update(dt: 2, idle: 30) }                 // 2 Minuten lesen
+        check("kurzes Lesen zählt mit", abs(tracker.activeSeconds - 1920) < 1, "\(tracker.activeSeconds)")
+        for _ in 0..<90 { tracker.update(dt: 2, idle: 120) }                // länger nichts, aber keine 5 Minuten
+        check("ab 1 Minute Leerlauf zählt nichts mehr dazu", abs(tracker.activeSeconds - 1920) < 1, "\(tracker.activeSeconds)")
+        tracker.update(dt: 2, idle: 301)                                    // 5 Minuten weg
+        check("5 Minuten weg zählt als Pause (von vorne)", tracker.activeSeconds == 0, "\(tracker.activeSeconds)")
+    }
+
     print("\nWarteschlange")
     do {
         let start = Date(timeIntervalSince1970: 1_800_000_000)

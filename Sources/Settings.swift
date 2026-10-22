@@ -263,10 +263,24 @@ struct SettingsView: View {
     private var reminderSection: some View {
         Section(t("Pausen", "Breaks")) {
             Toggle(t("Pausen-Erinnerung", "Break reminder"), isOn: $settings.breakReminders)
-            minutesSlider(t("Frühestens nach", "No sooner than"), value: $settings.reminderMin, range: 10...180, step: 5)
-            minutesSlider(t("Spätestens nach", "No later than"), value: $settings.reminderMax, range: 10...180, step: 5)
-            hint(t("Der genaue Zeitpunkt ist zufällig dazwischen – das wirkt natürlicher.",
-                   "The exact moment is random in between – it feels more natural."))
+            LabeledContent(t("Erinnern", "Remind")) {
+                Picker("", selection: $settings.breakByActivity) {
+                    Text(t("In festen Abständen", "At set intervals")).tag(false)
+                    Text(t("Nach Aktivität", "By activity")).tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            if settings.breakByActivity {
+                minutesSlider(t("Nach Arbeit am Stück", "After working for"), value: $settings.activityMinutes,
+                              range: 15...120, step: 5)
+                hint(t("Zählt nur, solange du tippst, klickst oder die Maus bewegst. Bist du 5 Minuten weg, war das schon eine Pause – dann fängt es von vorne an.",
+                       "Only counts while you type, click or move the mouse. If you step away for 5 minutes, that already was a break – the count starts over."))
+            } else {
+                minutesSlider(t("Frühestens nach", "No sooner than"), value: $settings.reminderMin, range: 10...180, step: 5)
+                minutesSlider(t("Spätestens nach", "No later than"), value: $settings.reminderMax, range: 10...180, step: 5)
+                hint(t("Der genaue Zeitpunkt ist zufällig dazwischen – das wirkt natürlicher.",
+                       "The exact moment is random in between – it feels more natural."))
+            }
             minutesSlider(t("Länge einer Pause", "Length of a break"), value: $settings.breakLength, range: 1...30, step: 1)
             hint(t("Gilt für Pausen-Erinnerungen und für die Besuche im Streifzug.",
                    "Used for break reminders and for visits while roaming."))

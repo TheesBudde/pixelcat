@@ -249,6 +249,12 @@ final class CatController {
     var reminderMinutes: ClosedRange<Double> = 45...55 {
         didSet { if reminderMinutes != oldValue { scheduleReminder() } }
     }
+    /// Pausen-Erinnerung nach echter Aktivität statt in festen Abständen
+    var breakByActivity = false {
+        didSet { if breakByActivity != oldValue { scheduleReminder() } }
+    }
+    /// Nach so vielen Minuten Arbeit am Stück
+    var activityMinutes = 50
     var breakLength: TimeInterval {
         get { brain.breakVisitLength }
         set { brain.breakVisitLength = newValue }
@@ -289,6 +295,8 @@ final class CatController {
         focusMinutes = settings.pomodoroFocus
         breakMinutes = settings.pomodoroBreak
         reminderMinutes = Double(settings.reminderMin)...Double(settings.reminderMax)
+        activityMinutes = settings.activityMinutes
+        breakByActivity = settings.breakByActivity
         breakLength = TimeInterval(settings.breakLength * 60)
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
@@ -638,9 +646,45 @@ final class CatController {
     }
 
     private func scheduleReminder() {
-        nextReminder = breakReminders
+        nextReminder = breakReminders && !breakByActivity
             ? Date().addingTimeInterval(.random(in: reminderMinutes) * 60)
             : .distantFuture
+        activity.reset()
+    }
+
+    /// Wie lange am Stück gearbeitet wird (für die Pausen-Erinnerung nach Aktivität)
+    private var activity = ActivityTracker()
+    private var lastActivityCheck = CACurrentMediaTime()
+
+    /// Sekunden seit der letzten Eingabe (Tastatur, Maus, Trackpad) – ohne Sonderrechte, ohne Tasten mitzulesen
+    private static var secondsSinceInput: Double {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
+
+    /// Nach Aktivität: Ist genug am Stück gearbeitet worden, ist es Zeit für eine Pause.
+    private func isActivityBreakDue() -> Bool {
+        let now = CACurrentMediaTime()
+        let dt = now - lastActivityCheck
+        lastActivityCheck = now
+        guard breakReminders, breakByActivity, pomodoro == nil else {
+            activity.reset()
+            return false
+        }
+        activity.update(dt: dt, idle: Self.secondsSinceInput)
+        return activity.activeSeconds >= Double(activityMinutes) * 60
+    }
+
+    /// Pausen-Erinnerung: zur Mitte, strecken, Blase „Pause“ – während eines Timers als Pause im Timer.
+    private func remindToTakeBreak(now: Date) {
+        if let timer {
+            // Wartet sie schon auf Streicheln, ist ohnehin Pause
+            if !timer.finished { takeBreakDuringTimer(now: now) }
+        } else {
+            pendingMeow = (.reminder, now)
+            brain.remindToTakeBreak()
+            showBubble(until: now.addingTimeInterval(breakLength))
+        }
+        scheduleReminder()
     }
 
     // MARK: Sensoren
@@ -1208,20 +1252,13 @@ final class CatController {
             updateCallHiding(now: date)
             updateFocus()
             updateOutfit()
+            if isActivityBreakDue() { remindToTakeBreak(now: date) }
         }
         updatePomodoro(now: date)
         updateTimer(now: date)
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
-            if let timer {
-                // Wartet sie schon auf Streicheln, ist ohnehin Pause
-                if !timer.finished { takeBreakDuringTimer(now: date) }
-            } else {
-                pendingMeow = (.reminder, date)
-                brain.remindToTakeBreak()
-                showBubble(until: date.addingTimeInterval(breakLength))
-            }
-            scheduleReminder()
+            remindToTakeBreak(now: date)
         }
 
         updateErrands(now: date)
