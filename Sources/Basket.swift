@@ -224,7 +224,9 @@ enum DockLocator {
                 guard size.width > 16 else { return nil }
                 // Bedienungshilfen zählen y von oben
                 let bottom = top - (position.y + size.height)
-                return Tile(center: CGPoint(x: position.x + size.width / 2, y: bottom + size.width / 2), size: size.width)
+                // Der Rahmen reicht unten 1 pt und oben ein gutes Stück über das Symbol hinaus (nachgemessen)
+                return Tile(center: CGPoint(x: position.x + size.width / 2, y: bottom + 1 + size.width / 2),
+                            size: size.width)
             }
         }
         return nil
@@ -288,9 +290,10 @@ enum DockLocator {
         let size = min(tile, screen.frame.width * 0.98 / slots)
         let left = screen.frame.midX - slots * size / 2
         let x = left + (pad + before + 0.5) * size
+        // Die Symbole sitzen knapp über der Mitte des Dock-Streifens (am Bildschirmfoto nachgemessen)
         let dockHeight = screen.visibleFrame.minY - screen.frame.minY
         return Tile(center: CGPoint(x: min(max(x, screen.frame.minX + size), screen.frame.maxX - size),
-                                    y: screen.frame.minY + dockHeight / 2),
+                                    y: screen.frame.minY + dockHeight / 2 + 0.045 * size),
                     size: size)
     }
 }
