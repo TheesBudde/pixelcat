@@ -328,6 +328,11 @@ final class CatBrain {
     var basketFloorY: CGFloat?
     /// Steht gerade vor dem Dock (beim Hinein- und Heraussteigen)
     var isAboveDock: Bool { phase == .enteringBasket || phase == .leavingBasket }
+    /// Liegt sie (auch) im Dock-Symbol? Schon in den letzten Augenblicken des Hineinlegens und noch beim
+    /// Aufwachen – dann liegt das gleiche Bild genau darüber, und beim Wechsel blitzt nichts.
+    var isInBasketPicture: Bool {
+        isAway || (phase == .enteringBasket && phaseTime >= 2.85) || (phase == .leavingBasket && phaseTime < 0.3)
+    }
     /// Wie weit sie auf Körbchengröße geschrumpft ist (0 = normal, 1 = so klein wie im Dock-Symbol)
     var basketShrink: CGFloat {
         switch phase {

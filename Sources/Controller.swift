@@ -854,8 +854,9 @@ final class CatController {
     /// Dock-Symbol: leeres Körbchen – oder die Katze schläft darin (atmet, hebt ab und zu den Schwanz).
     private func updateBasketTile(dt: Double) {
         guard basketInDock else { return }
-        tileClock += dt
-        let inside = brain.isAway
+        let inside = brain.isInBasketPicture
+        // Frisch hineingelegt: ausgeatmet und Schwanz unten anfangen – wie das letzte Bild der Katze davor
+        tileClock = inside && !basketTile.catInside ? 0 : tileClock + dt
         let breathIn = Int(tileClock / 1.1) % 2 == 1
         let tailUp = tileClock.truncatingRemainder(dividingBy: 6.5) > 5.4
         if basketTile.catInside != inside || basketTile.breathIn != breathIn || basketTile.tailUp != tailUp
