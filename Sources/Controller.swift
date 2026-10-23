@@ -162,6 +162,9 @@ final class CatController {
     private var ball: Ball?
     /// Vogel, während niemand am Rechner ist
     private var bird: Bird?
+    /// Sprung aus dem Einrichtungsfenster aufs Dock
+    private var dropWindow: PropWindow?
+    private var dropTimer: Timer?
     private var birdWindow: PropWindow?
     /// Für diese Abwesenheit kam der Vogel schon (erst nach neuer Eingabe wieder)
     private var birdDoneForIdle = false
@@ -439,6 +442,57 @@ final class CatController {
         lookoutWindow?.panel.orderOut(nil)
         ballWindow?.panel.orderOut(nil)
         birdWindow?.panel.orderOut(nil)
+    }
+
+    /// Nach der Einrichtung: Die Katze springt aus dem Fenster (`rect`: dort steht sie, in Bildschirmpunkten),
+    /// fällt aufs Dock und schrumpft dabei auf ihre Größe. Unten übernimmt die richtige Katze, dann `then`.
+    func dropIn(from rect: NSRect, then: @escaping () -> Void) {
+        updateBounds()
+        brain.dockY = ground
+        let sprite = Frames.stand
+        let startScale = max(1, rect.width / CGFloat(sprite.width))
+        let window = PropWindow(columns: sprite.width, rows: sprite.height, scale: startScale)
+        window.view.colors = coat.colors
+        window.view.sprite = sprite
+        let centerX = rect.midX
+        let startBottom = rect.minY
+        let target = scale
+        var bottom = startBottom
+        var vy: CGFloat = 320 // erst ein kleiner Hopser nach oben
+        var last = CACurrentMediaTime()
+        window.place(centerX: centerX, bottom: bottom)
+        window.panel.orderFrontRegardless()
+        dropWindow?.panel.orderOut(nil)
+        dropTimer?.invalidate()
+        dropWindow = window
+        dropTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self else {
+                    timer.invalidate()
+                    return
+                }
+                let now = CACurrentMediaTime()
+                let dt = CGFloat(min(0.05, now - last))
+                last = now
+                vy -= 2400 * dt
+                bottom += vy * dt
+                // Je tiefer sie fällt, desto kleiner wird sie – unten hat sie genau ihre Größe
+                let progress = min(1, max(0, (startBottom - bottom) / max(1, startBottom - self.ground)))
+                window.scale = startScale + (target - startScale) * progress
+                window.view.sprite = vy > 0 ? Frames.stand : Frames.walkA
+                if bottom <= self.ground {
+                    timer.invalidate()
+                    self.dropTimer = nil
+                    window.panel.orderOut(nil)
+                    self.dropWindow = nil
+                    self.brain.arrive(centerX: centerX)
+                    if self.isVisible { self.tick() } else { self.show() }
+                    then()
+                    return
+                }
+                window.place(centerX: centerX, bottom: bottom)
+            }
+        }
     }
 
     // MARK: Menüaktionen

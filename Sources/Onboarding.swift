@@ -11,6 +11,10 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     private var coatWatch: AnyCancellable?
     /// Fenster zu: Jetzt darf die Katze aufs Dock
     var onClose: (() -> Void)?
+    /// Mit „Fertig“: Die Katze springt aus dem Fenster aufs Dock (wo sie steht, in Bildschirmpunkten),
+    /// danach das Zuhause übernehmen
+    var onDrop: ((NSRect, @escaping () -> Void) -> Void)?
+    private var dropping = false
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -30,8 +34,9 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
         }
         // Jedes Mal von vorne
-        window?.contentView = NSHostingView(rootView: OnboardingView(settings: settings) { [weak self] in
-            self?.window?.close()
+        window?.alphaValue = 1
+        window?.contentView = NSHostingView(rootView: OnboardingView(settings: settings) { [weak self] rect, apply in
+            self?.finish(catRect: rect, apply: apply)
         })
         window?.title = L10n.s("Willkommen bei Pixelcat", "Welcome to Pixelcat")
         window?.center()
@@ -42,7 +47,29 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     /// Auch wer das Fenster einfach schließt, bekommt es nicht noch einmal ungefragt
     func windowWillClose(_ notification: Notification) {
         settings.onboardingDone = true
-        onClose?()
+        if !dropping { onClose?() }
+        dropping = false
+    }
+
+    /// „Fertig“: Die Katze springt heraus, das Fenster blendet aus und schließt sich.
+    private func finish(catRect: CGRect?, apply: @escaping () -> Void) {
+        guard let window, let content = window.contentView, let catRect, catRect.width > 0, onDrop != nil else {
+            self.window?.close()
+            apply()
+            return
+        }
+        // SwiftUI misst von oben links
+        let local = content.isFlipped ? catRect
+            : NSRect(x: catRect.minX, y: content.bounds.height - catRect.maxY, width: catRect.width, height: catRect.height)
+        let onScreen = window.convertToScreen(content.convert(local, to: nil))
+        dropping = true
+        onDrop?(onScreen, apply)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.25
+            window.animator().alphaValue = 0
+        }, completionHandler: { [weak window] in
+            MainActor.assumeIsolated { window?.close() }
+        })
     }
 }
 
@@ -57,15 +84,21 @@ struct OnboardingView: View {
     }
 
     @ObservedObject var settings: AppSettings
-    var onFinish: () -> Void
+    /// Fertig: wo die Katze im Fenster steht (für den Sprung aufs Dock) und was danach zu übernehmen ist
+    var onFinish: (CGRect?, @escaping () -> Void) -> Void
     @State private var step: Step
+    /// „Fertig“ gedrückt: Sie wacht auf und steht auf, dann springt sie hinaus
+    @State private var wokeAt: Date?
+    @State private var jumped = false
+    @State private var catFrame: CGRect = .zero
     @State private var forward = true
     /// Das Zuhause gilt erst am Ende, wenn die Katze aufs Dock kommt
     @State private var homeInBed: Bool
 
     static let maxNameLength = 16
 
-    init(settings: AppSettings, start: Step = .welcome, onFinish: @escaping () -> Void = {}) {
+    init(settings: AppSettings, start: Step = .welcome,
+         onFinish: @escaping (CGRect?, @escaping () -> Void) -> Void = { _, apply in apply() }) {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
@@ -256,8 +289,16 @@ struct OnboardingView: View {
                                    "\(settings.displayName) is on the way to your Dock.")) {
                 VStack(spacing: 6) {
                     FloatingHeart()
-                    PixelCat(coat: settings.coat, pose: .sleep, scale: 6)
+                        .opacity(wokeAt == nil ? 1 : 0)
+                    WakingCat(coat: settings.coat, scale: 6, wokeAt: wokeAt)
+                        .opacity(jumped ? 0 : 1)
+                        .background(GeometryReader { geometry in
+                            Color.clear
+                                .onAppear { catFrame = geometry.frame(in: .global) }
+                                .onChange(of: geometry.frame(in: .global)) { catFrame = $0 }
+                        })
                 }
+                .animation(.easeOut(duration: 0.3), value: wokeAt)
             } below: {
                 MadeWith()
             }
@@ -307,21 +348,27 @@ struct OnboardingView: View {
 
     private func next() {
         if step == .done {
+            guard wokeAt == nil else { return }
             settings.onboardingDone = true
-            // Erst das Fenster schließen, dann das Zuhause übernehmen, damit nichts in den Vordergrund springt
-            onFinish()
-            applyHome()
+            // Aufwachen, aufstehen, dann aus dem Fenster aufs Dock springen. Das Zuhause gilt erst, wenn sie unten ist
+            wokeAt = Date()
+            let inBed = homeInBed
+            let settings = settings
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+                jumped = true
+                onFinish(catFrame) { Self.applyHome(inBed: inBed, to: settings) }
+            }
         } else {
             go(1)
         }
     }
 
     /// Zuhause übernehmen. Nach der Freigabe hat die Einrichtung schon selbst gefragt.
-    private func applyHome() {
-        guard homeInBed != settings.basketInDock else { return }
+    private static func applyHome(inBed: Bool, to settings: AppSettings) {
+        guard inBed != settings.basketInDock else { return }
         settings.askForAccessWithBed = false
-        settings.basketInDock = homeInBed
-        if homeInBed { settings.basketNap = true }
+        settings.basketInDock = inBed
+        if inBed { settings.basketNap = true }
         settings.askForAccessWithBed = true
     }
 
@@ -885,5 +932,29 @@ private struct MadeWith: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
         .background(Capsule().fill(Color.primary.opacity(0.05)))
+    }
+}
+
+/// Schläft, bis „Fertig“ gedrückt wird: dann Augen auf, aufsetzen, aufstehen
+private struct WakingCat: View {
+    let coat: Coat
+    let scale: CGFloat
+    let wokeAt: Date?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { context in
+            PixelSprite(sprite: sprite(at: context.date), colors: coat.colors, scale: scale)
+        }
+    }
+
+    private func sprite(at date: Date) -> Sprite {
+        guard let wokeAt else {
+            return Int(date.timeIntervalSinceReferenceDate / 1.1) % 2 == 0 ? Frames.sleepA : Frames.sleepB
+        }
+        switch date.timeIntervalSince(wokeAt) {
+        case ..<0.35: return Frames.lieBlink
+        case ..<0.8: return Frames.sit
+        default: return Frames.stand
+        }
     }
 }

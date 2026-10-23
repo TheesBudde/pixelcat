@@ -974,6 +974,22 @@ final class CatBrain {
     }
 
     /// Beim Programmstart im Streifzug: gleich draußen sein.
+    /// Nach der Einrichtung: Sie ist gerade aus dem Fenster aufs Dock gesprungen und steht jetzt hier.
+    /// Danach geht es weiter wie eingestellt (in den Korb, auf Streifzug oder einfach dableiben).
+    func arrive(centerX: CGFloat) {
+        jump = nil
+        perchID = nil
+        wall = nil
+        afterHop = nil
+        pendingEmerge = nil
+        offscreenAllowed = false
+        visitTimeLeft = 0
+        goal = .wander
+        x = clampX(centerX - CGFloat(Layout.canvasWidth) / 2 * scale)
+        y = dockY
+        enter(.standing, for: 0.8)
+    }
+
     func startOutside() {
         offscreenAllowed = true
         x = offscreenX(left: true)
