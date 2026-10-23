@@ -686,6 +686,25 @@ enum Frames {
         "D": 0x26262E, "d": 0x50505E, "F": 0xC0283B, "M": 0xC6B3EC, "c": 0x5B4A86,
     ])
 
+    /// Was sie gerade trägt: Hut (ein Stück tiefer, z. B. die Schlafmaske) und Fliege
+    struct Outfit {
+        var hat: Sprite?
+        var drop = 0
+        var collar: Sprite?
+
+        /// Hut und Fliege auf diesem Bild: Pixel ab der linken unteren Ecke des Bilds
+        func pieces(on sprite: Sprite) -> [(sprite: Sprite, x: Int, y: Int)] {
+            var result: [(sprite: Sprite, x: Int, y: Int)] = []
+            if let hat, let ears = sprite.earAnchor {
+                result.append((hat, ears.center - hat.width / 2, sprite.height - 1 - ears.row - drop))
+            }
+            if let collar, let neck = sprite.collarAnchor {
+                result.append((collar, neck.center - collar.width / 2, sprite.height - neck.row - collar.height))
+            }
+            return result
+        }
+    }
+
     /// Katzenkopf für die Menüleiste als Vektorgrafik – gestochen scharf auf jedem Bildschirm.
     /// Als Vorlagenbild färbt macOS ihn passend zum hellen/dunklen Modus.
     static func menuBarIcon() -> NSImage {

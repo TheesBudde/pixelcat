@@ -93,7 +93,7 @@ struct OnboardingView: View {
     @State private var catFrame: CGRect = .zero
     @State private var forward = true
     /// Das Zuhause gilt erst am Ende, wenn die Katze aufs Dock kommt
-    @State private var homeInBed: Bool
+    @State private var home: Home
 
     static let maxNameLength = 16
 
@@ -102,7 +102,7 @@ struct OnboardingView: View {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
-        _homeInBed = State(initialValue: settings.basketInDock)
+        _home = State(initialValue: Home(settings))
     }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
@@ -183,22 +183,24 @@ struct OnboardingView: View {
                 }
             }
         case .home:
-            OnboardingPage(title: t("Wo darf ich wohnen?", "Where may I live?"),
-                           text: homeInBed
-                               ? t("Ich schlafe im Korb und komme zu Pausen heraus.",
-                                   "I sleep in my bed and come out for breaks.")
-                               : t("Ich laufe auf dem Dock herum und mache Nickerchen.",
-                                   "I stroll along the Dock and take naps.")) {
-                HStack(spacing: 22) {
-                    ChoiceCard(selected: !homeInBed, title: t("Auf dem Dock", "On the Dock")) {
+            OnboardingPage(title: t("Wo darf ich wohnen?", "Where may I live?"), text: homeText) {
+                HStack(spacing: 14) {
+                    ChoiceCard(selected: home == .dock, title: t("Auf dem Dock", "On the Dock")) {
                         PixelCat(coat: settings.coat, pose: .walk, scale: 4)
                     } action: {
-                        homeInBed = false
+                        home = .dock
                     }
-                    ChoiceCard(selected: homeInBed, title: t("Im Katzenkorb", "In my cat bed")) {
+                    ChoiceCard(selected: home == .roaming, title: t("Auf Streifzug", "Roaming")) {
+                        // Bis an den Kartenrand: Dort geht sie gerade hinaus
+                        SneakingOut(coat: settings.coat, scale: 4)
+                            .padding(.trailing, -14)
+                    } action: {
+                        home = .roaming
+                    }
+                    ChoiceCard(selected: home == .bed, title: t("Im Katzenkorb", "In my cat bed")) {
                         CatInBed(coat: settings.coat, scale: 3)
                     } action: {
-                        homeInBed = true
+                        home = .bed
                     }
                 }
             }
@@ -256,17 +258,17 @@ struct OnboardingView: View {
                 HStack(spacing: 14) {
                     ModeTile(title: t("Immer da", "Always here"),
                              caption: t("auf dem Dock", "on the Dock"),
-                             current: !homeInBed && !settings.roaming) {
+                             current: home == .dock) {
                         PixelCat(coat: settings.coat, pose: .walk, scale: 3)
                     }
                     ModeTile(title: t("Streifzug", "Roaming"),
                              caption: t("unterwegs", "out and about"),
-                             current: !homeInBed && settings.roaming) {
-                        PawTrail(coat: settings.coat, scale: 3, paws: 3)
+                             current: home == .roaming) {
+                        SneakingOut(coat: settings.coat, scale: 3)
                     }
                     ModeTile(title: t("Katzenkorb", "Cat bed"),
                              caption: t("schläft im Dock", "naps in the Dock"),
-                             current: homeInBed) {
+                             current: home == .bed) {
                         CatInBed(coat: settings.coat, scale: 2)
                     }
                 }
@@ -290,7 +292,8 @@ struct OnboardingView: View {
                 VStack(spacing: 6) {
                     FloatingHeart()
                         .opacity(wokeAt == nil ? 1 : 0)
-                    WakingCat(coat: settings.coat, scale: 6, wokeAt: wokeAt)
+                    WakingCat(coat: settings.coat, scale: 6, wokeAt: wokeAt,
+                              outfit: settings.currentOutfit?() ?? Frames.Outfit())
                         .opacity(jumped ? 0 : 1)
                         .background(GeometryReader { geometry in
                             Color.clear
@@ -352,30 +355,32 @@ struct OnboardingView: View {
             settings.onboardingDone = true
             // Aufwachen, aufstehen, dann aus dem Fenster aufs Dock springen. Das Zuhause gilt erst, wenn sie unten ist
             wokeAt = Date()
-            let inBed = homeInBed
+            let home = home
             let settings = settings
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
                 jumped = true
-                onFinish(catFrame) { Self.applyHome(inBed: inBed, to: settings) }
+                onFinish(catFrame) { home.apply(to: settings) }
             }
         } else {
             go(1)
         }
     }
 
-    /// Zuhause übernehmen. Nach der Freigabe hat die Einrichtung schon selbst gefragt.
-    private static func applyHome(inBed: Bool, to settings: AppSettings) {
-        guard inBed != settings.basketInDock else { return }
-        settings.askForAccessWithBed = false
-        settings.basketInDock = inBed
-        if inBed { settings.basketNap = true }
-        settings.askForAccessWithBed = true
+    private var homeText: String {
+        switch home {
+        case .dock: return t("Ich bleibe auf dem Dock, laufe herum und mache Nickerchen.",
+                             "I stay on the Dock, stroll around and take naps.")
+        case .roaming: return t("Ich gehe auf Streifzug und komme nur zu Pausen und Erinnerungen vorbei.",
+                                "I head out and only drop by for breaks and reminders.")
+        case .bed: return t("Ich schlafe im Korb im Dock und komme zu Pausen und Erinnerungen heraus.",
+                            "I sleep in my bed in the Dock and come out for breaks and reminders.")
+        }
     }
 
     private func go(_ delta: Int) {
         guard var target = Step(rawValue: step.rawValue + delta) else { return }
         // Die Frage nach der Freigabe nur mit Katzenkorb und wenn sie noch fehlt
-        if target == .bedAccess, !homeInBed || DockLocator.isTrusted {
+        if target == .bedAccess, home != .bed || DockLocator.isTrusted {
             guard let skip = Step(rawValue: target.rawValue + delta) else { return }
             target = skip
         }
@@ -427,6 +432,39 @@ private struct OnboardingPage<Art: View, Below: View>: View {
 extension OnboardingPage where Below == EmptyView {
     init(title: String, text: String, @ViewBuilder art: () -> Art) {
         self.init(title: title, text: text, art: art, below: { EmptyView() })
+    }
+}
+
+/// Wo sie wohnt: immer auf dem Dock, auf Streifzug oder im Katzenkorb
+enum Home: Equatable {
+    case dock, roaming, bed
+
+    @MainActor init(_ settings: AppSettings) {
+        if settings.basketInDock, settings.basketNap {
+            self = .bed
+        } else if !settings.basketInDock, settings.roaming {
+            self = .roaming
+        } else {
+            self = .dock
+        }
+    }
+
+    /// Übernehmen. Nach der Freigabe hat die Einrichtung schon selbst gefragt.
+    @MainActor func apply(to settings: AppSettings) {
+        guard Home(settings) != self else { return }
+        settings.askForAccessWithBed = false
+        switch self {
+        case .dock:
+            settings.basketInDock = false
+            settings.roaming = false
+        case .roaming:
+            settings.basketInDock = false
+            settings.roaming = true
+        case .bed:
+            settings.basketInDock = true
+            settings.basketNap = true
+        }
+        settings.askForAccessWithBed = true
     }
 }
 
@@ -869,26 +907,6 @@ private struct ThinkingCat: View {
     }
 }
 
-/// Pfotenspuren, die verblassen, und die Katze, die gerade losgeht
-private struct PawTrail: View {
-    let coat: Coat
-    var scale: CGFloat = 5
-    var paws = 5
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: scale * 2.5) {
-            ForEach(0..<paws, id: \.self) { index in
-                PixelSprite(sprite: PixelArt.paw, colors: ["K": coat == .black ? NSColor.white.cgColor : NSColor.black.cgColor],
-                            scale: scale * 0.8)
-                    .rotationEffect(.degrees(90))
-                    .offset(y: index % 2 == 0 ? -scale : -scale * 3.5)
-                    .opacity(0.1 + 0.3 * Double(index + 1) / Double(paws))
-            }
-            PixelCat(coat: coat, pose: .walk, scale: scale)
-        }
-    }
-}
-
 /// Eine der drei Arten, wo sie lebt. Die aktuelle Einstellung ist markiert.
 private struct ModeTile<Art: View>: View {
     let title: String
@@ -940,10 +958,14 @@ private struct WakingCat: View {
     let coat: Coat
     let scale: CGFloat
     let wokeAt: Date?
+    /// Hut und Fliege wie auf dem Dock
+    let outfit: Frames.Outfit
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { context in
-            PixelSprite(sprite: sprite(at: context.date), colors: coat.colors, scale: scale)
+            Image(nsImage: sprite(at: context.date).nsImage(colors: coat.colors, scale: scale, outfit: outfit))
+                .interpolation(.none)
+                .accessibilityHidden(true)
         }
     }
 
@@ -956,5 +978,28 @@ private struct WakingCat: View {
         case ..<0.8: return Frames.sit
         default: return Frames.stand
         }
+    }
+}
+
+/// Streifzug: Pfotenspuren zum Rand, und von der Katze ist nur noch das Hinterteil mit dem Schwanz zu sehen
+private struct SneakingOut: View {
+    let coat: Coat
+    let scale: CGFloat
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: scale * 1.5) {
+            ForEach(0..<3, id: \.self) { index in
+                PixelSprite(sprite: PixelArt.paw, colors: ["K": coat == .black ? NSColor.white.cgColor : NSColor.black.cgColor],
+                            scale: scale * 0.6)
+                    .rotationEffect(.degrees(90))
+                    .offset(y: index % 2 == 0 ? -scale : -scale * 3)
+                    .opacity(0.15 + 0.2 * Double(index))
+            }
+            // Halb aus dem Bild: vorne abgeschnitten, als wäre sie gerade hinausgegangen
+            PixelCat(coat: coat, pose: .walk, scale: scale)
+                .frame(width: CGFloat(Frames.walkA.width) * scale * 0.45, alignment: .leading)
+                .clipped()
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }

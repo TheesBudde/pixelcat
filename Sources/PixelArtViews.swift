@@ -17,6 +17,28 @@ extension Sprite {
     }
 }
 
+extension Sprite {
+    /// Mit Hut und Fliege; das Bild wird dafür nach oben (und falls nötig zur Seite) größer
+    func nsImage(colors: [Character: CGColor], scale: CGFloat, outfit: Frames.Outfit) -> NSImage {
+        let pieces = outfit.pieces(on: self)
+        guard !pieces.isEmpty else { return nsImage(colors: colors, scale: scale) }
+        let left = min(0, pieces.map(\.x).min() ?? 0)
+        let right = max(width, pieces.map { $0.x + $0.sprite.width }.max() ?? 0)
+        let top = max(height, pieces.map { $0.y + $0.sprite.height }.max() ?? 0)
+        let size = NSSize(width: CGFloat(right - left) * scale, height: CGFloat(top) * scale)
+        return NSImage(size: size, flipped: false) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.setShouldAntialias(false)
+            self.draw(in: ctx, x: CGFloat(-left), y: 0, scale: scale, colors: colors)
+            for piece in pieces {
+                piece.sprite.draw(in: ctx, x: CGFloat(piece.x - left), y: CGFloat(piece.y), scale: scale,
+                                  colors: Frames.accessoryColors)
+            }
+            return true
+        }
+    }
+}
+
 /// Ein Pixelbild in SwiftUI
 struct PixelSprite: View {
     let sprite: Sprite

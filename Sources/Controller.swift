@@ -27,6 +27,10 @@ final class PropView: NSView {
         didSet { needsDisplay = true }
     }
     var colors = PropColors.colors
+    /// Hut und Fliege auf dem Bild (Pixel ab dessen linker unterer Ecke)
+    var extras: [(sprite: Sprite, x: Int, y: Int)] = [] {
+        didSet { needsDisplay = true }
+    }
     var onMouseDown: ((NSPoint) -> Void)?
     var onMouseDragged: ((NSPoint) -> Void)?
     var onMouseUp: ((NSPoint) -> Void)?
@@ -62,6 +66,10 @@ final class PropView: NSView {
         ctx.clear(bounds)
         ctx.setShouldAntialias(false)
         sprite.draw(in: ctx, x: spriteOrigin.x, y: spriteOrigin.y, scale: scale, colors: colors)
+        for extra in extras {
+            extra.sprite.draw(in: ctx, x: spriteOrigin.x + CGFloat(extra.x), y: spriteOrigin.y + CGFloat(extra.y),
+                              scale: scale, colors: Frames.accessoryColors)
+        }
     }
 }
 
@@ -450,10 +458,13 @@ final class CatController {
         updateBounds()
         brain.dockY = ground
         let sprite = Frames.stand
+        let outfit = outfitNow()
         let startScale = max(1, rect.width / CGFloat(sprite.width))
-        let window = PropWindow(columns: sprite.width, rows: sprite.height, scale: startScale)
+        // Oben Platz für den Hut
+        let window = PropWindow(columns: sprite.width, rows: sprite.height + 10, scale: startScale)
         window.view.colors = coat.colors
         window.view.sprite = sprite
+        window.view.extras = outfit.pieces(on: sprite)
         let centerX = rect.midX
         let startBottom = rect.minY
         let target = scale
@@ -479,7 +490,11 @@ final class CatController {
                 // Je tiefer sie fällt, desto kleiner wird sie – unten hat sie genau ihre Größe
                 let progress = min(1, max(0, (startBottom - bottom) / max(1, startBottom - self.ground)))
                 window.scale = startScale + (target - startScale) * progress
-                window.view.sprite = vy > 0 ? Frames.stand : Frames.walkA
+                let pose = vy > 0 ? Frames.stand : Frames.walkA
+                if window.view.sprite !== pose {
+                    window.view.sprite = pose
+                    window.view.extras = outfit.pieces(on: pose)
+                }
                 if bottom <= self.ground {
                     timer.invalidate()
                     self.dropTimer = nil
@@ -834,6 +849,14 @@ final class CatController {
     /// die gehen immer vor. Sonst je nach Tageszeit: Zylinder und Fliege nach Feierabend, Schlafmütze ab der
     /// Schlafenszeit, Schlafmaske auf der Stirn am Morgen.
     private func updateOutfit() {
+        let outfit = outfitNow()
+        if view.accessory !== outfit.hat { view.accessory = outfit.hat }
+        view.accessoryDrop = outfit.drop
+        if view.collar !== outfit.collar { view.collar = outfit.collar }
+    }
+
+    /// Was sie jetzt trägt: Feiertage zuerst, dann nach Tageszeit (auch für die Einrichtung)
+    func outfitNow() -> Frames.Outfit {
         var hat: Sprite?, drop = 0, collar: Sprite?
         let day = Calendar.current.dateComponents([.month, .day], from: Date())
         if let outfitOverride {
@@ -854,9 +877,7 @@ final class CatController {
                 }
             }
         }
-        if view.accessory !== hat { view.accessory = hat }
-        view.accessoryDrop = drop
-        if view.collar !== collar { view.collar = collar }
+        return Frames.Outfit(hat: hat, drop: drop, collar: collar)
     }
 
     /// Streicheln: Die Maus bewegt sich über der Katze, ohne zu klicken.

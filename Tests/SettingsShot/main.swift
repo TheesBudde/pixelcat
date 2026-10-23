@@ -47,4 +47,9 @@ MainActor.assumeIsolated {
               to: base.replacingOccurrences(of: "einstellungen", with: "fell-\(coat.rawValue)-aufgaben"), appearance: look)
     }
     settings.coat = .black
+    // Letzte Seite am Abend: mit Zylinder und Fliege
+    settings.currentOutfit = { Frames.Outfit(hat: Frames.topHat, collar: Frames.bowTie) }
+    shoot(OnboardingView(settings: settings, start: .done), width: 620, height: 500,
+          to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-abend"), appearance: .darkAqua)
+    settings.currentOutfit = nil
 }

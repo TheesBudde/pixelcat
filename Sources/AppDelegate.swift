@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         onboardingWindow.onClose = { [weak self] in self?.cat.show() }
         onboardingWindow.onDrop = { [weak self] rect, then in self?.cat.dropIn(from: rect, then: then) }
+        settings.currentOutfit = { [weak self] in self?.cat.outfitNow() ?? Frames.Outfit() }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }

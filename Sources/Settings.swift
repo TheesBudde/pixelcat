@@ -95,6 +95,8 @@ final class AppSettings: ObservableObject {
     var onOpenTasks: (() -> Void)?
     /// Die Einrichtung noch einmal zeigen
     var onOpenSetup: (() -> Void)?
+    /// Was die Katze gerade trägt (Hut, Fliege), damit sie in der Einrichtung genauso aussieht
+    var currentOutfit: (() -> Frames.Outfit)?
     private var loading = true
 
     private let defaults = UserDefaults.standard
