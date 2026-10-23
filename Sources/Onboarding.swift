@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Einrichtung beim ersten Start: Die Katze stellt sich vor, bekommt einen Namen, ihr Fell und ihr Zuhause,
@@ -7,6 +8,7 @@ import SwiftUI
 final class OnboardingWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
+    private var coatWatch: AnyCancellable?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -22,6 +24,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
             window.isMovableByWindowBackground = true
             window.delegate = self
             self.window = window
+            // Hell oder dunkel je nach Fell, auch während man es aussucht
+            coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
         }
         // Jedes Mal von vorne
         window?.contentView = NSHostingView(rootView: OnboardingView(settings: settings) { [weak self] in
@@ -48,6 +52,8 @@ struct OnboardingView: View {
     var onFinish: () -> Void
     @State private var step: Step
     @State private var forward = true
+    /// Die Wahl „Katzenkorb“ gilt erst mit „Weiter“, damit macOS nicht schon beim Antippen nach der Freigabe fragt
+    @State private var homeInBed: Bool
 
     static let maxNameLength = 16
 
@@ -55,15 +61,18 @@ struct OnboardingView: View {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
+        _homeInBed = State(initialValue: settings.basketInDock)
     }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
     var body: some View {
         ZStack {
-            PixelBackdrop(opacity: 0.06)
-            LinearGradient(colors: [Color.orange.opacity(0.14), Color.pink.opacity(0.06), Color.clear],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            PixelBackdrop(coat: settings.coat, opacity: 0.06)
+            if settings.coat == .black {
+                LinearGradient(colors: [Color.orange.opacity(0.14), Color.pink.opacity(0.06), Color.clear],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
             VStack(spacing: 0) {
                 ZStack {
                     page(step)
@@ -77,8 +86,10 @@ struct OnboardingView: View {
                 footer
             }
         }
-        .frame(width: 620, height: 500)
+        .frame(minWidth: 620, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
         .ignoresSafeArea()
+        .environment(\.colorScheme, settings.coat.colorScheme)
+        .animation(.easeInOut(duration: 0.35), value: settings.coat)
     }
 
     // MARK: Seiten
@@ -90,7 +101,7 @@ struct OnboardingView: View {
             OnboardingPage(title: t("Hallo!", "Hi there!"),
                            text: t("Ich bin deine neue Pixelkatze und wohne ab jetzt auf deinem Dock.",
                                    "I'm your new pixel cat. From now on I live on your Dock.")) {
-                PixelCat(coat: settings.coat, pose: .sit, scale: 7)
+                PlayfulCat(coat: settings.coat, scale: 6)
             }
         case .name:
             OnboardingPage(title: t("Wie soll ich heißen?", "What's my name?"),
@@ -116,22 +127,21 @@ struct OnboardingView: View {
             }
         case .home:
             OnboardingPage(title: t("Wo darf ich wohnen?", "Where may I live?"),
-                           text: settings.basketInDock
+                           text: homeInBed
                                ? t("Ich schlafe im Korb und komme zu Pausen heraus.",
                                    "I sleep in my bed and come out for breaks.")
                                : t("Ich laufe auf dem Dock herum und mache Nickerchen.",
                                    "I stroll along the Dock and take naps.")) {
                 HStack(spacing: 22) {
-                    ChoiceCard(selected: !settings.basketInDock, title: t("Auf dem Dock", "On the Dock")) {
+                    ChoiceCard(selected: !homeInBed, title: t("Auf dem Dock", "On the Dock")) {
                         PixelCat(coat: settings.coat, pose: .walk, scale: 4)
                     } action: {
-                        settings.basketInDock = false
+                        homeInBed = false
                     }
-                    ChoiceCard(selected: settings.basketInDock, title: t("Im Katzenkorb", "In my cat bed")) {
+                    ChoiceCard(selected: homeInBed, title: t("Im Katzenkorb", "In my cat bed")) {
                         CatInBed(coat: settings.coat, scale: 3)
                     } action: {
-                        settings.basketInDock = true
-                        settings.basketNap = true
+                        homeInBed = true
                     }
                 }
             }
@@ -154,10 +164,7 @@ struct OnboardingView: View {
             OnboardingPage(title: t("Streichel mich", "Pet me"),
                            text: t("Fahr mit der Maus über mich, ohne zu klicken. Dann schnurre ich.",
                                    "Move the pointer over me without clicking. Then I purr.")) {
-                VStack(spacing: 6) {
-                    FloatingHeart()
-                    PixelCat(coat: settings.coat, pose: .petted, scale: 6)
-                }
+                PettableCat(coat: settings.coat, scale: 6, purrs: settings.purring)
             }
         case .menu:
             OnboardingPage(title: t("Mein Menü", "My menu"),
@@ -215,12 +222,20 @@ struct OnboardingView: View {
     }
 
     private func next() {
+        if step == .home { applyHome() }
         if step == .done {
             settings.onboardingDone = true
             onFinish()
         } else {
             go(1)
         }
+    }
+
+    /// Zuhause übernehmen. Erst jetzt fragt macOS (falls nötig) nach den Bedienungshilfen.
+    private func applyHome() {
+        guard homeInBed != settings.basketInDock else { return }
+        settings.basketInDock = homeInBed
+        if homeInBed { settings.basketNap = true }
     }
 
     private func go(_ delta: Int) {
@@ -466,5 +481,217 @@ private struct MenuBarSketch: View {
             Image(systemName: icon).frame(width: 16).foregroundStyle(.secondary)
             Text(title)
         }
+    }
+}
+
+// MARK: - Lebendige Katzen
+
+/// Schläft, bis die Maus ins Fenster kommt. Dann wacht sie auf, streckt sich, läuft ein Stück hin und her,
+/// setzt sich und putzt sich. Ist die Maus eine Weile weg, legt sie sich wieder schlafen.
+@MainActor
+final class PlayfulCatModel: ObservableObject {
+    private enum Phase: Equatable {
+        case sleeping, waking, stretching, walking(to: CGFloat), sitting, grooming, yawning, lyingDown
+    }
+
+    @Published private(set) var sprite: Sprite = Frames.sleepA
+    @Published private(set) var x: CGFloat = 0
+    @Published private(set) var facingLeft = false
+
+    /// So weit darf sie nach links und rechts laufen (Punkte)
+    var range: CGFloat = 130
+    var hovering = false {
+        didSet { if hovering { lastHover = clock } }
+    }
+
+    private var phase: Phase = .sleeping
+    private var phaseTime: Double = 0
+    private var phaseLength: Double = 0
+    private var clock: Double = 0
+    private var lastHover: Double = -100
+    /// Was sie nach dem Aufwachen als Erstes tut: nach links, umdrehen, nach rechts, hinsetzen, putzen
+    private var plan: [Phase] = []
+
+    func tick(_ dt: Double) {
+        clock += dt
+        phaseTime += dt
+        if hovering { lastHover = clock }
+        let frame = Int(phaseTime / 0.22)
+        switch phase {
+        case .sleeping:
+            sprite = Int(phaseTime / 1.1) % 2 == 0 ? Frames.sleepA : Frames.sleepB
+            if hovering { start(.waking, for: 0.8) }
+        case .waking:
+            sprite = phaseTime < 0.4 ? Frames.lieBlink : Frames.lie
+            if phaseTime >= phaseLength { start(.stretching, for: 1.4) }
+        case .stretching:
+            sprite = phaseTime < 0.7 ? Frames.stretchBowA : Frames.stretchBowB
+            if phaseTime >= phaseLength {
+                plan = [.walking(to: -range * 0.75), .walking(to: range * 0.45), .sitting, .grooming]
+                next()
+            }
+        case .walking(let target):
+            let speed: CGFloat = 70
+            let step = speed * CGFloat(dt)
+            facingLeft = target < x
+            if abs(target - x) <= step {
+                x = target
+                next()
+            } else {
+                x += facingLeft ? -step : step
+                sprite = frame % 2 == 0 ? Frames.walkA : Frames.walkB
+            }
+        case .sitting:
+            sprite = Int(phaseTime * 10) % 30 < 2 ? Frames.sitBlink : Frames.sit
+            if phaseTime >= phaseLength { next() }
+        case .grooming:
+            sprite = frame % 2 == 0 ? Frames.groomA : Frames.groomB
+            if phaseTime >= phaseLength { next() }
+        case .yawning:
+            sprite = Frames.yawn
+            if phaseTime >= phaseLength { next() }
+        case .lyingDown:
+            sprite = phaseTime < 0.6 ? Frames.sit : Frames.lie
+            if phaseTime >= phaseLength { start(.sleeping, for: 0) }
+        }
+    }
+
+    private func start(_ next: Phase, for length: Double) {
+        phase = next
+        phaseTime = 0
+        phaseLength = length
+    }
+
+    /// Nächster Schritt: erst der Plan, dann zufällig. Ohne Maus legt sie sich nach einer Weile wieder hin.
+    private func next() {
+        if !plan.isEmpty {
+            begin(plan.removeFirst())
+            return
+        }
+        if clock - lastHover > 4 {
+            start(.lyingDown, for: 1.4)
+            return
+        }
+        switch Int.random(in: 0..<5) {
+        case 0, 1:
+            var target = CGFloat.random(in: -range...range)
+            if abs(target - x) < 50 { target = x > 0 ? -range * 0.6 : range * 0.6 }
+            begin(.walking(to: target))
+        case 2: begin(.sitting)
+        case 3: begin(.grooming)
+        default: begin(.yawning)
+        }
+    }
+
+    private func begin(_ phase: Phase) {
+        switch phase {
+        case .sitting: start(.sitting, for: Double.random(in: 1.8...3.2))
+        case .grooming: start(.grooming, for: Double.random(in: 1.6...2.6))
+        case .yawning: start(.yawning, for: 1.0)
+        default: start(phase, for: 0)
+        }
+    }
+}
+
+struct PlayfulCat: View {
+    let coat: Coat
+    var scale: CGFloat = 6
+    @StateObject private var model = PlayfulCatModel()
+    private let timer = Timer.publish(every: 1.0 / 20, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            PixelSprite(sprite: model.sprite, colors: coat.colors, scale: scale, mirrored: model.facingLeft)
+                .offset(x: model.x)
+        }
+        .frame(width: 2 * model.range + 40 * scale, height: 22 * scale, alignment: .bottom)
+        .onReceive(timer) { _ in model.tick(1.0 / 20) }
+        // Die Maus irgendwo im Fenster weckt sie
+        .background(HoverReporter { model.hovering = $0 })
+    }
+}
+
+/// Meldet, ob die Maus im Fenster ist (auch über Knöpfen und Text)
+private struct HoverReporter: NSViewRepresentable {
+    var onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.onChange = onChange
+    }
+
+    final class TrackingView: NSView {
+        var onChange: ((Bool) -> Void)?
+        private var area: NSTrackingArea?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, let content = window.contentView else { return }
+            if let area { content.removeTrackingArea(area) }
+            let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                      owner: self, userInfo: nil)
+            content.addTrackingArea(area)
+            self.area = area
+            // Steht die Maus schon im Fenster, wacht sie gleich auf
+            let inside = content.bounds.contains(content.convert(window.mouseLocationOutsideOfEventStream, from: nil))
+            onChange?(inside)
+        }
+
+        override func removeFromSuperview() {
+            if let area { window?.contentView?.removeTrackingArea(area) }
+            super.removeFromSuperview()
+        }
+
+        override func mouseEntered(with event: NSEvent) { onChange?(true) }
+        override func mouseExited(with event: NSEvent) { onChange?(false) }
+    }
+}
+
+/// Zum Streicheln: Fährt die Maus über sie, kneift sie zufrieden die Augen zu, schmiegt sich an und schnurrt.
+struct PettableCat: View {
+    let coat: Coat
+    var scale: CGFloat = 6
+    var purrs = true
+
+    @State private var lastStroke: Date = .distantPast
+    @State private var lastPoint: CGPoint?
+    @State private var tick = 0
+    @State private var purr = Purr()
+    private let timer = Timer.publish(every: 1.0 / 20, on: .main, in: .common).autoconnect()
+
+    private var petted: Bool { Date().timeIntervalSince(lastStroke) < 0.8 }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            FloatingHeart()
+                .opacity(petted ? 1 : 0)
+                .animation(.easeInOut(duration: 0.3), value: petted)
+            PixelSprite(sprite: sprite, colors: coat.colors, scale: scale)
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let point):
+                        // Nur echtes Streichen zählt, nicht stillhalten
+                        if let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) > 2 { lastStroke = Date() }
+                        lastPoint = point
+                    case .ended:
+                        lastPoint = nil
+                    }
+                }
+        }
+        .onReceive(timer) { _ in
+            tick += 1
+            purr.update(dt: 1.0 / 20, active: purrs && petted)
+        }
+        .onDisappear { purr.stop() }
+    }
+
+    private var sprite: Sprite {
+        if petted { return (tick / 8) % 2 == 0 ? Frames.petStandTall : Frames.petStand }
+        return tick % 70 < 3 ? Frames.standBlink : Frames.stand
     }
 }

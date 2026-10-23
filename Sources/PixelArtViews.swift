@@ -86,18 +86,52 @@ enum PixelArt {
     ])
 }
 
-/// Ruhiger Hintergrund: sanfter Verlauf und ein paar blasse Pfoten, Fische und Herzen
+/// Die Fenster passen sich dem Fell an: dunkel für die schwarze Katze, hell mit einem Hauch Orange
+/// für die orange getigerte, hell und leicht grau für die grau getigerte.
+extension Coat {
+    var appearance: NSAppearance? {
+        NSAppearance(named: self == .black ? .darkAqua : .aqua)
+    }
+
+    var colorScheme: ColorScheme { self == .black ? .dark : .light }
+
+    /// Grundfarbe und Verlauf des Fensterhintergrunds
+    var backdrop: (base: Color, gradient: [Color]) {
+        switch self {
+        case .black:
+            return (Color(nsColor: .windowBackgroundColor),
+                    [Color.accentColor.opacity(0.10), Color.clear, Color.orange.opacity(0.07)])
+        case .orange:
+            return (Color(red: 1.0, green: 0.965, blue: 0.93),
+                    [Color.orange.opacity(0.16), Color.orange.opacity(0.04), Color.orange.opacity(0.10)])
+        case .gray:
+            return (Color(white: 0.955),
+                    [Color.white.opacity(0.6), Color.clear, Color.gray.opacity(0.10)])
+        }
+    }
+
+    /// Farbe der Pfoten, Fische und Herzen im Hintergrund
+    var backdropInk: CGColor {
+        switch self {
+        case .black: return NSColor.white.cgColor
+        case .orange: return NSColor(red: 0.55, green: 0.30, blue: 0.08, alpha: 1).cgColor
+        case .gray: return NSColor(white: 0.25, alpha: 1).cgColor
+        }
+    }
+}
+
+/// Ruhiger Hintergrund: sanfter Verlauf und ein paar blasse Pfoten, Fische und Herzen, passend zum Fell
 struct PixelBackdrop: View {
+    var coat: Coat = .black
     var opacity: Double = 0.07
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(nsColor: .windowBackgroundColor)
-                LinearGradient(colors: [Color.accentColor.opacity(0.10), Color.clear, Color.orange.opacity(0.07)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                coat.backdrop.base
+                LinearGradient(colors: coat.backdrop.gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
                 Canvas { context, size in
-                    let ink = NSColor.labelColor.cgColor
+                    let ink = coat.backdropInk
                     let colors: [Character: CGColor] = ["K": ink]
                     // Feste, locker verteilte Stellen: ein Muster, das sich wiederholt
                     let spots: [(x: Double, y: Double, art: Int, turn: Double)] = [

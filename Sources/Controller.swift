@@ -954,6 +954,8 @@ final class CatController {
 
     /// Dock-Symbol ein- oder ausblenden.
     private func updateDockPresence() {
+        let policy: NSApplication.ActivationPolicy = basketInDock ? .regular : .accessory
+        let changes = NSApp.activationPolicy() != policy
         if basketInDock {
             NSApp.setActivationPolicy(.regular)
             NSApp.dockTile.contentView = basketTile
@@ -963,6 +965,14 @@ final class CatController {
         }
         NSApp.dockTile.display()
         basketRefresh = 0
+        // Beim Wechsel gibt macOS den Fokus an ein anderes Programm ab (womöglich eins im Vollbild).
+        // Ist gerade ein Fenster von Pixelcat offen (Einstellungen, Einrichtung), holt es ihn zurück.
+        if changes, let window = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }) {
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 
     /// Der Bildschirm mit dem Dock (es kann auf jeden Bildschirm wandern)

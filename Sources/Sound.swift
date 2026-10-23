@@ -54,4 +54,10 @@ final class Purr {
             sound?.stop()
         }
     }
+
+    /// Sofort verstummen (z. B. wenn das Fenster zugeht)
+    func stop() {
+        volume = 0
+        sound?.stop()
+    }
 }

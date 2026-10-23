@@ -90,6 +90,9 @@ Applications folder and open it with right click › Open the first time.
 On first launch a short setup welcomes you. You give your cat a name, pick her coat and home, choose your
 reminders and learn how to pet her. You can open it again in the settings.
 
+Your settings survive updates. Pixelcat also keeps a copy in
+`~/Library/Application Support/Pixelcat/Settings.plist` and restores it if the settings are ever lost.
+
 <p align="center">
   <img src="docs/img/setup-welcome.png" width="32%" alt="Setup: welcome">
   <img src="docs/img/setup-coat.png" width="32%" alt="Setup: pick a coat">
@@ -114,7 +117,8 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Settings … (⌘,) | Everything else |
 | Quit Pixelcat (⌘Q) | Quit |
 
-The **settings window** is one scrolling page with her portrait on top:
+The **settings window** is one scrolling page with her portrait on top. All windows follow her coat: dark for the
+black cat, light with a hint of orange for the orange tabby, light gray for the gray tabby.
 
 <img src="docs/img/settings.png" width="360" align="right" alt="Settings window">
 

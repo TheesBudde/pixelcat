@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Eigenes Fenster für die Aufgaben: eintragen, umbenennen, entfernen und für jede einstellen,
@@ -7,6 +8,7 @@ import SwiftUI
 final class TasksWindow {
     private var window: NSWindow?
     private let settings: AppSettings
+    private var coatWatch: AnyCancellable?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -23,6 +25,7 @@ final class TasksWindow {
             window.contentView = NSHostingView(rootView: TasksView(settings: settings))
             window.center()
             self.window = window
+            coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
         }
         window?.title = L10n.s("Pixelcat Aufgaben", "Pixelcat Tasks")
         NSApp.activate(ignoringOtherApps: true)
@@ -55,8 +58,26 @@ struct TasksView: View {
                 SectionTitle(t("Erinnern", "Reminders"), icon: "bell.fill", color: .orange)
             }
             Section {
+                HStack(spacing: 10) {
+                    TextField("", text: $newText, prompt: Text(t("z. B. „Mama anrufen“", "e.g. “Call mom”")))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(add)
+                        .onChange(of: newText) { value in
+                            if value.count > Self.maxLength { newText = String(value.prefix(Self.maxLength)) }
+                        }
+                    intervalSlider($newMinutes)
+                    Button(t("Hinzufügen", "Add"), action: add)
+                        .disabled(newText.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                hint(t("Der Abstand gilt pro Aufgabe und schwankt etwas. Aus Katzenkorb oder Streifzug kommt sie dafür herein.",
+                       "The interval is per task and varies a little. She comes in from the cat bed or roaming for it."))
+            } header: {
+                SectionTitle(t("Neue Aufgabe", "New task"), icon: "plus", color: .blue)
+            }
+            Section {
                 if settings.taskItems.isEmpty {
-                    hint(t("Noch keine Aufgaben. Trag unten die erste ein.", "No tasks yet. Add the first one below."))
+                    hint(t("Noch keine Aufgaben. Trag oben die erste ein.", "No tasks yet. Add the first one above."))
                 }
                 ForEach($settings.taskItems) { $task in
                     HStack(spacing: 10) {
@@ -86,29 +107,12 @@ struct TasksView: View {
             } header: {
                 SectionTitle(t("Aufgaben", "Tasks"), icon: "checklist", color: .green)
             }
-            Section {
-                HStack(spacing: 10) {
-                    TextField("", text: $newText, prompt: Text(t("z. B. „Mama anrufen“", "e.g. “Call mom”")))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(add)
-                        .onChange(of: newText) { value in
-                            if value.count > Self.maxLength { newText = String(value.prefix(Self.maxLength)) }
-                        }
-                    intervalSlider($newMinutes)
-                    Button(t("Hinzufügen", "Add"), action: add)
-                        .disabled(newText.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                hint(t("Der Abstand gilt pro Aufgabe und schwankt etwas. Aus Katzenkorb oder Streifzug kommt sie dafür herein.",
-                       "The interval is per task and varies a little. She comes in from the cat bed or roaming for it."))
-            } header: {
-                SectionTitle(t("Neue Aufgabe", "New task"), icon: "plus", color: .blue)
-            }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .padding(.top, 18)
-        .background(PixelBackdrop())
+        .background(PixelBackdrop(coat: settings.coat))
+        .environment(\.colorScheme, settings.coat.colorScheme)
         .frame(minWidth: 480, minHeight: 320)
         .id(settings.language)
     }
@@ -116,7 +120,7 @@ struct TasksView: View {
     private func add() {
         let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        settings.taskItems.append(TaskItem(text: text, minutes: newMinutes))
+        settings.taskItems.insert(TaskItem(text: text, minutes: newMinutes), at: 0)
         newText = ""
     }
 

@@ -35,4 +35,16 @@ MainActor.assumeIsolated {
     }
     shoot(OnboardingView(settings: settings, start: .reminders), width: 620, height: 500,
           to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-dunkel"), appearance: .darkAqua)
+    // Jedes Fell färbt die Fenster: schwarz dunkel, orange hell mit Orangestich, grau hell und leicht grau
+    for coat in Coat.allCases {
+        settings.coat = coat
+        let look: NSAppearance.Name = coat == .black ? .darkAqua : .aqua
+        shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 660,
+              to: base.replacingOccurrences(of: "einstellungen", with: "fell-\(coat.rawValue)-einstellungen"), appearance: look)
+        shoot(OnboardingView(settings: settings, start: .coat), width: 620, height: 500,
+              to: base.replacingOccurrences(of: "einstellungen", with: "fell-\(coat.rawValue)-einrichtung"), appearance: look)
+        shoot(TasksView(settings: settings), width: 560, height: 620,
+              to: base.replacingOccurrences(of: "einstellungen", with: "fell-\(coat.rawValue)-aufgaben"), appearance: look)
+    }
+    settings.coat = .black
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Alle Einstellungen an einem Ort. Jede Änderung wird sofort gespeichert und an die Katze weitergegeben.
@@ -92,7 +93,17 @@ final class AppSettings: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
+    /// Sicherung aller Einstellungen als Datei (nur in der echten App, nicht in Tests). Gehen die Einstellungen
+    /// verloren (neu installiert, zurückgesetzt), holt Pixelcat sie beim nächsten Start von hier zurück.
+    static var backupURL: URL? {
+        guard Bundle.main.bundleIdentifier != nil,
+              let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return nil }
+        return support.appendingPathComponent("Pixelcat/Settings.plist")
+    }
+
     init() {
+        Self.restoreBackupIfNeeded(into: defaults)
         defaults.register(defaults: [
             "catName": "", "coat": Coat.black.rawValue, "scale": 3.0,
             "climbing": false, "chaseCursor": true, "multiScreen": true, "roaming": false, "basketInDock": false,
@@ -156,11 +167,23 @@ final class AppSettings: ObservableObject {
         onboardingDone = defaults.object(forKey: "onboardingDone") as? Bool ?? (stored["coat"] != nil)
         L10n.language = language
         loading = false
+        // Wer schon Einstellungen hat, bekommt gleich eine Sicherung
+        if onboardingDone, let url = Self.backupURL, !FileManager.default.fileExists(atPath: url.path) {
+            Self.writeBackup(storedValues)
+        }
     }
 
     private func changed() {
         guard !loading else { return }
-        let values: [String: Any] = [
+        let values = storedValues
+        for (key, value) in values { defaults.set(value, forKey: key) }
+        Self.writeBackup(values)
+        onChange?()
+    }
+
+    /// Alles, was gespeichert wird
+    private var storedValues: [String: Any] {
+        [
             "catName": catName, "coat": coat.rawValue, "scale": scale,
             "climbing": climbing, "chaseCursor": chaseCursor, "multiScreen": multiScreen,
             "roaming": roaming, "basketInDock": basketInDock, "basketNap": basketNap, "breakReminders": breakReminders,
@@ -177,8 +200,21 @@ final class AppSettings: ObservableObject {
             "sounds": sounds, "purring": purring, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
-        for (key, value) in values { defaults.set(value, forKey: key) }
-        onChange?()
+    }
+
+    private static func writeBackup(_ values: [String: Any]) {
+        guard let url = backupURL else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        (values as NSDictionary).write(to: url, atomically: true)
+    }
+
+    /// Sind keine Einstellungen gespeichert, aber eine Sicherung da: zurückholen
+    private static func restoreBackupIfNeeded(into defaults: UserDefaults) {
+        guard let url = backupURL, let id = Bundle.main.bundleIdentifier,
+              (defaults.persistentDomain(forName: id) ?? [:])["coat"] == nil,
+              let backup = NSDictionary(contentsOf: url) as? [String: Any]
+        else { return }
+        for (key, value) in backup { defaults.set(value, forKey: key) }
     }
 }
 
@@ -189,6 +225,7 @@ final class SettingsWindow {
     private var window: NSWindow?
     private let settings: AppSettings
     private let focus: FocusMonitor
+    private var coatWatch: AnyCancellable?
 
     init(settings: AppSettings, focus: FocusMonitor) {
         self.settings = settings
@@ -207,6 +244,8 @@ final class SettingsWindow {
             window.contentView = NSHostingView(rootView: SettingsView(settings: settings, focus: focus))
             window.center()
             self.window = window
+            // Hell oder dunkel je nach Fell
+            coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
         }
         window?.title = L10n.s("Pixelcat Einstellungen", "Pixelcat Settings")
         focus.refresh()
@@ -246,7 +285,8 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
         }
-        .background(PixelBackdrop())
+        .background(PixelBackdrop(coat: settings.coat))
+        .environment(\.colorScheme, settings.coat.colorScheme)
         .frame(minWidth: 480, minHeight: 400)
         // Bei Sprachwechsel alles neu aufbauen
         .id(settings.language)

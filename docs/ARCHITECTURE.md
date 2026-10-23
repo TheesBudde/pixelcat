@@ -175,6 +175,13 @@ through `INFocusStatusCenter` after the user allows it once.
 `AppSettings` is one `ObservableObject` for everything, stored in `UserDefaults`. Every change calls `onChange`, and
 the controller applies it right away. The settings, tasks and setup windows are SwiftUI views in `NSHostingView`s.
 The setup appears on first launch when no settings are stored yet, and can be opened again from the settings.
+Every change is also written to `~/Library/Application Support/Pixelcat/Settings.plist`. If the preferences are
+missing on launch, Pixelcat restores them from there.
+
+The windows follow the cat's coat (`Coat.appearance`, `Coat.backdrop`): dark for the black cat, light with an orange
+tint for the orange tabby, light gray for the gray tabby. On the welcome page a small `PlayfulCatModel` lets the cat
+sleep until the pointer enters the window, then wake, stretch, walk, sit and groom. The petting page tracks the
+pointer over the cat and plays the purr.
 
 ## Sounds
 
