@@ -1,6 +1,6 @@
 # Pixelcat architecture
 
-A technical sketch of how Pixelcat works. About 7,500 lines of Swift in `Sources/`, built with `swiftc` directly
+A technical sketch of how Pixelcat works. About 8,700 lines of Swift in `Sources/`, built with `swiftc` directly
 (no Xcode project) into a menu bar app (`LSUIElement`) for macOS 13 and later.
 
 ## The big picture
@@ -54,7 +54,7 @@ flowchart LR
 | `Sound.swift` | `Meow` and `Purr` |
 | `Settings.swift` | `AppSettings` and the settings window |
 | `TasksWindow.swift` | The tasks window |
-| `Onboarding.swift` | First launch setup: name, coat, home, reminders, a short tour of the features |
+| `Onboarding.swift` | First launch setup: language, name, coat, home, reminders, a short tour, the drop onto the Dock |
 | `PixelArtViews.swift` | Sprites as SwiftUI views and the faint pixel backdrop of the windows |
 | `Localization.swift` | `L10n.s("Deutsch", "English")`: both languages side by side in code |
 | `SelfTest.swift` | On screen self test (`--selftest`, `--selftest calls`) |
@@ -185,9 +185,34 @@ Every change is also written to `~/Library/Application Support/Pixelcat/Settings
 missing on launch, Pixelcat restores them from there.
 
 The windows follow the cat's coat (`Coat.appearance`, `Coat.backdrop`): dark for the black cat, light with an orange
-tint for the orange tabby, light gray for the gray tabby. On the welcome page a small `PlayfulCatModel` lets the cat
-sleep until the pointer enters the window, then wake, stretch, walk, sit and groom. The petting page tracks the
-pointer over the cat and plays the purr.
+tint for the orange tabby, light gray for the gray tabby.
+
+## The setup
+
+`OnboardingView` is a row of small pages: welcome, language, name, coat, home, an optional question about Accessibility
+access for the cat bed, reminders, a short tour and the last page. The cat stays off the Dock until the setup is done,
+and the chosen home (`Home`: cat bed, Dock or roaming) is applied only at the very end, so the Dock icon never changes
+in the middle of it.
+
+```mermaid
+sequenceDiagram
+    participant Setup as OnboardingView
+    participant Window as OnboardingWindow
+    participant Cat as CatController
+    participant Brain as CatBrain
+    Setup->>Setup: Done: wake up, sit, stand (WakingCat)
+    Setup->>Window: where the cat stands in the window
+    Window->>Window: convert to screen points, fade out and close
+    Window->>Cat: dropIn(from: rect)
+    Cat->>Cat: hop and fall, shrinking to her size (PropWindow)
+    Cat->>Brain: arrive(centerX:) on the Dock
+    Cat->>Setup: apply the home (bed, roaming or stay)
+```
+
+On the welcome page `PlayfulCatModel` lets the cat sleep until the pointer enters the window. Then she sits up, stands
+and strolls slowly, and only later sits, grooms or stretches. The petting page tracks the pointer over the cat and plays
+the purr. The last page and the drop show her current outfit (`CatController.outfitNow()`), so she wears her top hat in
+the evening right away.
 
 ## Sounds
 
@@ -197,6 +222,6 @@ Real cat recordings from “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0
 ## Testing
 
 - `test.sh` compiles the sources with `Tests/main.swift` and plays through scenarios without a screen: the cat bed,
-  every reminder, overlaps and the scheduler queue.
+  every reminder, overlaps, the scheduler queue, the bird chase and the welcome page cat.
 - `preview.sh` renders sprites, bubbles, props and all windows to `build/preview/` for a visual check.
 - `--selftest` runs every reminder on the real screen and checks the result. `--selftest calls` simulates a call.

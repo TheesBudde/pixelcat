@@ -91,16 +91,18 @@ Update with `brew upgrade --cask pixelcat`. Without Homebrew: download the ZIP f
 [release](https://github.com/TheesBudde/pixelcat/releases/latest), unzip it, move `Pixelcat.app` to your
 Applications folder and open it with right click › Open the first time.
 
-On first launch a short setup welcomes you. You pick English or German, give your cat a name, pick her coat and home and choose your
-reminders. A little tour then shows how she reminds you, remembers your tasks, heads out when roaming and likes to
-be petted. The cat joins your Dock once the setup is done. You can open it again in the settings.
+On first launch a short setup welcomes you, one small step per page. You pick English or German, give your cat a
+name, choose her coat and where she lives (in her cat bed, on the Dock or roaming) and pick your reminders. A little
+tour then shows how she reminds you, remembers your tasks, heads out and likes to be petted. When you click Done she
+wakes up, jumps out of the window and drops onto your Dock, shrinking to her size on the way down. Then she heads to
+her bed, walks off or stays, just as you chose. You can open the setup again in the settings.
 
 Your settings survive updates. Pixelcat also keeps a copy in
 `~/Library/Application Support/Pixelcat/Settings.plist` and restores it if the settings are ever lost.
 
 <p align="center">
   <img src="docs/img/setup-welcome.png" width="32%" alt="Setup: welcome">
-  <img src="docs/img/setup-coat.png" width="32%" alt="Setup: pick a coat">
+  <img src="docs/img/setup-home.png" width="32%" alt="Setup: where she lives">
   <img src="docs/img/setup-reminders.png" width="32%" alt="Setup: pick reminders">
 </p>
 
@@ -177,8 +179,9 @@ To draw your own poses, edit the text grids in `Sources/Sprites.swift` and run `
 ```
 
 `test.sh` plays through the cat bed (breaks, timers, reminders, calls, full screen, clicks and a bed moved in the
-Dock, also in the middle of climbing in or out) and all reminders (drinking, eye breaks, end of the workday, tasks,
-activity, overlaps with breaks and Pomodoro).
+Dock, also in the middle of climbing in or out), all reminders (drinking, eye breaks, end of the workday, tasks,
+activity, overlaps with breaks and Pomodoro), the bird chase with and without the bed, and the calm cat on the
+welcome page.
 
 On the real screen, with the installed app (it quits afterwards and writes `build/selftest.log`):
 
