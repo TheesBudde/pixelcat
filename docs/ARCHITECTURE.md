@@ -6,20 +6,20 @@ A technical sketch of how Pixelcat works. About 7,500 lines of Swift in `Sources
 ## The big picture
 
 ```
-┌──────────── Menu bar ─────────────────────────── [🐱] ◄── NSStatusItem (AppDelegate)
-│                                                        Menu: Pomodoro, timer, reminders, settings …
+┌─ Menu bar ──────────────────────────────── [cat] ◄── NSStatusItem (AppDelegate)
+│                                                       menu: Pomodoro, timer, reminders, settings
 │
-│          ┌──────────┐   ┌────────┐
-│          │ ☁  window │   │ /\_/\  │ ◄── borderless, transparent NSPanel (CatController)
-│          │  (eye    │   │ (o.o)  │     floats above all windows, on every Space,
-│          │  break)  │   └────────┘     never takes focus away from your app
-│  ════════╧══════════╧═════════════════  ◄── top of the Dock = NSScreen.visibleFrame.minY
-│  [ Dock   ⬜ ⬜ ⬜ ⬜ 🧺 ⬜ ⬜ ]           ◄── optional cat bed: a Dock tile view (BasketTileView)
-└──────────────────────────────────────────────────────
+│     ┌─────────────┐        ┌────────┐
+│     │ eye break   │        │ /\_/\  │ ◄── borderless, transparent NSPanel (CatController)
+│     │ window      │        │ (o.o)  │     floats above all windows on every Space
+│     │ (PropWindow)│        └────────┘     and never takes focus away from your app
+│  ═══╧═════════════╧════════════════════ ◄── top of the Dock = NSScreen.visibleFrame.minY
+│  [ Dock   ▢ ▢ ▢ ▢ (bed) ▢ ▢ ]          ◄── optional cat bed: Dock tile view (BasketTileView)
+└──────────────────────────────────────────
 ```
 
 ```mermaid
-flowchart TD
+flowchart LR
     App[AppDelegate<br/>menu bar item, menu, windows] --> Settings[AppSettings<br/>UserDefaults]
     App --> Controller[CatController<br/>panel, tick loop, props]
     Settings -- onChange --> Controller
