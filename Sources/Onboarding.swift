@@ -106,8 +106,8 @@ struct OnboardingView: View {
     private func page(_ step: Step) -> some View {
         switch step {
         case .language:
-            OnboardingPage(title: "Deutsch oder English?",
-                           text: "Wähle deine Sprache. Choose your language.") {
+            OnboardingPage(title: t("Deutsch oder Englisch?", "English or German?"),
+                           text: t("Wähle deine Sprache.", "Choose your language.")) {
                 PixelCat(coat: settings.coat, pose: .sit, scale: 4)
             } below: {
                 HStack(spacing: 18) {
