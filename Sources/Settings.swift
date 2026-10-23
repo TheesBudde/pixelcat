@@ -18,11 +18,14 @@ final class AppSettings: ObservableObject {
     @Published var roaming: Bool { didSet { changed() } }
     @Published var basketInDock: Bool {
         didSet {
-            // Beim Einschalten gleich um die Freigabe bitten – damit findet sie das Körbchen überall genau
-            if basketInDock, !oldValue, !loading, !DockLocator.isTrusted { DockLocator.requestTrust() }
+            // Beim Einschalten gleich um die Freigabe bitten, damit sie das Körbchen überall genau findet
+            // (die Einrichtung fragt selbst und schaltet das ab)
+            if basketInDock, !oldValue, !loading, askForAccessWithBed, !DockLocator.isTrusted { DockLocator.requestTrust() }
             changed()
         }
     }
+    /// Nach der Freigabe fragen, sobald der Katzenkorb eingeschaltet wird
+    var askForAccessWithBed = true
     /// Katzenkorb (mit Körbchen): Sie schläft im Körbchen im Dock und kommt nur zu Pausen heraus.
     @Published var basketNap: Bool { didSet { changed() } }
     @Published var breakReminders: Bool { didSet { changed() } }
@@ -297,15 +300,7 @@ struct SettingsView: View {
     private var lookSection: some View {
         Section {
             LabeledContent(t("Name", "Name")) {
-                TextField("", text: $settings.catName, prompt: Text("Pixelcat"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 180)
-                    .onChange(of: settings.catName) { value in
-                        if value.count > OnboardingView.maxNameLength {
-                            settings.catName = String(value.prefix(OnboardingView.maxNameLength))
-                        }
-                    }
+                NameInput(name: $settings.catName)
             }
             LabeledContent(t("Fell", "Coat")) {
                 Picker("", selection: $settings.coat) {
@@ -613,6 +608,35 @@ struct SettingsView: View {
                     .frame(width: 52, alignment: .trailing)
             }
         }
+    }
+}
+
+/// Name der Katze: schlichter Text mit Stift, ohne Rahmen. Beim Bearbeiten wird die Fläche etwas kräftiger.
+struct NameInput: View {
+    @Binding var name: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 7) {
+            TextField("", text: $name, prompt: Text("Pixelcat"))
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .font(.system(.body, design: .rounded).weight(.medium))
+                .focused($focused)
+                .frame(width: 150)
+                .onChange(of: name) { value in
+                    if value.count > OnboardingView.maxNameLength { name = String(value.prefix(OnboardingView.maxNameLength)) }
+                }
+            Image(systemName: "pencil")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(focused ? Color.accentColor : .secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.primary.opacity(focused ? 0.09 : 0.05)))
+        .contentShape(Capsule())
+        .onTapGesture { focused = true }
+        .animation(.easeOut(duration: 0.15), value: focused)
     }
 }
 

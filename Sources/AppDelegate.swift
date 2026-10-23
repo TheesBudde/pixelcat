@@ -57,7 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             cat.showTaskNow(id)
         }
         settings.onOpenTasks = { [weak self] in self?.openTasks() }
-        settings.onOpenSetup = { [weak self] in self?.onboardingWindow.show() }
+        // Während der Einrichtung ist die Katze nicht auf dem Dock, danach kommt sie
+        settings.onOpenSetup = { [weak self] in
+            self?.cat.hide()
+            self?.onboardingWindow.show()
+        }
+        onboardingWindow.onClose = { [weak self] in self?.cat.show() }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
@@ -82,15 +87,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.toolTip = settings.displayName
         buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
+        // Beim allerersten Start (oder mit --onboarding) erst die Einrichtung, danach kommt die Katze
+        let selfTesting = CommandLine.arguments.contains("--selftest")
+        let setup = CommandLine.arguments.contains("--onboarding") || (!settings.onboardingDone && !selfTesting)
         if ProcessInfo.processInfo.environment["PIXELCAT_CALIBRATE"] != nil {
             cat.runCalibration()
+        } else if setup {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.onboardingWindow.show() }
         } else {
             cat.show()
-        }
-        // Beim allerersten Start (oder mit --onboarding): die Einrichtung, sobald die Katze auf dem Dock ist
-        let selfTesting = CommandLine.arguments.contains("--selftest")
-        if CommandLine.arguments.contains("--onboarding") || (!settings.onboardingDone && !selfTesting) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.onboardingWindow.show() }
         }
     }
 
@@ -112,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(toggleItem)
         menu.addItem(.separator())
 
-        pomodoroItem = item("Pomodoro", #selector(togglePomodoro))
+        pomodoroItem = item("Pomodoro", #selector(togglePomodoro), icon: "timer")
         menu.addItem(pomodoroItem)
         timerMenu = NSMenu()
         for minutes in Self.timerPresets {
@@ -121,19 +126,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             timerMenu.addItem(preset)
         }
         timerMenu.addItem(.separator())
-        timerMenu.addItem(item(t("Eigene Zeit …", "Custom time …"), #selector(askForTimer)))
+        timerMenu.addItem(item(t("Eigene Zeit …", "Custom time …"), #selector(askForTimer), icon: "keyboard"))
         timerItem = NSMenuItem(title: "Timer", action: nil, keyEquivalent: "")
         timerItem.target = self
+        timerItem.image = Self.symbol("hourglass")
         timerItem.submenu = timerMenu
         menu.addItem(timerItem)
         infoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         infoItem.isEnabled = false
         menu.addItem(infoItem)
-        reminderItem = item(t("Pausenerinnerung", "Break reminder"), #selector(toggleReminders))
+        reminderItem = item(t("Pausenerinnerung", "Break reminder"), #selector(toggleReminders), icon: "cup.and.saucer")
         menu.addItem(reminderItem)
-        drinkItem = item(t("Trinkerinnerung", "Drink reminder"), #selector(toggleDrinking))
+        drinkItem = item(t("Trinkerinnerung", "Drink reminder"), #selector(toggleDrinking), icon: "drop")
         menu.addItem(drinkItem)
-        eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks))
+        eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks), icon: "mountain.2")
         menu.addItem(eyeItem)
         // Aufgaben: Untermenü zum Ein-/Ausschalten und zum Bearbeiten der Liste
         let taskMenu = NSMenu()
@@ -153,37 +159,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             taskMenu.addItem(more)
         }
         if !settings.taskItems.isEmpty { taskMenu.addItem(.separator()) }
-        taskMenu.addItem(item(t("Aufgaben hinzufügen und bearbeiten …", "Add and edit tasks …"), #selector(openTasks)))
+        taskMenu.addItem(item(t("Aufgaben hinzufügen und bearbeiten …", "Add and edit tasks …"), #selector(openTasks), icon: "square.and.pencil"))
         taskItem = NSMenuItem(title: t("Aufgabenerinnerung", "Task reminder"), action: nil, keyEquivalent: "")
         taskItem.submenu = taskMenu
+        taskItem.image = Self.symbol("checklist")
         menu.addItem(taskItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
         if settings.basketInDock {
-            roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming))
+            roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming), icon: "basket")
             roamItem.toolTip = t("Die Katze schläft im Korb im Dock und kommt nur zu Pausen und Erinnerungen heraus.",
                                  "The cat sleeps in the bed in the Dock and only comes out for breaks and reminders.")
         } else {
-            roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming))
+            roamItem = item(t("Streifzug", "Roaming"), #selector(toggleRoaming), icon: "pawprint")
             roamItem.toolTip = t("Die Katze geht weg und kommt nur zu Pausen und Erinnerungen herein.",
                                  "The cat heads out and only comes in for breaks and reminders.")
         }
         menu.addItem(roamItem)
         menu.addItem(.separator())
 
-        feedItem = item(t("Füttern", "Feed"), #selector(feed))
+        feedItem = item(t("Füttern", "Feed"), #selector(feed), icon: "fork.knife")
         menu.addItem(feedItem)
-        playItem = item(t("Mit Wollknäuel spielen", "Play with yarn"), #selector(togglePlaying))
+        playItem = item(t("Mit Wollknäuel spielen", "Play with yarn"), #selector(togglePlaying), icon: "circle.dotted")
         menu.addItem(playItem)
-        startleItem = item(t("Aufscheuchen", "Startle"), #selector(startle))
+        startleItem = item(t("Aufscheuchen", "Startle"), #selector(startle), icon: "hand.tap")
         menu.addItem(startleItem)
-        sleepItem = item(t("Schlafen legen", "Put to sleep"), #selector(goToSleep))
+        sleepItem = item(t("Schlafen legen", "Put to sleep"), #selector(goToSleep), icon: "moon.zzz")
         menu.addItem(sleepItem)
         menu.addItem(.separator())
 
-        menu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ","))
+        menu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ",", icon: "gearshape"))
         let quit = NSMenuItem(title: t("Pixelcat beenden", "Quit Pixelcat"),
                               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
+        quit.image = Self.symbol("power")
         menu.addItem(quit)
 
         statusItem.menu = menu
@@ -206,10 +214,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.mainMenu = main
     }
 
-    private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
+    private func item(_ title: String, _ action: Selector, key: String = "", icon: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self
+        if let icon { item.image = Self.symbol(icon) }
         return item
+    }
+
+    /// Kleines Symbol vor einem Menüpunkt (SF Symbols)
+    private static func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
     }
 
     /// Restzeit von Pomodoro oder Timer neben dem Katzenkopf in der Menüleiste.
@@ -227,6 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
         toggleItem.title = cat.isVisible ? t("Katze ausblenden", "Hide cat") : t("Katze einblenden", "Show cat")
+        toggleItem.image = Self.symbol(cat.isVisible ? "eye.slash" : "eye")
 
         // Haken = läuft; nochmal anklicken beendet. Pomodoro und Timer schließen sich aus.
         pomodoroItem.state = cat.pomodoro == nil ? .off : .on

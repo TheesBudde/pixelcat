@@ -9,6 +9,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
     private var coatWatch: AnyCancellable?
+    /// Fenster zu: Jetzt darf die Katze aufs Dock
+    var onClose: (() -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -40,19 +42,23 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
     /// Auch wer das Fenster einfach schließt, bekommt es nicht noch einmal ungefragt
     func windowWillClose(_ notification: Notification) {
         settings.onboardingDone = true
+        onClose?()
     }
 }
 
 struct OnboardingView: View {
     enum Step: Int, CaseIterable {
-        case welcome, name, coat, home, reminders, petting, menu, done
+        case welcome, name, coat, home, bedAccess, reminders, petting, menu, done
+
+        /// Die Frage nach der Freigabe gehört zum Zuhause und bekommt keinen eigenen Punkt
+        static var dots: [Step] { allCases.filter { $0 != .bedAccess } }
     }
 
     @ObservedObject var settings: AppSettings
     var onFinish: () -> Void
     @State private var step: Step
     @State private var forward = true
-    /// Die Wahl „Katzenkorb“ gilt erst mit „Weiter“, damit macOS nicht schon beim Antippen nach der Freigabe fragt
+    /// Das Zuhause gilt erst am Ende, wenn die Katze aufs Dock kommt
     @State private var homeInBed: Bool
 
     static let maxNameLength = 16
@@ -113,8 +119,8 @@ struct OnboardingView: View {
             }
         case .coat:
             OnboardingPage(title: t("Welches Fell steht mir?", "Which coat suits me?"),
-                           text: t("Schau mal aufs Dock. Ich ziehe mich gleich um.",
-                                   "Take a look at the Dock. I change right away.")) {
+                           text: t("Alle drei sind sehr gemütlich. Du kannst es später ändern.",
+                                   "All three are very cozy. You can change it later.")) {
                 HStack(spacing: 18) {
                     ForEach(Coat.allCases, id: \.self) { coat in
                         ChoiceCard(selected: settings.coat == coat, title: coat.title) {
@@ -143,6 +149,22 @@ struct OnboardingView: View {
                     } action: {
                         homeInBed = true
                     }
+                }
+            }
+        case .bedAccess:
+            OnboardingPage(title: t("Soll ich meinen Korb genau finden?", "Shall I find my bed exactly?"),
+                           text: t("Dafür fragt macOS einmal nach den Bedienungshilfen. Ohne schätze ich, wo er steht.",
+                                   "macOS will ask once for Accessibility access. Without it I estimate where it is.")) {
+                CatInBed(coat: settings.coat, scale: 4)
+            } below: {
+                HStack(spacing: 14) {
+                    Button(t("Nein, schätzen", "No, estimate")) { go(1) }
+                        .buttonStyle(CapsuleButtonStyle(prominent: false))
+                    Button(t("Ja, genau finden", "Yes, find it")) {
+                        DockLocator.requestTrust()
+                        go(1)
+                    }
+                    .buttonStyle(CapsuleButtonStyle())
                 }
             }
         case .reminders:
@@ -174,8 +196,8 @@ struct OnboardingView: View {
             }
         case .done:
             OnboardingPage(title: t("Schön, dass ich da bin!", "Happy to be here!"),
-                           text: t("\(settings.displayName) wartet unten auf dem Dock auf dich.",
-                                   "\(settings.displayName) is waiting for you on the Dock.")) {
+                           text: t("\(settings.displayName) kommt gleich auf dein Dock.",
+                                   "\(settings.displayName) is on the way to your Dock.")) {
                 VStack(spacing: 6) {
                     FloatingHeart()
                     PixelCat(coat: settings.coat, pose: .sleep, scale: 6)
@@ -196,10 +218,11 @@ struct OnboardingView: View {
                 .frame(width: 140, alignment: .leading)
             Spacer()
             HStack(spacing: 7) {
-                ForEach(Step.allCases, id: \.self) { item in
+                ForEach(Step.dots, id: \.self) { item in
+                    let current = item == (step == .bedAccess ? .home : step)
                     Capsule()
-                        .fill(item == step ? Color.accentColor : Color.secondary.opacity(0.3))
-                        .frame(width: item == step ? 20 : 7, height: 7)
+                        .fill(current ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .frame(width: current ? 20 : 7, height: 7)
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: step)
@@ -207,6 +230,9 @@ struct OnboardingView: View {
             Button(nextTitle, action: next)
                 .buttonStyle(CapsuleButtonStyle())
                 .keyboardShortcut(.defaultAction)
+                // Bei der Frage nach der Freigabe antwortet man mit Ja oder Nein
+                .opacity(step == .bedAccess ? 0 : 1)
+                .disabled(step == .bedAccess)
             .frame(width: 140, alignment: .trailing)
         }
         .padding(.horizontal, 32)
@@ -222,24 +248,32 @@ struct OnboardingView: View {
     }
 
     private func next() {
-        if step == .home { applyHome() }
         if step == .done {
             settings.onboardingDone = true
+            // Erst das Fenster schließen, dann das Zuhause übernehmen, damit nichts in den Vordergrund springt
             onFinish()
+            applyHome()
         } else {
             go(1)
         }
     }
 
-    /// Zuhause übernehmen. Erst jetzt fragt macOS (falls nötig) nach den Bedienungshilfen.
+    /// Zuhause übernehmen. Nach der Freigabe hat die Einrichtung schon selbst gefragt.
     private func applyHome() {
         guard homeInBed != settings.basketInDock else { return }
+        settings.askForAccessWithBed = false
         settings.basketInDock = homeInBed
         if homeInBed { settings.basketNap = true }
+        settings.askForAccessWithBed = true
     }
 
     private func go(_ delta: Int) {
-        guard let target = Step(rawValue: step.rawValue + delta) else { return }
+        guard var target = Step(rawValue: step.rawValue + delta) else { return }
+        // Die Frage nach der Freigabe nur mit Katzenkorb und wenn sie noch fehlt
+        if target == .bedAccess, !homeInBed || DockLocator.isTrusted {
+            guard let skip = Step(rawValue: target.rawValue + delta) else { return }
+            target = skip
+        }
         forward = delta > 0
         withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) { step = target }
     }
@@ -291,16 +325,19 @@ extension OnboardingPage where Below == EmptyView {
     }
 }
 
-/// Runder, farbiger Knopf für „Weiter“
+/// Runder Knopf für „Weiter“: farbig, oder zurückhaltend für die zweite Wahl
 private struct CapsuleButtonStyle: ButtonStyle {
+    var prominent = true
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(.body, design: .rounded).weight(.semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(prominent ? Color.white : Color.primary)
             .padding(.horizontal, 22)
             .padding(.vertical, 9)
-            .background(Capsule().fill(Color.accentColor.gradient))
-            .shadow(color: Color.accentColor.opacity(0.3), radius: 6, y: 2)
+            .background(Capsule().fill(prominent ? AnyShapeStyle(Color.accentColor.gradient)
+                                                 : AnyShapeStyle(Color.primary.opacity(0.08))))
+            .shadow(color: Color.accentColor.opacity(prominent ? 0.3 : 0), radius: 6, y: 2)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
     }
@@ -319,14 +356,14 @@ private struct NameField: View {
         VStack(spacing: 14) {
             TextField("", text: $settings.catName, prompt: Text("Pixelcat"))
                 .textFieldStyle(.plain)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 20)
                 .frame(width: 280)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.background.opacity(0.9)))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.accentColor.opacity(focused ? 0.8 : 0.25), lineWidth: 2))
+                .background(Capsule().fill(Color.primary.opacity(focused ? 0.08 : 0.05)))
+                .overlay(Capsule().strokeBorder(Color.accentColor.opacity(focused ? 0.55 : 0), lineWidth: 1.5))
+                .animation(.easeOut(duration: 0.15), value: focused)
                 .focused($focused)
                 .onChange(of: settings.catName) { value in
                     if value.count > OnboardingView.maxNameLength {
@@ -486,20 +523,24 @@ private struct MenuBarSketch: View {
 
 // MARK: - Lebendige Katzen
 
-/// Schläft, bis die Maus ins Fenster kommt. Dann wacht sie auf, streckt sich, läuft ein Stück hin und her,
-/// setzt sich und putzt sich. Ist die Maus eine Weile weg, legt sie sich wieder schlafen.
+/// Schläft, bis die Maus ins Fenster kommt. Dann wacht sie auf, streckt sich und bleibt ruhig: Meist sitzt sie,
+/// putzt sich ab und zu, steht mal auf, geht langsam ein paar Schritte oder dreht sich um. Ist die Maus eine Weile
+/// weg, dreht sie sich und legt sich wieder schlafen.
 @MainActor
 final class PlayfulCatModel: ObservableObject {
     private enum Phase: Equatable {
-        case sleeping, waking, stretching, walking(to: CGFloat), sitting, grooming, yawning, lyingDown
+        case sleeping, waking, stretching, sitting, grooming, standing, yawning, lyingDown
+        case walking(to: CGFloat)
+        /// Kurz von hinten zu sehen, dann schaut sie in die andere Richtung
+        case turning(thenLieDown: Bool)
     }
 
     @Published private(set) var sprite: Sprite = Frames.sleepA
     @Published private(set) var x: CGFloat = 0
     @Published private(set) var facingLeft = false
 
-    /// So weit darf sie nach links und rechts laufen (Punkte)
-    var range: CGFloat = 130
+    /// So weit darf sie nach links und rechts gehen (Punkte)
+    var range: CGFloat = 70
     var hovering = false {
         didSet { if hovering { lastHover = clock } }
     }
@@ -509,49 +550,52 @@ final class PlayfulCatModel: ObservableObject {
     private var phaseLength: Double = 0
     private var clock: Double = 0
     private var lastHover: Double = -100
-    /// Was sie nach dem Aufwachen als Erstes tut: nach links, umdrehen, nach rechts, hinsetzen, putzen
-    private var plan: [Phase] = []
 
     func tick(_ dt: Double) {
         clock += dt
         phaseTime += dt
         if hovering { lastHover = clock }
-        let frame = Int(phaseTime / 0.22)
         switch phase {
         case .sleeping:
-            sprite = Int(phaseTime / 1.1) % 2 == 0 ? Frames.sleepA : Frames.sleepB
-            if hovering { start(.waking, for: 0.8) }
+            sprite = Int(phaseTime / 1.3) % 2 == 0 ? Frames.sleepA : Frames.sleepB
+            if hovering, phaseTime > 0.8 { start(.waking, for: 1.2) }
         case .waking:
-            sprite = phaseTime < 0.4 ? Frames.lieBlink : Frames.lie
-            if phaseTime >= phaseLength { start(.stretching, for: 1.4) }
+            sprite = phaseTime < 0.5 ? Frames.lieBlink : Frames.lie
+            if phaseTime >= phaseLength { start(.stretching, for: 1.8) }
         case .stretching:
-            sprite = phaseTime < 0.7 ? Frames.stretchBowA : Frames.stretchBowB
-            if phaseTime >= phaseLength {
-                plan = [.walking(to: -range * 0.75), .walking(to: range * 0.45), .sitting, .grooming]
-                next()
-            }
-        case .walking(let target):
-            let speed: CGFloat = 70
-            let step = speed * CGFloat(dt)
-            facingLeft = target < x
-            if abs(target - x) <= step {
-                x = target
-                next()
-            } else {
-                x += facingLeft ? -step : step
-                sprite = frame % 2 == 0 ? Frames.walkA : Frames.walkB
-            }
+            sprite = phaseTime < 0.9 ? Frames.stretchBowA : Frames.stretchBowB
+            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 4...6)) }
         case .sitting:
-            sprite = Int(phaseTime * 10) % 30 < 2 ? Frames.sitBlink : Frames.sit
+            sprite = Int(phaseTime * 10) % 40 < 2 ? Frames.sitBlink : Frames.sit
             if phaseTime >= phaseLength { next() }
         case .grooming:
-            sprite = frame % 2 == 0 ? Frames.groomA : Frames.groomB
+            sprite = Int(phaseTime / 0.35) % 2 == 0 ? Frames.groomA : Frames.groomB
+            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 3...5)) }
+        case .standing:
+            sprite = Int(phaseTime * 10) % 30 < 2 ? Frames.standBlink : Frames.stand
             if phaseTime >= phaseLength { next() }
         case .yawning:
             sprite = Frames.yawn
-            if phaseTime >= phaseLength { next() }
+            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 3...5)) }
+        case .walking(let target):
+            // Gemächlich, ein paar Schritte
+            let step = 22 * CGFloat(dt)
+            facingLeft = target < x
+            if abs(target - x) <= step {
+                x = target
+                start(.standing, for: .random(in: 1.0...1.8))
+            } else {
+                x += facingLeft ? -step : step
+                sprite = Int(phaseTime / 0.32) % 2 == 0 ? Frames.walkA : Frames.walkB
+            }
+        case .turning(let lieDown):
+            sprite = Frames.sitBackA
+            if phaseTime >= phaseLength {
+                facingLeft.toggle()
+                if lieDown { start(.lyingDown, for: 1.6) } else { start(.sitting, for: .random(in: 3...5)) }
+            }
         case .lyingDown:
-            sprite = phaseTime < 0.6 ? Frames.sit : Frames.lie
+            sprite = phaseTime < 0.7 ? Frames.sit : Frames.lie
             if phaseTime >= phaseLength { start(.sleeping, for: 0) }
         }
     }
@@ -562,33 +606,24 @@ final class PlayfulCatModel: ObservableObject {
         phaseLength = length
     }
 
-    /// Nächster Schritt: erst der Plan, dann zufällig. Ohne Maus legt sie sich nach einer Weile wieder hin.
+    /// Was als Nächstes kommt. Meistens bleibt sie einfach sitzen.
     private func next() {
-        if !plan.isEmpty {
-            begin(plan.removeFirst())
+        if clock - lastHover > 6 {
+            start(.turning(thenLieDown: true), for: 0.6)
             return
         }
-        if clock - lastHover > 4 {
-            start(.lyingDown, for: 1.4)
-            return
-        }
-        switch Int.random(in: 0..<5) {
-        case 0, 1:
-            var target = CGFloat.random(in: -range...range)
-            if abs(target - x) < 50 { target = x > 0 ? -range * 0.6 : range * 0.6 }
-            begin(.walking(to: target))
-        case 2: begin(.sitting)
-        case 3: begin(.grooming)
-        default: begin(.yawning)
-        }
-    }
-
-    private func begin(_ phase: Phase) {
-        switch phase {
-        case .sitting: start(.sitting, for: Double.random(in: 1.8...3.2))
-        case .grooming: start(.grooming, for: Double.random(in: 1.6...2.6))
-        case .yawning: start(.yawning, for: 1.0)
-        default: start(phase, for: 0)
+        let roll = Double.random(in: 0..<1)
+        switch roll {
+        case ..<0.35: start(.sitting, for: .random(in: 4...7))
+        case ..<0.55: start(.grooming, for: .random(in: 2.0...3.0))
+        case ..<0.70: start(.standing, for: .random(in: 1.5...2.5))
+        case ..<0.85:
+            // Ein paar Schritte, eher zurück zur Mitte
+            let distance = CGFloat.random(in: 30...55)
+            let target = x > 0 ? x - distance : x < 0 ? x + distance : (Bool.random() ? distance : -distance)
+            start(.walking(to: max(-range, min(range, target))), for: 0)
+        case ..<0.93: start(.turning(thenLieDown: false), for: 0.6)
+        default: start(.yawning, for: 1.2)
         }
     }
 }
