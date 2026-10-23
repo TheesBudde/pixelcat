@@ -48,7 +48,9 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
 struct OnboardingView: View {
     enum Step: Int, CaseIterable {
-        case welcome, name, coat, home, bedAccess, reminders, petting, menu, done
+        case welcome, name, coat, home, bedAccess, reminders
+        /// Kleine Führung: was sie kann
+        case tourReminders, tourTasks, tourAway, petting, menu, done
 
         /// Die Frage nach der Freigabe gehört zum Zuhause und bekommt keinen eigenen Punkt
         static var dots: [Step] { allCases.filter { $0 != .bedAccess } }
@@ -182,6 +184,28 @@ struct OnboardingView: View {
                                  isOn: $settings.quittingTimeEnabled)
                 }
             }
+        case .tourReminders:
+            OnboardingPage(title: t("Ich erinnere dich", "I remind you"),
+                           text: t("An Pausen, ans Trinken, an deine Augen und an den Feierabend. Ganz sanft, mit einer Gedankenblase.",
+                                   "To take breaks, drink, rest your eyes and call it a day. Gently, with a thought bubble.")) {
+                HStack(alignment: .bottom, spacing: 26) {
+                    PixelSprite(sprite: LookoutArt.frames[6], colors: LookoutArt.colors, scale: 3)
+                    ThinkingCat(coat: settings.coat, thought: t("PAUSE", "BREAK"))
+                    PixelSprite(sprite: Frames.waterFullA, colors: PropColors.colors, scale: 6)
+                }
+            }
+        case .tourTasks:
+            OnboardingPage(title: t("Ich merke mir Dinge", "I remember things"),
+                           text: t("Trag Aufgaben ein und ich denke ab und zu für dich daran. Jede in ihrem eigenen Takt.",
+                                   "Add tasks and I'll think of them for you now and then. Each at its own pace.")) {
+                ThinkingCat(coat: settings.coat, thought: t("Mama anrufen", "Call mom"))
+            }
+        case .tourAway:
+            OnboardingPage(title: t("Manchmal bin ich unterwegs", "Sometimes I'm out"),
+                           text: t("Mit Streifzug gehe ich los und komme nur zu Pausen und Erinnerungen vorbei. Mit Katzenkorb schlafe ich so lange im Dock.",
+                                   "With Roaming I head out and only drop by for breaks and reminders. With the cat bed I nap in the Dock instead.")) {
+                PawTrail(coat: settings.coat)
+            }
         case .petting:
             OnboardingPage(title: t("Streichel mich", "Pet me"),
                            text: t("Fahr mit der Maus über mich, ohne zu klicken. Dann schnurre ich.",
@@ -202,6 +226,8 @@ struct OnboardingView: View {
                     FloatingHeart()
                     PixelCat(coat: settings.coat, pose: .sleep, scale: 6)
                 }
+            } below: {
+                MadeWith()
             }
         }
     }
@@ -523,9 +549,9 @@ private struct MenuBarSketch: View {
 
 // MARK: - Lebendige Katzen
 
-/// Schläft, bis die Maus ins Fenster kommt. Dann wacht sie auf, streckt sich und bleibt ruhig: Meist sitzt sie,
-/// putzt sich ab und zu, steht mal auf, geht langsam ein paar Schritte oder dreht sich um. Ist die Maus eine Weile
-/// weg, dreht sie sich und legt sich wieder schlafen.
+/// Schläft, bis die Maus ins Fenster kommt. Dann wacht sie auf, setzt sich kurz, steht gleich auf und schlendert
+/// gemächlich hin und her. Erst nach einer Weile setzt sie sich mal, putzt sich oder streckt sich. Ist die Maus eine
+/// Weile weg, dreht sie sich und legt sich wieder schlafen.
 @MainActor
 final class PlayfulCatModel: ObservableObject {
     private enum Phase: Equatable {
@@ -540,7 +566,7 @@ final class PlayfulCatModel: ObservableObject {
     @Published private(set) var facingLeft = false
 
     /// So weit darf sie nach links und rechts gehen (Punkte)
-    var range: CGFloat = 70
+    var range: CGFloat = 100
     var hovering = false {
         didSet { if hovering { lastHover = clock } }
     }
@@ -550,6 +576,8 @@ final class PlayfulCatModel: ObservableObject {
     private var phaseLength: Double = 0
     private var clock: Double = 0
     private var lastHover: Double = -100
+    /// Seit wann sie wach ist: Hinsetzen, Putzen und Strecken kommen erst später
+    private var awakeSince: Double = 0
 
     func tick(_ dt: Double) {
         clock += dt
@@ -558,32 +586,37 @@ final class PlayfulCatModel: ObservableObject {
         switch phase {
         case .sleeping:
             sprite = Int(phaseTime / 1.3) % 2 == 0 ? Frames.sleepA : Frames.sleepB
-            if hovering, phaseTime > 0.8 { start(.waking, for: 1.2) }
+            if hovering, phaseTime > 0.5 { start(.waking, for: 1.3) }
         case .waking:
-            sprite = phaseTime < 0.5 ? Frames.lieBlink : Frames.lie
-            if phaseTime >= phaseLength { start(.stretching, for: 1.8) }
+            // Augen auf, kurz aufsetzen, dann gleich aufstehen
+            sprite = phaseTime < 0.4 ? Frames.lieBlink : phaseTime < 0.9 ? Frames.sit : Frames.stand
+            if phaseTime >= phaseLength {
+                awakeSince = clock
+                facingLeft = Bool.random()
+                walk()
+            }
         case .stretching:
             sprite = phaseTime < 0.9 ? Frames.stretchBowA : Frames.stretchBowB
-            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 4...6)) }
+            if phaseTime >= phaseLength { start(.standing, for: 1.0) }
         case .sitting:
             sprite = Int(phaseTime * 10) % 40 < 2 ? Frames.sitBlink : Frames.sit
             if phaseTime >= phaseLength { next() }
         case .grooming:
             sprite = Int(phaseTime / 0.35) % 2 == 0 ? Frames.groomA : Frames.groomB
-            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 3...5)) }
+            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 1.5...2.5)) }
         case .standing:
             sprite = Int(phaseTime * 10) % 30 < 2 ? Frames.standBlink : Frames.stand
             if phaseTime >= phaseLength { next() }
         case .yawning:
             sprite = Frames.yawn
-            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 3...5)) }
+            if phaseTime >= phaseLength { start(.sitting, for: .random(in: 1.5...2.5)) }
         case .walking(let target):
             // Gemächlich, ein paar Schritte
             let step = 22 * CGFloat(dt)
             facingLeft = target < x
             if abs(target - x) <= step {
                 x = target
-                start(.standing, for: .random(in: 1.0...1.8))
+                start(.standing, for: .random(in: 0.6...1.4))
             } else {
                 x += facingLeft ? -step : step
                 sprite = Int(phaseTime / 0.32) % 2 == 0 ? Frames.walkA : Frames.walkB
@@ -592,7 +625,7 @@ final class PlayfulCatModel: ObservableObject {
             sprite = Frames.sitBackA
             if phaseTime >= phaseLength {
                 facingLeft.toggle()
-                if lieDown { start(.lyingDown, for: 1.6) } else { start(.sitting, for: .random(in: 3...5)) }
+                if lieDown { start(.lyingDown, for: 1.6) } else { walk() }
             }
         case .lyingDown:
             sprite = phaseTime < 0.7 ? Frames.sit : Frames.lie
@@ -606,25 +639,34 @@ final class PlayfulCatModel: ObservableObject {
         phaseLength = length
     }
 
-    /// Was als Nächstes kommt. Meistens bleibt sie einfach sitzen.
+    /// Was als Nächstes kommt. Meistens schlendert sie weiter, erst später setzt sie sich auch mal.
     private func next() {
         if clock - lastHover > 6 {
             start(.turning(thenLieDown: true), for: 0.6)
             return
         }
+        let settled = clock - awakeSince > 10
         let roll = Double.random(in: 0..<1)
         switch roll {
-        case ..<0.35: start(.sitting, for: .random(in: 4...7))
-        case ..<0.55: start(.grooming, for: .random(in: 2.0...3.0))
-        case ..<0.70: start(.standing, for: .random(in: 1.5...2.5))
-        case ..<0.85:
-            // Ein paar Schritte, eher zurück zur Mitte
-            let distance = CGFloat.random(in: 30...55)
-            let target = x > 0 ? x - distance : x < 0 ? x + distance : (Bool.random() ? distance : -distance)
-            start(.walking(to: max(-range, min(range, target))), for: 0)
-        case ..<0.93: start(.turning(thenLieDown: false), for: 0.6)
-        default: start(.yawning, for: 1.2)
+        case ..<0.50: walk()
+        case ..<0.62: start(.turning(thenLieDown: false), for: 0.6)
+        case ..<0.74: start(.standing, for: .random(in: 1.0...2.0))
+        case ..<0.84 where settled: start(.sitting, for: .random(in: 2.0...3.0))
+        case ..<0.93 where settled: start(.grooming, for: .random(in: 1.6...2.4))
+        case ..<0.97 where settled: start(.stretching, for: 1.8)
+        case ..<1 where settled: start(.yawning, for: 1.2)
+        default: walk()
         }
+    }
+
+    /// Gemächlich ein Stück gehen, mal weiter, mal nur ein paar Schritte
+    private func walk() {
+        var distance = CGFloat.random(in: 35...90)
+        if facingLeft { distance = -distance }
+        var target = x + distance
+        // Am Rand umdrehen
+        if abs(target) > range { target = x - distance }
+        start(.walking(to: max(-range, min(range, target))), for: 0)
     }
 }
 
@@ -728,5 +770,57 @@ struct PettableCat: View {
     private var sprite: Sprite {
         if petted { return (tick / 8) % 2 == 0 ? Frames.petStandTall : Frames.petStand }
         return tick % 70 < 3 ? Frames.standBlink : Frames.stand
+    }
+}
+
+// MARK: - Bilder der Führung
+
+/// Die Katze sitzt und denkt an etwas, mit der echten Gedankenblase
+private struct ThinkingCat: View {
+    let coat: Coat
+    let thought: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            PixelSprite(sprite: BubbleFrames(text: thought).whole, colors: BubbleFrames.colors, scale: 3)
+                .offset(x: 18)
+            PixelCat(coat: coat, pose: .sit, scale: 4)
+        }
+    }
+}
+
+/// Pfotenspuren, die verblassen, und die Katze, die gerade losgeht
+private struct PawTrail: View {
+    let coat: Coat
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 14) {
+            ForEach(0..<5, id: \.self) { index in
+                PixelSprite(sprite: PixelArt.paw, colors: ["K": coat == .black ? NSColor.white.cgColor : NSColor.black.cgColor],
+                            scale: 4)
+                    .rotationEffect(.degrees(90))
+                    .offset(y: index % 2 == 0 ? -4 : -18)
+                    .opacity(0.08 + 0.07 * Double(index))
+            }
+            PixelCat(coat: coat, pose: .walk, scale: 5)
+        }
+    }
+}
+
+/// Ganz unten auf der letzten Seite: gemacht mit Liebe, Claude und Kaffee
+private struct MadeWith: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(L10n.s("Gemacht mit ", "Made with "))
+            PixelSprite(sprite: PixelArt.heart, colors: ["K": NSColor.systemPink.cgColor], scale: 2)
+            Text(L10n.s(", Claude und ", ", Claude & "))
+            PixelSprite(sprite: PixelArt.coffee, colors: PixelArt.coffeeColors, scale: 2)
+                .offset(y: -2)
+        }
+        .font(.system(.callout, design: .rounded).weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Color.primary.opacity(0.05)))
     }
 }

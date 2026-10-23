@@ -53,7 +53,7 @@ flowchart LR
 | `Sound.swift` | `Meow` and `Purr` |
 | `Settings.swift` | `AppSettings` and the settings window |
 | `TasksWindow.swift` | The tasks window |
-| `Onboarding.swift` | First launch setup: name, coat, home, reminders, a short tutorial |
+| `Onboarding.swift` | First launch setup: name, coat, home, reminders, a short tour of the features |
 | `PixelArtViews.swift` | Sprites as SwiftUI views and the faint pixel backdrop of the windows |
 | `Localization.swift` | `L10n.s("Deutsch", "English")`: both languages side by side in code |
 | `SelfTest.swift` | On screen self test (`--selftest`, `--selftest calls`) |

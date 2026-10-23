@@ -75,6 +75,20 @@ enum PixelArt {
         ".KKKKKKK",
         "..KKK..K",
     ])
+    /// Kaffeetasse mit Dampf
+    static let coffee = Sprite([
+        "..s..s...",
+        ".s..s....",
+        "..s..s...",
+        "KKKKKKK..",
+        "KCCCCCKKK",
+        "KWWWWWK.K",
+        "KWWWWWK.K",
+        "KWWWWWKKK",
+        ".KWWWK...",
+        "..KKK....",
+    ])
+    static let coffeeColors = rgbPalette(["K": 0x2B1D16, "C": 0x6F4A2E, "W": 0xFFF4E2, "s": 0xB9B2AA])
     /// Herz
     static let heart = Sprite([
         ".KK.KK.",

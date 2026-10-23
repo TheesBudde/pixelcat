@@ -87,8 +87,9 @@ Update with `brew upgrade --cask pixelcat`. Without Homebrew: download the ZIP f
 [release](https://github.com/TheesBudde/pixelcat/releases/latest), unzip it, move `Pixelcat.app` to your
 Applications folder and open it with right click › Open the first time.
 
-On first launch a short setup welcomes you. You give your cat a name, pick her coat and home, choose your
-reminders and learn how to pet her. You can open it again in the settings.
+On first launch a short setup welcomes you. You give your cat a name, pick her coat and home and choose your
+reminders. A little tour then shows how she reminds you, remembers your tasks, heads out when roaming and likes to
+be petted. The cat joins your Dock once the setup is done. You can open it again in the settings.
 
 Your settings survive updates. Pixelcat also keeps a copy in
 `~/Library/Application Support/Pixelcat/Settings.plist` and restores it if the settings are ever lost.

@@ -402,8 +402,8 @@ MainActor.assumeIsolated {
         check("ohne Namen heißt sie Pixelcat", settings.displayName == "Pixelcat")
         settings.catName = " Mochi "
         check("Name ohne Leerzeichen am Rand", settings.displayName == "Mochi")
-        check("Einrichtung hat acht Punkte, die Korb-Frage gehört zum Zuhause",
-              OnboardingView.Step.dots.count == 8 && !OnboardingView.Step.dots.contains(.bedAccess))
+        check("jede Seite hat einen Punkt, nur die Korb-Frage gehört zum Zuhause",
+              OnboardingView.Step.dots.count == OnboardingView.Step.allCases.count - 1 && !OnboardingView.Step.dots.contains(.bedAccess))
         let model = PlayfulCatModel()
         for _ in 0..<200 { model.tick(0.05) }
         check("ohne Maus schläft die Begrüßungskatze weiter", model.x == 0 && model.sprite === Frames.sleepA || model.sprite === Frames.sleepB)
