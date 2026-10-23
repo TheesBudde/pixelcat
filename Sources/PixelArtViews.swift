@@ -20,7 +20,11 @@ extension Sprite {
 extension Sprite {
     /// Mit Hut und Fliege; das Bild wird dafür nach oben (und falls nötig zur Seite) größer
     func nsImage(colors: [Character: CGColor], scale: CGFloat, outfit: Frames.Outfit) -> NSImage {
-        let pieces = outfit.pieces(on: self)
+        nsImage(colors: colors, scale: scale, pieces: outfit.pieces(on: self))
+    }
+
+    /// Mit weiteren Teilen in den Farben der Accessoires (Pixel ab der linken unteren Ecke)
+    func nsImage(colors: [Character: CGColor], scale: CGFloat, pieces: [(sprite: Sprite, x: Int, y: Int)]) -> NSImage {
         guard !pieces.isEmpty else { return nsImage(colors: colors, scale: scale) }
         let left = min(0, pieces.map(\.x).min() ?? 0)
         let right = max(width, pieces.map { $0.x + $0.sprite.width }.max() ?? 0)
@@ -96,6 +100,20 @@ enum PixelArt {
         "KKKKKK.K",
         ".KKKKKKK",
         "..KKK..K",
+    ])
+    /// Wanderbündel am Stock: blaues Tuch mit weißen Punkten, oben verknotet (Farben der Accessoires)
+    static let bindle = Sprite([
+        "...K..K.....",
+        "..KBKKBK....",
+        ".KBWBBBBK...",
+        ".KBBBWBBK...",
+        ".KBWBBBWK...",
+        "..KBBBBK....",
+        "...KKKKu....",
+        "........u...",
+        ".........u..",
+        "..........u.",
+        "...........u",
     ])
     /// Claudes Funke, als Pixelbild
     static let claudeSpark = Sprite([

@@ -185,22 +185,20 @@ struct OnboardingView: View {
         case .home:
             OnboardingPage(title: t("Wo darf ich wohnen?", "Where may I live?"), text: homeText) {
                 HStack(spacing: 14) {
+                    ChoiceCard(selected: home == .bed, title: t("Im Katzenkorb", "In my cat bed")) {
+                        CatInBed(coat: settings.coat, scale: 3)
+                    } action: {
+                        home = .bed
+                    }
                     ChoiceCard(selected: home == .dock, title: t("Auf dem Dock", "On the Dock")) {
                         PixelCat(coat: settings.coat, pose: .walk, scale: 4)
                     } action: {
                         home = .dock
                     }
                     ChoiceCard(selected: home == .roaming, title: t("Auf Streifzug", "Roaming")) {
-                        // Bis an den Kartenrand: Dort geht sie gerade hinaus
-                        SneakingOut(coat: settings.coat, scale: 4)
-                            .padding(.trailing, -14)
+                        SneakingOut(coat: settings.coat, scale: 3.5)
                     } action: {
                         home = .roaming
-                    }
-                    ChoiceCard(selected: home == .bed, title: t("Im Katzenkorb", "In my cat bed")) {
-                        CatInBed(coat: settings.coat, scale: 3)
-                    } action: {
-                        home = .bed
                     }
                 }
             }
@@ -256,6 +254,11 @@ struct OnboardingView: View {
                            text: t("Das stellst du in den Einstellungen ein. Mit Streifzug oder Katzenkorb komme ich nur zu Pausen und Erinnerungen heraus.",
                                    "You choose in the settings. With Roaming or the cat bed I only come out for breaks and reminders.")) {
                 HStack(spacing: 14) {
+                    ModeTile(title: t("Katzenkorb", "Cat bed"),
+                             caption: t("schläft im Dock", "naps in the Dock"),
+                             current: home == .bed) {
+                        CatInBed(coat: settings.coat, scale: 2)
+                    }
                     ModeTile(title: t("Immer da", "Always here"),
                              caption: t("auf dem Dock", "on the Dock"),
                              current: home == .dock) {
@@ -265,11 +268,6 @@ struct OnboardingView: View {
                              caption: t("unterwegs", "out and about"),
                              current: home == .roaming) {
                         SneakingOut(coat: settings.coat, scale: 3)
-                    }
-                    ModeTile(title: t("Katzenkorb", "Cat bed"),
-                             caption: t("schläft im Dock", "naps in the Dock"),
-                             current: home == .bed) {
-                        CatInBed(coat: settings.coat, scale: 2)
                     }
                 }
             }
@@ -981,25 +979,25 @@ private struct WakingCat: View {
     }
 }
 
-/// Streifzug: Pfotenspuren zum Rand, und von der Katze ist nur noch das Hinterteil mit dem Schwanz zu sehen
+/// Streifzug: Sie zieht los wie eine kleine Abenteurerin, mit dem Wanderbündel über der Schulter
 private struct SneakingOut: View {
     let coat: Coat
     let scale: CGFloat
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: scale * 1.5) {
-            ForEach(0..<3, id: \.self) { index in
-                PixelSprite(sprite: PixelArt.paw, colors: ["K": coat == .black ? NSColor.white.cgColor : NSColor.black.cgColor],
-                            scale: scale * 0.6)
-                    .rotationEffect(.degrees(90))
-                    .offset(y: index % 2 == 0 ? -scale : -scale * 3)
-                    .opacity(0.15 + 0.2 * Double(index))
-            }
-            // Halb aus dem Bild: vorne abgeschnitten, als wäre sie gerade hinausgegangen
-            PixelCat(coat: coat, pose: .walk, scale: scale)
-                .frame(width: CGFloat(Frames.walkA.width) * scale * 0.45, alignment: .leading)
-                .clipped()
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            let pose = Int(context.date.timeIntervalSinceReferenceDate / 0.25) % 2 == 0 ? Frames.walkA : Frames.walkB
+            Image(nsImage: pose.nsImage(colors: coat.colors, scale: scale, pieces: Self.bindle(on: pose)))
+                .interpolation(.none)
+                .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// Der Stock liegt auf der Schulter, ein Stück hinter dem Kopf, das Bündel hängt hinten oben
+    private static func bindle(on sprite: Sprite) -> [(sprite: Sprite, x: Int, y: Int)] {
+        guard let ears = sprite.earAnchor else { return [] }
+        let shoulderX = ears.center - 4, shoulderRow = ears.row + 6
+        let stick = PixelArt.bindle
+        return [(stick, shoulderX - (stick.width - 1), sprite.height - 1 - shoulderRow)]
     }
 }
