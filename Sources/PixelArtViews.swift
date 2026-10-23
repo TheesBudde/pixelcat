@@ -75,6 +75,19 @@ enum PixelArt {
         ".KKKKKKK",
         "..KKK..K",
     ])
+    /// Claudes Funke, als Pixelbild
+    static let claudeSpark = Sprite([
+        "....K....",
+        ".K..K..K.",
+        "..K.K.K..",
+        "...KKK...",
+        "KKKKKKKKK",
+        "...KKK...",
+        "..K.K.K..",
+        ".K..K..K.",
+        "....K....",
+    ])
+    static let claudeOrange = NSColor(red: 0.85, green: 0.47, blue: 0.34, alpha: 1).cgColor
     /// Kaffeetasse mit Dampf
     static let coffee = Sprite([
         "..s..s...",

@@ -1,8 +1,9 @@
 import Foundation
 
 /// Kleine Erinnerungen neben der Pause: trinken, aus dem Fenster schauen, an eine Aufgabe denken, Feierabend.
+/// Dazu der Vogel, den sie jagt, während niemand am Rechner ist.
 enum ErrandKind: Hashable, CaseIterable {
-    case drink, lookout, task, quittingTime
+    case drink, lookout, task, quittingTime, bird
 }
 
 struct Errand: Equatable {

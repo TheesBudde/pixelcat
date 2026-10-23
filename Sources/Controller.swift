@@ -160,6 +160,13 @@ final class CatController {
     private var bowl: Bowl?
     private var bowlWindow: PropWindow?
     private var ball: Ball?
+    /// Vogel, während niemand am Rechner ist
+    private var bird: Bird?
+    private var birdWindow: PropWindow?
+    /// Für diese Abwesenheit kam der Vogel schon (erst nach neuer Eingabe wieder)
+    private var birdDoneForIdle = false
+    /// „Jetzt zeigen“: Der Vogel bleibt eine Weile, auch wenn gerade jemand die Maus bewegt
+    private var birdStaysUntil = Date.distantPast
     private var ballWindow: PropWindow?
     private var dragOffset = CGPoint.zero
     private var lastDrag: (point: NSPoint, time: CFTimeInterval)?
@@ -324,6 +331,7 @@ final class CatController {
         taskList = settings.taskItems
         tasksDuringCalls = settings.tasksDuringCalls
         meowForTasks = settings.meowForTasks
+        birdAfterMinutes = settings.birdWhenAway ? settings.birdMinutes : nil
         tasksEnabled = settings.taskReminders
         let quitting = settings.quittingTimeEnabled ? (settings.quittingTime, settings.quittingWeekdaysOnly) : nil
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
@@ -348,6 +356,8 @@ final class CatController {
     var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil }
     /// Auch bei Aufgaben-Erinnerungen miauen
     var meowForTasks = false
+    /// Vogel jagen, wenn so lange niemand am Rechner war (Minuten, nil = aus)
+    var birdAfterMinutes: Int?
     /// Wie oft sie schon miaut hat (für den Selbsttest)
     private(set) var meowCount = 0
 
@@ -418,6 +428,7 @@ final class CatController {
         lookoutWindow?.panel.orderFrontRegardless()
         if !brain.isAway { panel.orderFrontRegardless() }
         ballWindow?.panel.orderFrontRegardless()
+        birdWindow?.panel.orderFrontRegardless()
     }
 
     func hide() {
@@ -427,6 +438,7 @@ final class CatController {
         bowlWindow?.panel.orderOut(nil)
         lookoutWindow?.panel.orderOut(nil)
         ballWindow?.panel.orderOut(nil)
+        birdWindow?.panel.orderOut(nil)
     }
 
     // MARK: Menüaktionen
@@ -656,6 +668,7 @@ final class CatController {
         bowlWindow?.scale = scale
         lookoutWindow?.scale = scale
         ballWindow?.scale = scale
+        birdWindow?.scale = scale
         bubble?.scale = scale
         updateBounds()
     }
@@ -1172,6 +1185,7 @@ final class CatController {
 
     /// Aus den Einstellungen („Jetzt zeigen“): gleich als Nächstes zeigen.
     func showErrandNow(_ kind: ErrandKind) {
+        if kind == .bird { birdStaysUntil = Date().addingTimeInterval(25) }
         errands.requestNow(kind)
         nextErrandAllowed = .distantPast
     }
@@ -1235,6 +1249,17 @@ final class CatController {
             if soundsAllowed { pendingMeow = (.breakStarts, now) }
             brain.callToCenter(visitLength: 75)
             return
+        case .bird:
+            releaseBird()
+            // Aus dem Streifzug oder Körbchen kommt sie herein und schaut sich erst etwas verlegen um
+            if brain.isOutAndAbout {
+                brain.peeksLeft = 3
+                brain.startErrandVisit(for: 3 * 60 * 60)
+            } else {
+                brain.peeksLeft = 1
+                brain.noticeSomething()
+            }
+            return
         case .task:
             // Nur die Blase – sie wird dafür nicht geweckt; im Streifzug oder Körbchen kommt sie herein
             // (im Videocall bleibt sie versteckt, die Blase steht dann über dem Korb im Dock)
@@ -1262,16 +1287,59 @@ final class CatController {
             return lookoutWindow == nil || now.timeIntervalSince(since) > 4 * 60
         case .quittingTime, .task:
             return errandBubble == nil
+        case .bird:
+            // Jemand ist zurück: Der Vogel fliegt davon, erledigt ist es, wenn er weg ist
+            if let bird, !bird.isLeaving, now >= birdStaysUntil, Self.secondsSinceInput < 2 { bird.leave() }
+            return bird == nil
         }
     }
 
     private func finishErrand(now: Date) {
+        if activeErrand?.errand.kind == .bird {
+            removeBird()
+            // Im Streifzug oder Körbchen zügig zurück
+            if brain.roaming { brain.hurryOut = true }
+        }
         if let bowl, bowl.water { removeBowl() }
         removeLookout()
         errandBubble?.pop()
         brain.endErrandVisit()
         activeErrand = nil
         nextErrandAllowed = now.addingTimeInterval(15)
+    }
+
+    // MARK: Vogel
+
+    /// Lange niemand am Rechner? Dann kommt ein Vogel vorbei – einmal pro Abwesenheit.
+    private func checkForBird(now: Date) {
+        let idle = Self.secondsSinceInput
+        if idle < 5 { birdDoneForIdle = false }
+        guard let minutes = birdAfterMinutes, !birdDoneForIdle, idle >= Double(minutes) * 60, activeErrand == nil,
+              canRunErrand, hiddenBecause == nil, !brain.calm else { return }
+        birdDoneForIdle = true
+        startErrand(Errand(kind: .bird), now: now)
+    }
+
+    /// Der Vogel fliegt von einer Seite herein, hoch oben
+    private func releaseBird() {
+        guard bird == nil, let frame = screen?.frame else { return }
+        let fromLeft = Bool.random()
+        let bird = Bird(x: fromLeft ? frame.minX - 30 : frame.maxX + 30, y: ground + 150 * scale / 3)
+        let window = PropWindow(columns: BirdArt.width, rows: BirdArt.height, scale: scale)
+        window.view.colors = BirdArt.colors
+        window.view.sprite = BirdArt.up
+        self.bird = bird
+        birdWindow = window
+        brain.bird = bird
+        if isVisible { window.panel.orderFrontRegardless() }
+    }
+
+    private func removeBird() {
+        birdWindow?.panel.orderOut(nil)
+        birdWindow = nil
+        bird = nil
+        brain.bird = nil
+        brain.peeksLeft = 0
     }
 
     /// Pomodoro oder Timer beginnt: laufende Erinnerung abbrechen (Napf und Fenster weg)
@@ -1436,6 +1504,7 @@ final class CatController {
             updateFocus()
             updateOutfit()
             if isActivityBreakDue() { remindToTakeBreak(now: date) }
+            checkForBird(now: date)
             // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
             if hiddenBecause != nil, activeErrand?.errand.kind == .task, screenIsShared { errandBubble?.pop() }
         }
@@ -1458,6 +1527,10 @@ final class CatController {
             let radius = 4 * scale
             ball.update(dt: dt, minX: frame.minX + radius, maxX: frame.maxX - radius,
                         maxY: frame.height - 9 * scale, unit: scale / 3)
+        }
+        if let bird, let frame = screen?.frame {
+            bird.update(dt: dt, minX: frame.minX, maxX: frame.maxX, ground: ground, top: frame.maxY, unit: scale / 3)
+            if bird.isGone { removeBird() }
         }
         if let bowl, bowl.food <= 0, brain.phase != .eating, brain.phase != .drinking {
             bowl.emptyFor += dt
@@ -1509,6 +1582,10 @@ final class CatController {
         if let ball, let ballWindow {
             ballWindow.view.sprite = Int(ball.rolled / (3 * scale)) % 2 == 0 ? Frames.yarnA : Frames.yarnB
             ballWindow.place(centerX: ball.x, bottom: ground + ball.y)
+        }
+        if let bird, let birdWindow {
+            birdWindow.view.sprite = BirdArt.frame(bird)
+            birdWindow.place(centerX: bird.x, bottom: bird.y)
         }
     }
 }

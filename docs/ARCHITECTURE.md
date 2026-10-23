@@ -48,6 +48,7 @@ flowchart LR
 | `Reminders.swift` | `ErrandScheduler`, `TaskItem`, `OutfitTimes`, `ActivityTracker`. Pure logic, no windows |
 | `Basket.swift` | `BasketArt` (the plush bed), `BasketTileView` (Dock icon), `DockLocator` (where the bed sits) |
 | `Lookout.swift` | The eye break window: frame, sky, sun, hills and a drifting cloud |
+| `Bird.swift` | The bird she chases while you're away: steering flight, swoops, dodging, flying off |
 | `Bubble.swift`, `PixelFont.swift` | Thought bubbles with a hand drawn pixel font (letters, umlauts, digits, punctuation) |
 | `Sensors.swift` | `CallDetector` (camera, microphone, screen sharing), `FocusMonitor` |
 | `Sound.swift` | `Meow` and `Purr` |
@@ -143,6 +144,11 @@ flowchart LR
     Gate -- in a call --> TaskOnly[only tasks, if allowed:<br/>bubble at the Dock, cat hidden]
     Run --> Back[back to bed or roaming]
 ```
+
+The bird is an errand too. When no input has arrived for the set time, the controller starts it: the cat comes in
+(or climbs out of her bed), peeks left and right, then chases. `CatBrain` runs under the bird, swats when it flies low
+and reuses the pounce jump when it is higher. On the next input the bird flies off, the errand ends and she hurries
+back.
 
 Only one reminder runs at a time. The scheduler is plain logic with an injectable clock and random source, which
 is what `test.sh` exercises.

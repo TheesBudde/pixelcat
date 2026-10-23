@@ -222,6 +222,12 @@ final class CatBrain {
         didSet { if mode != oldValue { modeChanged(from: oldValue) } }
     }
     var ball: Ball?
+    /// Vogel, der umherfliegt, während niemand am Rechner ist
+    var bird: Bird?
+    /// Nach dem Hereinkommen erst ein paarmal nach links und rechts schauen
+    var peeksLeft = 0
+    /// Nach dem Vogel schnell wieder hinaus bzw. zurück ins Körbchen
+    var hurryOut = false
     var bowl: Bowl?
     var climbingEnabled = false {
         didSet {
@@ -336,6 +342,8 @@ final class CatBrain {
 
     private var stalkWiggle = 0.0
     private var pounceFollowUp = false
+    /// Nicht pausenlos nach dem Vogel springen
+    private var pounceCooldown = 0.0
     /// Auf dem Weg zum Körbchen: wann sie zuletzt nachgesehen hat, wo es steht
     private var basketCheck = 0.0
 
@@ -700,7 +708,7 @@ final class CatBrain {
             return
         }
         let needsDock = (bowl?.food ?? 0) > 0 || lookout != nil || reminderPending || ball != nil
-            || awaitingAcknowledgement
+            || awaitingAcknowledgement || bird.map { !$0.isLeaving } == true
         if mode == .focus {
             enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
         } else if perchID != nil, needsDock || !mayClimb {
@@ -716,6 +724,15 @@ final class CatBrain {
             reminderPending = false
             goal = .center
             walk(to: (minX + maxX) / 2, speed: 60 * unit)
+        } else if let bird, !bird.isLeaving {
+            if peeksLeft > 0 {
+                // Noch etwas verlegen: erst nach links und rechts schauen
+                peeksLeft -= 1
+                facingRight.toggle()
+                enter(.standing, for: .random(in: 0.7...1.1))
+            } else {
+                enter(.chasing)
+            }
         } else if ball != nil {
             enter(.chasing)
         } else if canChaseCursor, let cursor, cursor.idle > 2, abs(cursor.x - center) < 600 * unit,
@@ -984,7 +1001,8 @@ final class CatBrain {
         if basketReady(), let basketX {
             goal = .intoBasket
             basketCheck = 0
-            walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: 60 * unit)
+            walk(to: basketX - CGFloat(Layout.canvasWidth) / 2 * scale, speed: (hurryOut ? 120 : 60) * unit)
+            hurryOut = false
             return
         }
         var toLeft = x < (minX + maxX) / 2
@@ -994,7 +1012,8 @@ final class CatBrain {
         if let dockSideIsLeft { toLeft = dockSideIsLeft } // zum Körbchen im seitlichen Dock
         offscreenAllowed = true
         goal = .exit
-        walk(to: offscreenX(left: toLeft), speed: 70 * unit)
+        walk(to: offscreenX(left: toLeft), speed: (hurryOut ? 130 : 70) * unit)
+        hurryOut = false
     }
 
     /// Streifzug beendet: von der Seite zurück aufs Dock.
@@ -1565,6 +1584,10 @@ final class CatBrain {
     // MARK: Spielen
 
     private func updateChase(_ dt: Double) {
+        if let bird {
+            updateBirdChase(dt, bird)
+            return
+        }
         guard let ball else {
             enter(.standing, for: 0.4)
             return
@@ -1584,6 +1607,42 @@ final class CatBrain {
             return
         }
         let chaseSpeed = (abs(distance) > 90 * unit ? 150 : 70) * unit
+        let step = min(abs(distance), chaseSpeed * CGFloat(dt))
+        x += distance > 0 ? step : -step
+        chaseMoving = step > 0.05
+        speed = chaseSpeed
+    }
+
+    /// Dem Vogel hinterher: unter ihn laufen, nach ihm schlagen, wenn er tief fliegt, und springen,
+    /// wenn er etwas höher ist. Fliegt er zu hoch, wartet sie darunter.
+    private func updateBirdChase(_ dt: Double, _ bird: Bird) {
+        guard !bird.isLeaving else {
+            enter(.standing, for: 0.5)
+            return
+        }
+        pounceCooldown -= dt
+        if abs(bird.x - center) > 4 * scale { facingRight = bird.x > center }
+        let dir: CGFloat = facingRight ? 1 : -1
+        let desired = clampX(bird.x - CGFloat(Layout.canvasWidth) / 2 * scale - dir * 6 * scale)
+        let distance = desired - x
+        let height = bird.y - dockY
+        if abs(distance) < 10 * scale, pounceCooldown <= 0 {
+            if height < 30 * unit {
+                pounceCooldown = .random(in: 0.6...1.2)
+                bird.dodge(after: 0.15)
+                enter(.batting, for: 0.35)
+                return
+            }
+            if height < 150 * unit {
+                pounceCooldown = .random(in: 1.6...3.0)
+                bird.dodge(after: 0.25)
+                pounceFollowUp = true
+                startJump(toX: clampX(x + dir * 14 * scale), toY: dockY, landing: .dock,
+                          arc: max(25 * unit, height - 6 * scale))
+                return
+            }
+        }
+        let chaseSpeed = (abs(distance) > 90 * unit ? 130 : 70) * unit
         let step = min(abs(distance), chaseSpeed * CGFloat(dt))
         x += distance > 0 ? step : -step
         chaseMoving = step > 0.05

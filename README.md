@@ -37,6 +37,10 @@ of your tasks and call it a day. She never gets in the way and hides during vide
   bed size, climbs in, turns once and sleeps there. In the Dock icon she breathes and lifts her tail now and then.
   She climbs out for breaks, timers and reminders and goes back afterwards. You can move the bed anywhere in the Dock.
 - **Roaming:** Without the bed she heads out and is gone. She only drops by for breaks, timers and reminders.
+- **A bird while you're away:** After a while without input (10 minutes by default) a little bird flutters across
+  the screen. She comes out of her bed or in from roaming, looks around shyly and chases it, swatting when it swoops
+  low and leaping when it flies higher. As soon as you're back, the bird flies off and she hurries back to her bed
+  or out again.
 
 ### Gentle reminders
 
@@ -87,7 +91,7 @@ Update with `brew upgrade --cask pixelcat`. Without Homebrew: download the ZIP f
 [release](https://github.com/TheesBudde/pixelcat/releases/latest), unzip it, move `Pixelcat.app` to your
 Applications folder and open it with right click › Open the first time.
 
-On first launch a short setup welcomes you. You give your cat a name, pick her coat and home and choose your
+On first launch a short setup welcomes you. You pick English or German, give your cat a name, pick her coat and home and choose your
 reminders. A little tour then shows how she reminds you, remembers your tasks, heads out when roaming and likes to
 be petted. The cat joins your Dock once the setup is done. You can open it again in the settings.
 
@@ -130,6 +134,7 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **End of the workday:** On/off, time, Monday to Friday only
 - **Outfits:** Nightcap at bedtime, morning outfit until a set time
 - **Tasks:** Opens the tasks window
+- **While you're away:** Chase a bird after a set time without input, Show now
 - **Sounds and being considerate:** Meow, meow for tasks, purring, hide during calls, respect Focus
 - **Language:** Same as macOS, Deutsch, English
 

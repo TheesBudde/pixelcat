@@ -58,6 +58,9 @@ final class AppSettings: ObservableObject {
     @Published var taskItems: [TaskItem] { didSet { changed() } }
     /// An Aufgaben auch während Videocalls bzw. bei eingeschaltetem Mikrofon erinnern (nur die Blase)
     @Published var tasksDuringCalls: Bool { didSet { changed() } }
+    /// Ist so lange niemand am Rechner, fliegt ein Vogel herum und sie jagt ihn
+    @Published var birdWhenAway: Bool { didSet { changed() } }
+    @Published var birdMinutes: Int { didSet { changed() } }
     // Ton & Rücksicht
     @Published var sounds: Bool { didSet { changed() } }
     @Published var purring: Bool { didSet { changed() } }
@@ -116,7 +119,7 @@ final class AppSettings: ObservableObject {
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "tasksDuringCalls": false,
+            "taskReminders": false, "tasksDuringCalls": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -159,6 +162,8 @@ final class AppSettings: ObservableObject {
             taskItems = (defaults.stringArray(forKey: "taskItems") ?? []).map { TaskItem(text: $0, minutes: minutes) }
         }
         tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
+        birdWhenAway = defaults.bool(forKey: "birdWhenAway")
+        birdMinutes = defaults.integer(forKey: "birdMinutes")
         sounds = defaults.bool(forKey: "sounds")
         purring = defaults.bool(forKey: "purring")
         meowForTasks = defaults.bool(forKey: "meowForTasks")
@@ -199,7 +204,7 @@ final class AppSettings: ObservableObject {
             "quittingWeekdaysOnly": quittingWeekdaysOnly,
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
-            "tasksDuringCalls": tasksDuringCalls,
+            "tasksDuringCalls": tasksDuringCalls, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
             "sounds": sounds, "purring": purring, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
@@ -280,6 +285,7 @@ struct SettingsView: View {
                 quittingSection
                 outfitSection
                 taskSection
+                birdSection
                 soundSection
                 considerateSection
                 languageSection
@@ -495,6 +501,21 @@ struct SettingsView: View {
         case 0: return t("Noch keine Aufgaben.", "No tasks yet.")
         case 1: return t("1 Aufgabe mit eigenem Abstand.", "1 task with its own interval.")
         case let count: return t("\(count) Aufgaben, jede mit eigenem Abstand.", "\(count) tasks, each with its own interval.")
+        }
+    }
+
+    private var birdSection: some View {
+        Section {
+            Toggle(t("Vogel jagen, wenn du weg bist", "Chase a bird while you're away"), isOn: $settings.birdWhenAway)
+            minutesSlider(t("Weg seit", "Away for"), value: $settings.birdMinutes, range: 2...60, step: 1)
+            HStack {
+                hint(t("Dann fliegt ein Vogel herum und sie jagt ihn. Bist du zurück, fliegt er davon und sie geht zurück in den Korb oder auf Streifzug.",
+                       "A bird then flies around and she chases it. When you're back, it flies off and she returns to her bed or roaming."))
+                Spacer()
+                previewButton(.bird)
+            }
+        } header: {
+            SectionTitle(t("Wenn du weg bist", "While you're away"), icon: "bird.fill", color: .cyan)
         }
     }
 

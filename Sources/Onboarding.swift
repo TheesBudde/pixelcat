@@ -48,7 +48,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
 struct OnboardingView: View {
     enum Step: Int, CaseIterable {
-        case welcome, name, coat, home, bedAccess, reminders
+        case language, welcome, name, coat, home, bedAccess, reminders
         /// Kleine Führung: was sie kann
         case tourReminders, tourTasks, tourAway, petting, menu, done
 
@@ -65,7 +65,7 @@ struct OnboardingView: View {
 
     static let maxNameLength = 16
 
-    init(settings: AppSettings, start: Step = .welcome, onFinish: @escaping () -> Void = {}) {
+    init(settings: AppSettings, start: Step = .language, onFinish: @escaping () -> Void = {}) {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
@@ -105,6 +105,22 @@ struct OnboardingView: View {
     @ViewBuilder
     private func page(_ step: Step) -> some View {
         switch step {
+        case .language:
+            OnboardingPage(title: "Deutsch oder English?",
+                           text: "Wähle deine Sprache. Choose your language.") {
+                PixelCat(coat: settings.coat, pose: .sit, scale: 4)
+            } below: {
+                HStack(spacing: 18) {
+                    ForEach([Language.german, Language.english], id: \.self) { language in
+                        ChoiceCard(selected: L10n.isGerman == (language == .german), title: language.title, artHeight: 44) {
+                            Text(language == .german ? "Hallo!" : "Hello!")
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                        } action: {
+                            settings.language = language
+                        }
+                    }
+                }
+            }
         case .welcome:
             OnboardingPage(title: t("Hallo!", "Hi there!"),
                            text: t("Ich bin deine neue Pixelkatze und wohne ab jetzt auf deinem Dock.",
@@ -201,10 +217,26 @@ struct OnboardingView: View {
                 ThinkingCat(coat: settings.coat, thought: t("Mama anrufen", "Call mom"))
             }
         case .tourAway:
-            OnboardingPage(title: t("Manchmal bin ich unterwegs", "Sometimes I'm out"),
-                           text: t("Mit Streifzug gehe ich los und komme nur zu Pausen und Erinnerungen vorbei. Mit Katzenkorb schlafe ich so lange im Dock.",
-                                   "With Roaming I head out and only drop by for breaks and reminders. With the cat bed I nap in the Dock instead.")) {
-                PawTrail(coat: settings.coat)
+            OnboardingPage(title: t("Immer da oder unterwegs?", "Always here or out and about?"),
+                           text: t("Das stellst du in den Einstellungen ein. Mit Streifzug oder Katzenkorb komme ich nur zu Pausen und Erinnerungen heraus.",
+                                   "You choose in the settings. With Roaming or the cat bed I only come out for breaks and reminders.")) {
+                HStack(spacing: 14) {
+                    ModeTile(title: t("Immer da", "Always here"),
+                             caption: t("auf dem Dock", "on the Dock"),
+                             current: !homeInBed && !settings.roaming) {
+                        PixelCat(coat: settings.coat, pose: .walk, scale: 3)
+                    }
+                    ModeTile(title: t("Streifzug", "Roaming"),
+                             caption: t("unterwegs", "out and about"),
+                             current: !homeInBed && settings.roaming) {
+                        PawTrail(coat: settings.coat, scale: 3, paws: 3)
+                    }
+                    ModeTile(title: t("Katzenkorb", "Cat bed"),
+                             caption: t("schläft im Dock", "naps in the Dock"),
+                             current: homeInBed) {
+                        CatInBed(coat: settings.coat, scale: 2)
+                    }
+                }
             }
         case .petting:
             OnboardingPage(title: t("Streichel mich", "Pet me"),
@@ -239,8 +271,8 @@ struct OnboardingView: View {
             Button(t("Zurück", "Back")) { go(-1) }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .opacity(step == .welcome ? 0 : 1)
-                .disabled(step == .welcome)
+                .opacity(step == .language ? 0 : 1)
+                .disabled(step == .language)
                 .frame(width: 140, alignment: .leading)
             Spacer()
             HStack(spacing: 7) {
@@ -416,6 +448,7 @@ private struct NameField: View {
 private struct ChoiceCard<Art: View>: View {
     let selected: Bool
     let title: String
+    var artHeight: CGFloat = 100
     @ViewBuilder var art: Art
     var action: () -> Void
 
@@ -423,7 +456,7 @@ private struct ChoiceCard<Art: View>: View {
         Button(action: action) {
             VStack(spacing: 12) {
                 art
-                    .frame(width: 130, height: 100, alignment: .bottom)
+                    .frame(width: 130, height: artHeight, alignment: .bottom)
                 Text(title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
             }
@@ -792,18 +825,46 @@ private struct ThinkingCat: View {
 /// Pfotenspuren, die verblassen, und die Katze, die gerade losgeht
 private struct PawTrail: View {
     let coat: Coat
+    var scale: CGFloat = 5
+    var paws = 5
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 14) {
-            ForEach(0..<5, id: \.self) { index in
+        HStack(alignment: .bottom, spacing: scale * 2.5) {
+            ForEach(0..<paws, id: \.self) { index in
                 PixelSprite(sprite: PixelArt.paw, colors: ["K": coat == .black ? NSColor.white.cgColor : NSColor.black.cgColor],
-                            scale: 4)
+                            scale: scale * 0.8)
                     .rotationEffect(.degrees(90))
-                    .offset(y: index % 2 == 0 ? -4 : -18)
-                    .opacity(0.08 + 0.07 * Double(index))
+                    .offset(y: index % 2 == 0 ? -scale : -scale * 3.5)
+                    .opacity(0.1 + 0.3 * Double(index + 1) / Double(paws))
             }
-            PixelCat(coat: coat, pose: .walk, scale: 5)
+            PixelCat(coat: coat, pose: .walk, scale: scale)
         }
+    }
+}
+
+/// Eine der drei Arten, wo sie lebt. Die aktuelle Einstellung ist markiert.
+private struct ModeTile<Art: View>: View {
+    let title: String
+    let caption: String
+    let current: Bool
+    @ViewBuilder var art: Art
+
+    var body: some View {
+        VStack(spacing: 8) {
+            art
+                .frame(width: 140, height: 70, alignment: .bottom)
+            Text(title)
+                .font(.system(.callout, design: .rounded).weight(.semibold))
+            Text(caption)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(width: 168)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(.background.opacity(current ? 0.95 : 0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(current ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: current ? 2 : 1))
     }
 }
 
@@ -813,7 +874,9 @@ private struct MadeWith: View {
         HStack(spacing: 0) {
             Text(L10n.s("Gemacht mit ", "Made with "))
             PixelSprite(sprite: PixelArt.heart, colors: ["K": NSColor.systemPink.cgColor], scale: 2)
-            Text(L10n.s(", Claude und ", ", Claude & "))
+            Text(", ")
+            PixelSprite(sprite: PixelArt.claudeSpark, colors: ["K": PixelArt.claudeOrange], scale: 2)
+            Text(L10n.s(" Claude und ", " Claude & "))
             PixelSprite(sprite: PixelArt.coffee, colors: PixelArt.coffeeColors, scale: 2)
                 .offset(y: -2)
         }

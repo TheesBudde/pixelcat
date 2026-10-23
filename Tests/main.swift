@@ -394,6 +394,63 @@ MainActor.assumeIsolated {
         check("im Call ohne Aufgaben-Erlaubnis: nichts", s.popNext(where: { _ in false }) == nil && s.queue.count == 1)
     }
 
+    print("\nVogel, wenn niemand da ist")
+    @MainActor func birdScenario(_ name: String, roaming: Bool) {
+        let b = CatBrain()
+        b.clock = { afternoon }
+        b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 300
+        b.useBasket = true
+        b.emergeDelay = 2
+        b.locateBasket = { b.basketX = 1200; b.basketFloorY = 27 }
+        b.roaming = roaming
+        for _ in 0..<Int(25 / dt) { b.update(dt: dt) }
+        let wasAway = b.isAway
+        // Der Vogel kommt: aus dem Korb heraus, umschauen, jagen
+        let bird = Bird(x: 1400, y: 57 + 150)
+        b.bird = bird
+        if b.isOutAndAbout {
+            b.peeksLeft = 3
+            b.startErrandVisit(for: 3 * 60 * 60)
+        } else {
+            b.peeksLeft = 1
+            b.noticeSomething()
+        }
+        var seen = Set<String>()
+        for _ in 0..<Int(60 / dt) {
+            bird.update(dt: dt, minX: 0, maxX: 1440, ground: 57, top: 900, unit: 1)
+            b.update(dt: dt)
+            seen.insert("\(b.phase)")
+        }
+        let chased = seen.contains("chasing") && (seen.contains("jumping") || seen.contains("batting"))
+        // Jemand ist zurück: Der Vogel fliegt davon
+        bird.leave()
+        var flewOff = false
+        for _ in 0..<Int(10 / dt) {
+            bird.update(dt: dt, minX: 0, maxX: 1440, ground: 57, top: 900, unit: 1)
+            b.update(dt: dt)
+            if bird.isGone { flewOff = true; break }
+        }
+        b.bird = nil
+        b.endErrandVisit()
+        if roaming { b.hurryOut = true }
+        var back: Double?
+        for i in 0..<Int(30 / dt) {
+            b.update(dt: dt)
+            if b.isAway, back == nil { back = Double(i) * dt }
+        }
+        var problems: [String] = []
+        if roaming, !wasAway { problems.append("lag vorher nicht im Korb") }
+        if !chased { problems.append("hat nicht gejagt: \(seen.sorted())") }
+        if !flewOff { problems.append("Vogel ist nicht weggeflogen") }
+        if roaming, back == nil { problems.append("ist nicht zurück in den Korb") }
+        if !roaming, b.isAway { problems.append("ist ohne Streifzug verschwunden") }
+        let detail = back.map { String(format: " (zurück im Korb nach %.0f s)", $0) } ?? ""
+        print(problems.isEmpty ? "✓ \(name)\(detail)" : "✗ \(name)\n    " + problems.joined(separator: "\n    "))
+        if !problems.isEmpty { failed += 1 }
+    }
+    birdScenario("aus dem Katzenkorb: heraus, jagen, schnell zurück", roaming: true)
+    birdScenario("ohne Korb und Streifzug: jagen, danach normal weiter", roaming: false)
+
     print("\nName und Einrichtung")
     do {
         let settings = AppSettings()
