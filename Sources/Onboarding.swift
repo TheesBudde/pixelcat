@@ -48,7 +48,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
 struct OnboardingView: View {
     enum Step: Int, CaseIterable {
-        case language, welcome, name, coat, home, bedAccess, reminders
+        case welcome, language, name, coat, home, bedAccess, reminders
         /// Kleine Führung: was sie kann
         case tourReminders, tourTasks, tourAway, petting, menu, done
 
@@ -65,7 +65,7 @@ struct OnboardingView: View {
 
     static let maxNameLength = 16
 
-    init(settings: AppSettings, start: Step = .language, onFinish: @escaping () -> Void = {}) {
+    init(settings: AppSettings, start: Step = .welcome, onFinish: @escaping () -> Void = {}) {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
@@ -271,8 +271,8 @@ struct OnboardingView: View {
             Button(t("Zurück", "Back")) { go(-1) }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .opacity(step == .language ? 0 : 1)
-                .disabled(step == .language)
+                .opacity(step == .welcome ? 0 : 1)
+                .disabled(step == .welcome)
                 .frame(width: 140, alignment: .leading)
             Spacer()
             HStack(spacing: 7) {
@@ -876,7 +876,7 @@ private struct MadeWith: View {
             PixelSprite(sprite: PixelArt.heart, colors: ["K": NSColor.systemPink.cgColor], scale: 2)
             Text(", ")
             PixelSprite(sprite: PixelArt.claudeSpark, colors: ["K": PixelArt.claudeOrange], scale: 2)
-            Text(L10n.s(" Claude und ", " Claude & "))
+            Text(L10n.s(" und ", " & "))
             PixelSprite(sprite: PixelArt.coffee, colors: PixelArt.coffeeColors, scale: 2)
                 .offset(y: -2)
         }
