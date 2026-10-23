@@ -1,32 +1,38 @@
 import AppKit
 import SwiftUI
 
-// Zeichnet das Einstellungsfenster (ganze Seite) als Bild – zur Sichtprüfung
+// Zeichnet das Einstellungsfenster, das Aufgabenfenster und alle Seiten der Einrichtung als Bild, zur Sichtprüfung
 MainActor.assumeIsolated {
     _ = NSApplication.shared
     let settings = AppSettings()
     settings.taskItems = [TaskItem(text: "Mama anrufen", minutes: 120), TaskItem(text: "Wasser trinken", minutes: 5),
                           TaskItem(text: "Steuererklärung abgeben", minutes: 90)]
     settings.breakByActivity = CommandLine.arguments.contains("--activity")
-    let view = NSHostingView(rootView: SettingsView(settings: settings, focus: FocusMonitor()).frame(width: 520))
-    view.frame = NSRect(x: 0, y: 0, width: 520, height: 3200)
-    view.layoutSubtreeIfNeeded()
-    let height = min(3200, view.fittingSize.height)
-    view.frame = NSRect(x: 0, y: 0, width: 520, height: height)
-    view.layoutSubtreeIfNeeded()
-    let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
-    view.cacheDisplay(in: view.bounds, to: rep)
-    try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))
-    print("Höhe", height)
+    if let i = CommandLine.arguments.firstIndex(of: "--lang"), i + 1 < CommandLine.arguments.count {
+        settings.language = CommandLine.arguments[i + 1] == "en" ? .english : .german
+    }
+    let base = CommandLine.arguments[1]
 
-    // Das Aufgabenfenster
-    let tasks = NSHostingView(rootView: TasksView(settings: settings).frame(width: 560))
-    tasks.frame = NSRect(x: 0, y: 0, width: 560, height: 1200)
-    tasks.layoutSubtreeIfNeeded()
-    tasks.frame = NSRect(x: 0, y: 0, width: 560, height: min(1200, tasks.fittingSize.height))
-    tasks.layoutSubtreeIfNeeded()
-    let tasksRep = tasks.bitmapImageRepForCachingDisplay(in: tasks.bounds)!
-    tasks.cacheDisplay(in: tasks.bounds, to: tasksRep)
-    let tasksPath = CommandLine.arguments[1].replacingOccurrences(of: "einstellungen", with: "aufgabenfenster")
-    try! tasksRep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: tasksPath))
+    func shoot<V: View>(_ view: V, width: CGFloat, height: CGFloat, to path: String, appearance: NSAppearance.Name = .aqua) {
+        let host = NSHostingView(rootView: view.frame(width: width, height: height))
+        host.appearance = NSAppearance(named: appearance)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        host.layoutSubtreeIfNeeded()
+        let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+        host.cacheDisplay(in: host.bounds, to: rep)
+        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: path))
+    }
+
+    // Ganze Seite: so hoch, dass alles hineinpasst
+    shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 2900, to: base)
+    shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 660,
+          to: base.replacingOccurrences(of: ".png", with: "-dunkel.png"), appearance: .darkAqua)
+    shoot(TasksView(settings: settings), width: 560, height: 620,
+          to: base.replacingOccurrences(of: "einstellungen", with: "aufgabenfenster"))
+    for step in OnboardingView.Step.allCases {
+        shoot(OnboardingView(settings: settings, start: step), width: 620, height: 500,
+              to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-\(step.rawValue + 1)"))
+    }
+    shoot(OnboardingView(settings: settings, start: .reminders), width: 620, height: 500,
+          to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-dunkel"), appearance: .darkAqua)
 }

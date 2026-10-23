@@ -1,260 +1,203 @@
 # Pixelcat 🐈
 
-Eine kleine Pixel-Art-Katze (orange getigert, schwarz oder grau getigert), die auf der Oberkante deines Docks hin und her
-läuft, sich irgendwann hinlegt und schläft. Im Liegen bewegt sie ab und zu ruhig die
-Schwanzspitze.
+<p align="center">
+  <img src="docs/img/stand-orange.png" height="60" alt="Orange tabby">&nbsp;&nbsp;
+  <img src="docs/img/walk.png" height="60" alt="Walking">&nbsp;&nbsp;
+  <img src="docs/img/sleep.png" height="40" alt="Sleeping">&nbsp;&nbsp;
+  <img src="docs/img/stand-gray.png" height="60" alt="Gray tabby">&nbsp;&nbsp;
+  <img src="docs/img/yarn.png" height="28" alt="Yarn ball">
+</p>
 
-- **Streicheln:** Fährst du mit der Maus über sie, ohne zu klicken, wacht sie auf,
-  kneift zufrieden die Augen zu und schmiegt sich an. Danach kuschelt sie sich wieder ein.
-- **Aufscheuchen:** Ein Klick lässt sie kurz zusammenzucken und ein Stück weglaufen.
-- **Füttern:** Ein Napf erscheint, die Katze läuft hin, frisst ihn leer und putzt sich danach.
-- **Wollknäuel:** Ein Knäuel fällt herein, die Katze jagt es und schlägt mit der Tatze danach.
-  Du kannst es mit der Maus greifen, hochheben und werfen.
-- **Pomodoro:** 25 Minuten Fokus, in denen die Katze tief schläft und sich nicht aufscheuchen
-  lässt. Danach wacht sie auf, streckt sich und läuft 5 Minuten herum. Dann beginnt die
-  nächste Runde. Die Restzeit steht neben dem Symbol in der Menüleiste.
-- **Klettern:** Im Kletter-Modus zieht es sie nach oben: Sobald ein passendes Fenster offen ist,
-  klettert sie an der Seite hoch oder springt hinauf, balanciert oben entlang, springt von Fenster
-  zu Fenster und hält dort auch ihre Nickerchen. Nur selten kommt sie freiwillig herunter. Verschiebst du ein Fenster, fährt sie mit;
-  schließt du es, fällt sie aufs Dock. Bei Vollbild oder Split View bleibt sie auf dem Dock.
-  Über dem Fenster muss etwas Platz bis zur Menüleiste sein, sonst passt sie nicht hin.
-- **Streifzug:** Die Katze geht nach draußen und ist nicht mehr zu sehen. Nur wenn Pause ist
-  (Pomodoro-Pause, Pausen-Erinnerung oder abgelaufener Timer), kommt sie herein, läuft in die Bildschirmmitte, streckt
-  sich, miaut und bummelt dort 5 Minuten herum. Für die kleinen Erinnerungen (Trinken, Augenpause, Aufgaben,
-  Feierabend) kommt sie ebenfalls herein. Danach geht sie wieder. Ohne Streifzug ist sie
-  wie gewohnt die ganze Zeit da.
-- **Miauen:** Leise, echte Katzenlaute zu Beginn und am Ende der Pomodoro-Pause, wenn der Timer abläuft, bei der
-  Pausen-Erinnerung, zum Trinken, zur Augenpause und zum Feierabend – bei Aufgaben nur, wenn eingestellt. Im
-  Videocall und bei macOS-Fokus nie. In den Einstellungen unter „Töne“ ganz abschaltbar.
-- **Timer:** Eine eigene Zeit stellen (Schnellwahl 5–60 Minuten oder „Eigene Zeit …“, z. B. `25`
-  oder `1:30`). Solange er läuft, schläft die Katze; läuft er ab, wacht sie auf, geht in die
-  Bildschirmmitte, streckt sich, miaut und sucht dort dezent Aufmerksamkeit – strecken, dich
-  mit langsamem Blinzeln anschauen, auf dem Rücken rekeln –, bis du sie streichelst oder anklickst.
-  Erst dann ist der Timer vorbei (im Streifzug geht sie danach wieder hinaus). Pausen-Erinnerungen gibt es trotzdem – der Timer zählt
-  währenddessen weiter. Timer und Pomodoro schließen sich gegenseitig aus.
-- **Gedankenblase:** Erinnert sie an eine Pause (Pausen-Erinnerung, Pomodoro-Pause), schwebt über ihrem Kopf
-  eine Wolke mit „PAUSE“ bzw. „BREAK“ – genauso bei Trinken, Feierabend und Aufgaben. Die Pixelschrift kann
-  alle Buchstaben, Umlaute, Ziffern und gängigen Satzzeichen. Ein Klick lässt die Blase platzen.
-- **Pausen-Erinnerung:** Alle 45–55 Minuten läuft sie in die Bildschirmmitte und streckt sich. Wahlweise
-  **nach Aktivität:** Dann zählt Pixelcat nur die Zeit, in der du tippst, klickst oder die Maus bewegst (bis zu
-  einer Minute Lesen zählt mit). Bist du 5 Minuten weg, war das schon eine Pause – die Zählung beginnt neu.
-  Dafür fragt Pixelcat nur ab, wie lange die letzte Eingabe her ist; keine Freigabe nötig, keine Tasten werden gelesen.
-- **Trink-Erinnerung:** Ungefähr alle 45 Minuten (einstellbar) stellt sie einen blauen Wassernapf hin,
-  schlabbert 25 Sekunden lang und denkt dabei „Trinken“. Danach putzt sie sich das Schnäuzchen.
-- **Augenpause:** Ungefähr alle 20 Minuten (einstellbar) ploppt ein kleines Fenster auf – Himmel, Sonne,
-  Hügel und eine vorbeiziehende Wolke. Sie setzt sich davor aufs Fensterbrett und schaut eine halbe Minute
-  hinaus (von hinten zu sehen, der Schwanz zuckt). Schau mit ihr in die Ferne; danach verschwindet das Fenster.
-- **Feierabend:** Zur eingestellten Uhrzeit (wahlweise nur werktags) setzt sie Zylinder und Fliege auf, kommt in
-  die Mitte, streckt sich und denkt „Feierabend“. Den Anzug-Look trägt sie bis zur Schlafenszeit.
-- **Outfits nach Tageszeit (Einstellung):** Ab der Schlafenszeit eine Schlafmütze mit Sternen (bis 5 Uhr), morgens
-  bis zur eingestellten Uhrzeit eine hochgeschobene Schlafmaske auf der Stirn.
-- **Aufgaben-Erinnerung:** Im eigenen Aufgabenfenster (Menü „Aufgaben-Erinnerung ▸ Aufgaben hinzufügen und
-  bearbeiten …“) trägst du Stichworte ein („Mama anrufen“) und stellst für **jede einzeln** ein, wie oft sie
-  ungefähr daran denkt – von alle 5 Minuten bis alle 4 Stunden. Der genaue Zeitpunkt schwankt ein wenig. Lange
-  Einträge werden auf bis zu drei Zeilen umbrochen; jede Aufgabe lässt sich mit einem Klick vorführen. Wahlweise
-  **auch während Videocalls** (Kamera oder Mikrofon an): Die Katze bleibt dann versteckt, nur die Blase erscheint
-  über dem Katzenkorb im Dock bzw. unten rechts – nie, während der Bildschirm geteilt wird.
-- **Kleine Erinnerungen, nacheinander:** Trinken, Augenpause, Aufgaben und Feierabend warten aufeinander und
-  auf Pausen, Pomodoro und Timer – nie zwei auf einmal. Im Streifzug oder Katzenkorb kommt sie dafür herein und
-  geht danach wieder. Jede lässt sich in den Einstellungen mit „Jetzt zeigen“ vorführen.
-- **Eigenheiten:** Zwischendurch putzt sie Pfote und Kopf, gähnt, streckt sich nach dem
-  Aufwachen (vorne absenken, tief strecken und wippen, Hinterbein nach hinten) und rollt sich
-  manchmal auf den Rücken.
-- **Vollbild:** Läuft ein Programm im Vollbild (kein Dock), streckt sie die Vorderpfote aus und hopst an den
-  unteren Bildschirmrand; zurück auf dem Schreibtisch springt sie wieder aufs Dock.
-- **Katzenkorb im Dock (Einstellung):** Pixelcat zeigt ein ovales Plüschbett im Dock, und im Menü steht
-  **Katzenkorb** statt **Streifzug**. Ist der Katzenkorb an, schrumpft
-  sie auf dem Dock auf Körbchengröße, steigt mit den Pfoten hinein, dreht sich einmal im Kreis, legt sich hin – und schläft dort – im Dock-Symbol atmet sie und hebt ab und zu den Schwanz. Zu Pausen, Timer und
-  den Erinnerungen (Trinken, Augenpause, Aufgaben, Feierabend) klettert sie heraus und danach wieder hinein. Wo das Körbchen sitzt, liest sie erst nach, wenn sie
-  hinein- oder herausklettert – mit der Freigabe „Bedienungshilfen“ (wird beim Einschalten angefragt) genau,
-  sonst geschätzt aus den Dock-Einstellungen (Symbolgröße, angeheftete und laufende Apps, Abstandshalter,
-  Ordner, zuletzt benutzte Apps, automatisches Verkleinern bei vollem Dock). Wandert das Dock auf einen anderen
-  Bildschirm, wacht sie dort auf. Steht das Dock links oder rechts, ist es automatisch ausgeblendet oder läuft
-  ein Programm im Vollbild, läuft sie stattdessen zur Seite hinaus (beim seitlichen Dock zu dessen Seite).
-- **Rücksichtsvoll:** Bei Videocalls (Kamera oder Mikrofon an) und Bildschirmfreigabe versteckt sie sich und
-  kommt danach zurück; Erinnerungen warten so lange (Aufgaben auf Wunsch nicht). Ist ein macOS-Fokus aktiv, ist sie
-  still und schläft mehr.
-- **Schnurren:** beim Streicheln, sanft ein- und ausgeblendet.
-- **Mauszeiger jagen:** Ruht die Maus knapp über dem Dock, schleicht sie sich an, wackelt mit dem Hinterteil
-  und springt (nicht im Streifzug).
-- **Feiertage:** Kürbis an Halloween, Weihnachtsmütze am 24./25. Dezember, Partyhut an Silvester und Neujahr
-  (immer an).
-- **Mehrere Bildschirme:** Ist ein Bildschirm daneben angeschlossen, läuft sie ab und zu hinüber.
-- **Zweisprachig:** Deutsch und Englisch.
-- **Tageszeit:** Tagsüber (9–19 Uhr) ist sie unternehmungslustig und macht nur kurze
-  Nickerchen. Morgens und abends ist sie gemütlich. Nachts (23–6 Uhr) schläft sie lange und
-  legt sich nach dem Aufscheuchen sofort wieder hin.
+A tiny pixel art cat for your Mac. She lives on top of your Dock, strolls back and forth, curls up and naps,
+and gently flicks the tip of her tail while she sleeps. Pick an orange tabby, a black cat or a gray tabby and
+give her a name.
 
-## Installieren
+Pixelcat is also a soft productivity buddy: she reminds you to take breaks, drink water, rest your eyes, think
+of your tasks and call it a day. She never gets in the way and hides during video calls.
 
-Mit [Homebrew](https://brew.sh):
+## Features
+
+### Living on your Dock
+
+- **Petting:** Move the pointer over her without clicking. She wakes up, squints happily, leans into your hand
+  and purrs. Then she settles down again.
+- **Startling:** A click makes her jump and run off a little.
+- **Feeding:** A bowl appears, she walks over, eats it all up and grooms herself afterwards.
+- **Yarn ball:** A ball of yarn drops in. She chases it and swats it with her paw. You can grab, lift and throw it.
+- **Climbing:** In climbing mode she wants to go up. She climbs the side of a window or jumps on top, balances
+  along the edge, leaps from window to window and naps up there. Move a window and she rides along. Close it and
+  she drops onto the Dock. She stays on the Dock in full screen and Split View.
+- **Chasing the pointer:** When the pointer rests just above the Dock, she sneaks up, wiggles her behind and pounces.
+- **Quirks:** She grooms her paw and head, yawns, stretches after waking up and sometimes rolls onto her back.
+- **Time of day:** Busy and curious during the day (9 am to 7 pm), cozy in the morning and evening, sound asleep at
+  night (11 pm to 6 am).
+- **Multiple displays:** If there is a display next to the main one, she wanders over now and then.
+- **Full screen:** When an app is in full screen (no Dock), she hops down to the bottom edge of the screen.
+- **Cat bed in the Dock:** Optional. A plush oval bed appears in your Dock. With **Cat Bed** turned on she shrinks to
+  bed size, climbs in, turns once and sleeps there. In the Dock icon she breathes and lifts her tail now and then.
+  She climbs out for breaks, timers and reminders and goes back afterwards. You can move the bed anywhere in the Dock.
+- **Roaming:** Without the bed she heads out and is gone. She only drops by for breaks, timers and reminders.
+
+### Gentle reminders
+
+- **Pomodoro:** 25 minutes of focus while she sleeps deeply and can't be disturbed. Then she wakes up, stretches
+  and strolls around for 5 minutes. The time left is shown next to the menu bar icon.
+- **Timer:** Set your own time (5 to 60 minutes or a custom value like `25` or `1:30`). She sleeps until it runs
+  out, then walks to the middle of the screen, meows and asks for attention until you pet or click her.
+- **Break reminder:** Every 45 to 55 minutes, or **by activity**: Pixelcat then only counts the time you type,
+  click or move the mouse. Five minutes away count as a break and the count starts over. Pixelcat only asks macOS
+  how long ago the last input was. No keys are read and no permission is needed.
+- **Drink reminder:** About every 45 minutes she puts down a blue water bowl, laps for a while and thinks “Drink”.
+- **Eye break:** About every 20 minutes a small window pops up with sky, sun, hills and a drifting cloud. She sits
+  on the sill and gazes out for half a minute. Look into the distance with her.
+- **End of the workday:** At your chosen time (weekdays only if you like) she puts on a top hat and bow tie, walks
+  to the middle and thinks “Off work”.
+- **Tasks:** Add short notes like “Call mom” in the tasks window and set for **each one** how often she thinks of
+  it, from every 5 minutes to every 4 hours. Optionally also during video calls: she stays hidden and only the
+  thought bubble appears at the Dock. Never while you share your screen.
+- **One at a time:** Reminders wait for each other and for breaks, Pomodoro and timers. Every reminder can be
+  previewed in the settings with **Show now**. A click pops the thought bubble.
+
+### Outfits
+
+- **Evening:** Top hat and bow tie after work, until bedtime.
+- **Night:** A starry nightcap from bedtime until 5 am.
+- **Morning:** A sleep mask pushed up on her forehead until your chosen time.
+- **Holidays:** A pumpkin at Halloween, a Santa hat on December 24 and 25, a party hat on New Year's Eve and New
+  Year's Day.
+
+### Considerate
+
+- **Video calls and screen sharing:** While the camera or microphone is on or the screen is shared, she hides
+  and comes back afterwards. Reminders wait until then.
+- **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
+- **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks and the end of the day.
+  Purring while you pet her. Never in video calls or Focus. Everything can be turned off.
+- **Languages:** English and German.
+
+## Install
+
+With [Homebrew](https://brew.sh):
 
 ```bash
 brew install --cask theesbudde/pixelcat/pixelcat
 ```
 
-Aktualisieren mit `brew upgrade --cask pixelcat`. Ohne Homebrew: die ZIP vom neuesten
-[Release](https://github.com/TheesBudde/pixelcat/releases/latest) laden, entpacken, `Pixelcat.app` in den
-Programme-Ordner ziehen und beim ersten Start per Rechtsklick → Öffnen starten.
+Update with `brew upgrade --cask pixelcat`. Without Homebrew: download the ZIP from the latest
+[release](https://github.com/TheesBudde/pixelcat/releases/latest), unzip it, move `Pixelcat.app` to your
+Applications folder and open it with right click › Open the first time.
 
-## Starten
+On first launch a short setup welcomes you. You give your cat a name, pick her coat and home, choose your
+reminders and learn how to pet her. You can open it again in the settings.
+
+<p align="center">
+  <img src="docs/img/setup-welcome.png" width="32%" alt="Setup: welcome">
+  <img src="docs/img/setup-coat.png" width="32%" alt="Setup: pick a coat">
+  <img src="docs/img/setup-reminders.png" width="32%" alt="Setup: pick reminders">
+</p>
+
+## Using Pixelcat
+
+Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the **menu bar** as a little cat head.
+
+| Menu item | What it does |
+|---|---|
+| Hide / Show cat (⌘K) | Turn her on and off |
+| Pomodoro | Focus and breaks in turns (checkmark = running) |
+| Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |
+| Break reminder | Regular breaks (on/off) |
+| Drink reminder · Eye break | Small reminders (on/off) |
+| Task reminder ▸ | On · Also during video calls · Your tasks · Add and edit tasks … |
+| Roaming | She heads out and only comes in for breaks and reminders |
+| Cat Bed | Replaces Roaming when the cat bed is in the Dock: she sleeps in the bed |
+| Feed · Play with yarn · Startle · Put to sleep | Actions |
+| Settings … (⌘,) | Everything else |
+| Quit Pixelcat (⌘Q) | Quit |
+
+The **settings window** is one scrolling page with her portrait on top:
+
+<img src="docs/img/settings.png" width="360" align="right" alt="Settings window">
+
+- **Look:** Name, coat, size
+- **Behavior:** Climbing, chasing the pointer, other displays, cat bed in the Dock, Roaming or Cat Bed
+- **Pomodoro and breaks:** Focus and break length, break reminder at set intervals or by activity, break length
+- **Drinking and eyes:** On/off, rough interval, Show now
+- **End of the workday:** On/off, time, Monday to Friday only
+- **Outfits:** Nightcap at bedtime, morning outfit until a set time
+- **Tasks:** Opens the tasks window
+- **Sounds and being considerate:** Meow, meow for tasks, purring, hide during calls, respect Focus
+- **Language:** Same as macOS, Deutsch, English
+
+To keep her around, add Pixelcat under *System Settings › General › Login Items*.
+<br clear="right">
+
+## How it works
+
+Pixelcat is a plain Swift app built with AppKit and SwiftUI, without an Xcode project. A transparent, borderless
+panel floats above everything and carries the cat along the top edge of the Dock. A state machine decides what
+she does next, and every pose is a small text grid drawn pixel by pixel.
+
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the technical sketch with diagrams.
+
+## Build from source
 
 ```bash
 ./build.sh
 open build/Pixelcat.app
 ```
 
-Die App hat **kein Dock-Symbol**. Sie lebt in der **Menüleiste** oben rechts (Katzenkopf-Symbol).
-Das Menü enthält nur, was man oft braucht:
+`build.sh` calls `swiftc` directly and packages the `.app` for your Mac (`UNIVERSAL=1` builds for Apple Silicon
+and Intel). Requires macOS 13 or later and the Xcode command line tools.
 
-| Menüpunkt | Wirkung |
-|---|---|
-| Katze ausblenden / einblenden (⌘K) | An- und Ausschalten |
-| Pomodoro | Fokus und Pause im Wechsel (Haken = läuft) |
-| Timer ▸ 5 … 60 Min. / Eigene Zeit … | Timer stellen (Haken = läuft, nochmal klicken beendet) |
-| Pausen-Erinnerung | regelmäßige Pausen (an/aus) |
-| Trink-Erinnerung · Augenpause | kleine Erinnerungen (je an/aus) |
-| Aufgaben-Erinnerung ▸ | Eingeschaltet · Auch während Videocalls · Liste der Aufgaben · Aufgaben hinzufügen und bearbeiten … |
-| Streifzug | Katze geht weg und kommt nur zu Pausen und Erinnerungen herein (an/aus) |
-| Katzenkorb | statt Streifzug, wenn der Katzenkorb im Dock eingeschaltet ist: Katze schläft im Korb und kommt nur zu Pausen und Erinnerungen heraus (an/aus) |
-| Füttern · Mit Wollknäuel spielen · Aufscheuchen · Schlafen legen | Aktionen |
-| Einstellungen … (⌘,) | Fenster mit allem Weiteren |
-| Pixelcat beenden (⌘Q) | App beenden |
-
-**Einstellungsfenster** – eine Seite zum Durchscrollen, nur Schalter, Segmente und Schieberegler:
-- **Aussehen:** Fellfarbe, Größe
-- **Verhalten:** Klettern, Mauszeiger jagen, auf andere Bildschirme wechseln, Katzenkorb im Dock, dazu Streifzug bzw. Katzenkorb
-- **Pomodoro & Pausen:** Fokus- und Pausenlänge, Pausen-Erinnerung in festen Abständen (frühestens/spätestens)
-  oder nach Aktivität (Minuten Arbeit am Stück), Länge einer Pause
-- **Trinken, Augen:** an/aus, ungefähre Abstände, „Jetzt zeigen“
-- **Feierabend:** an/aus, Uhrzeit, nur Montag bis Freitag
-- **Outfits:** Schlafmütze ab Schlafenszeit, Morgen-Outfit bis zu einer Uhrzeit
-- **Aufgaben:** Knopf zum Aufgabenfenster (dort: an/aus, auch während Videocalls, Liste mit Abstand je Aufgabe)
-- **Töne & Rücksicht:** Miauen, auch bei Aufgaben miauen, Schnurren, bei Videocall/Bildschirmfreigabe verstecken,
-  Fokus berücksichtigen
-- **Sprache:** wie macOS, Deutsch, English
-
-Startest du die App erneut, während sie ausgeblendet ist, kommt die Katze zurück.
-Wenn du sie dauerhaft haben willst, zieh `build/Pixelcat.app` in den Ordner *Programme*
-und füge sie unter *Systemeinstellungen → Allgemein → Anmeldeobjekte* hinzu.
-
-## Technische Skizze
-
-Eine einseitige Übersicht der Architektur gibt es als PDF:
-[docs/architektur/pixelkatze-architektur.pdf](docs/architektur/pixelkatze-architektur.pdf)
-(LaTeX-Quelltext daneben, kompilierbar mit XeLaTeX, z. B. `tectonic pixelkatze-architektur.tex`).
-
-```
-┌──────────── Menüleiste ─────────────────────────── [🐱] ◄── NSStatusItem (AppDelegate)
-│                                                       │     Menü: an/aus, Größe, Beenden
-│                                                       │
-│                     ┌────────┐                        │
-│                     │ /\_/\  │ ◄── randloses, durchsichtiges NSPanel (CatController)
-│                     │ (o.o)  │     • schwebt über allen Fenstern, auf allen Spaces
-│  ═══════════════════╧════════╧═══  ◄── Oberkante Dock = NSScreen.visibleFrame.minY
-│  [ Dock  ⬜ ⬜ ⬜ ⬜ ⬜ ⬜ ⬜ ]
-└──────────────────────────────────────────────────────
-```
-
-- **Sprache:** Swift mit AppKit, ohne Xcode-Projekt. `build.sh` ruft `swiftc` auf und
-  baut daraus ein `.app`-Paket (mit `LSUIElement`, also ohne Dock-Symbol).
-- **Fenster (`Controller.swift` → `CatController`):** Ein kleines, randloses `NSPanel` mit
-  durchsichtigem Hintergrund. Es wird 30-mal pro Sekunde auf die Position der Katze
-  verschoben. Die Unterkante liegt auf `visibleFrame.minY`, also genau auf dem Dock.
-  `.nonactivatingPanel` sorgt dafür, dass ein Klick auf die Katze dem gerade aktiven
-  Programm nicht den Fokus wegnimmt.
-- **Grafik (`Sprites.swift`):** Jede Pose ist ein Textraster mit einem Buchstaben pro Pixel
-  (`K` Umriss, `O` Fell, `h` Glanz, `s` Streifen, `W` Brust/Pfoten, `E` Augen, `P` Nase/Ohren,
-  `w` Schnurrhaare). Welche Farbe ein Buchstabe bekommt, legt die Fellfarbe (`Coat`) fest.
-  Bei der schwarzen Katze sind Streifen und Brust einfach auch schwarz. Gezeichnet
-  wird Pixel für Pixel als Quadrat, also bewusst „blockig“. Nach links wird gespiegelt.
-  Die Varianten mit geschlossenen und zufriedenen Augen werden automatisch erzeugt.
-- **Verhalten (`Cat.swift` → `CatBrain`):** ein Zustandsautomat:
-
-  ```
-  stehen ⇄ laufen (⇄ putzen) → hinsetzen → hinlegen (→ Rücken) → schlafen → aufwachen → strecken/gähnen …
-     Napf ──► hinlaufen → fressen → putzen
-     Knäuel ──► jagen → mit der Tatze schlagen → (zuschauen / putzen) → jagen …
-     Pomodoro ──► Fokus: schlafen (lässt sich nicht stören) ⇄ Pause: aufwachen, strecken, laufen
-     Klettern ──► Wand hoch / hinaufspringen → oben laufen ⇄ zum Nachbarfenster springen → runter
-     Klick ──► zusammenzucken → weglaufen → verschnaufen → (laufen) → hinlegen …
-     Maus streicht drüber ──► genießen & anschmiegen → wieder einkuscheln / weiterlaufen
-  ```
-  Wie viele Runden sie läuft, wie lange sie schläft und wie weit sie wegrennt, hängt
-  von der Uhrzeit ab (`Temperament`). Dazu blinzelt sie zwischendurch und atmet im Schlaf.
-- **Streicheln:** 30-mal pro Sekunde wird die Mausposition abgefragt. Bewegt sich die
-  Maus über den Katzenpixeln, ohne dass eine Taste gedrückt ist, zählt das als Streicheln.
-  Dafür braucht die App keine besonderen Rechte.
-- **Menüleisten-Symbol:** als Vektorgrafik gezeichnet, damit es auf jedem Bildschirm scharf ist.
-- **Stage Manager:** Die Vorschaubilder am Rand meldet macOS als winzige Fenster der jeweiligen App; zu jedem
-  gibt es ein gleich großes „WindowManager“-Fenster. Daran erkennt Pixelcat sie und klettert nicht darauf.
-- **Vollbild:** gilt, wenn ein Fenster die volle Breite hat, bis unten reicht und oben höchstens den
-  Notch-Streifen frei lässt.
-- **Fenster zum Klettern:** `CGWindowListCopyWindowInfo` liefert fünfmal pro Sekunde die Positionen
-  aller Fenster – ohne Sonderrechte, da keine Fenstertitel gelesen werden. Von jeder Oberkante wird
-  abgezogen, was Fenster weiter vorne verdecken (`CatController.perches`). Ein Fenster in voller
-  Bildschirmhöhe heißt Vollbild oder Split View – dann wird nicht geklettert.
-- **Töne (`Resources/Sounds`):** echte Katzenaufnahmen (Miauen und Schnurren) aus „Cat Purr & Meow“ von Kerzoven
-  (https://opengameart.org/content/cat-purr-meow, CC0 / gemeinfrei), zugeschnitten und angeglichen.
-- **Napf und Knäuel:** eigene kleine Fenster. Das Knäuel hat eine einfache Physik
-  (Schwerkraft, Abprallen, Rollreibung) und lässt sich ziehen und werfen.
-- **Sensoren (`Sensors.swift`):** Ob Kamera oder Mikrofon benutzt werden, fragt die App über CoreMediaIO
-  und CoreAudio ab – ohne Berechtigung. Bildschirmfreigabe erkennt sie an den Prozessen der macOS-Freigabe
-  und von Zoom. Den Fokus-Status gibt macOS nur nach einmaliger Zustimmung heraus (`INFocusStatusCenter`).
-- **Energie sparen:** Der Takt läuft nur bei Bewegung mit 30 Bildern pro Sekunde, in Ruhe mit 8 und
-  ist die Katze weg, nur zweimal pro Sekunde.
-- **Einstellungen (`Settings.swift`):** ein Modell (`AppSettings`) für alles, gespeichert in UserDefaults;
-  das Fenster ist in SwiftUI gebaut. Texte stehen zweisprachig direkt im Code (`L10n.s("Deutsch", "English")`).
-- **Klicks:** Nur sichtbare Katzenpixel reagieren (`hitTest`). Die durchsichtige Fläche
-  drumherum lässt Klicks durch.
-- **Vorschau der Sprites:** `build/Pixelcat.app/Contents/MacOS/Pixelcat --export-preview vorschau.png`
-
-## Vorführen
+### Demo and previews
 
 ```bash
-open build/Pixelcat.app --args --demo
+open build/Pixelcat.app --args --demo              # always afternoon, climbs a lot
+open build/Pixelcat.app --args --outfit santa      # pumpkin, santa or party
+open build/Pixelcat.app --args --onboarding        # show the setup again
 ```
 
-Im Demo-Modus ist für die Katze immer Nachmittag (sie ist aktiv) und sie klettert deutlich öfter.
-Mit `--outfit pumpkin`, `--outfit santa` oder `--outfit party` lassen sich die Feiertags-Verkleidungen vorführen.
+To draw your own poses, edit the text grids in `Sources/Sprites.swift` and run `./build.sh` again.
 
-## Eigene Posen malen
-
-In `Sources/Sprites.swift` einfach die Textraster ändern und `./build.sh` erneut ausführen.
-
-## Testen
+### Tests
 
 ```bash
-./test.sh       # Abläufe durchspielen und prüfen
-./preview.sh    # Pixelbilder (Blasen, Posen, Napf, Fenster) und Fenster nach build/preview/ rendern
+./test.sh       # play through scenarios and check them
+./preview.sh    # render sprites, bubbles, props and all windows to build/preview/
 ```
 
-Auf dem echten Bildschirm (die installierte App, sie beendet sich danach; Protokoll in `build/selftest.log`):
+`test.sh` plays through the cat bed (breaks, timers, reminders, calls, full screen, clicks and a bed moved in the
+Dock, also in the middle of climbing in or out) and all reminders (drinking, eye breaks, end of the workday, tasks,
+activity, overlaps with breaks and Pomodoro).
+
+On the real screen, with the installed app (it quits afterwards and writes `build/selftest.log`):
 
 ```bash
-/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest         # alle Erinnerungen
-/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest calls   # Videocall nachgespielt
+/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest         # all reminders
+/Applications/Pixelcat.app/Contents/MacOS/Pixelcat --selftest calls   # simulated video call
 ```
 
-`test.sh` spielt Szenarien rund um den Katzenkorb und die kleinen Erinnerungen durch (Trinken, Augenpause,
-Feierabend, Aufgaben, Aktivität, Überschneidungen mit Pausen und Pomodoro). Beim Katzenkorb kommen Pause, Timer,
-Erinnerung, Videocall, Vollbild, Klicks und ein im Dock verschobener Korb vor – jeweils auch mitten im Hinein- oder
-Herausklettern –, und es wird geprüft, dass sie immer genau am Korb hinein- und herausklettert und nie hängen bleibt. Zum Nachmessen am echten Dock: Pixelcat mit `PIXELCAT_CALIBRATE=1` starten –
-erst zeigt das Dock-Symbol die schlafende Katze, nach 6 s liegt stattdessen das letzte Bild der Animation darüber.
+To calibrate against a real Dock, start Pixelcat with `PIXELCAT_CALIBRATE=1`. The Dock icon first shows the
+sleeping cat, after 6 seconds the last frame of the climbing animation is drawn on top.
 
-## Neue Version veröffentlichen
+### Releasing
 
 ```bash
-./release.sh v4.1
+./release.sh v6.2
 ```
 
-Das baut die App für Apple Silicon und Intel und legt `build/Pixelcat-v4.1.zip` an.
-Die Datei dann auf GitHub unter *Releases → Draft a new release* hochladen. Danach Homebrew nachziehen:
+This builds for Apple Silicon and Intel and creates `build/Pixelcat-v6.2.zip`. Upload it on GitHub under
+*Releases › Draft a new release*, then update Homebrew:
 
 ```bash
-./update-cask.sh v4.1
+./update-cask.sh v6.2
 ```
 
-Das lädt die veröffentlichte ZIP, trägt Version und Prüfsumme in den Tap
-([homebrew-pixelcat](https://github.com/TheesBudde/homebrew-pixelcat), liegt als Nachbarordner `../homebrew-pixelcat`)
-ein, committet und pusht.
+This downloads the published ZIP, writes version and checksum into the tap
+([homebrew-pixelcat](https://github.com/TheesBudde/homebrew-pixelcat), expected next door in `../homebrew-pixelcat`),
+commits and pushes.
+
+## Credits
+
+Cat sounds: “Cat Purr & Meow” by Kerzoven ([opengameart.org](https://opengameart.org/content/cat-purr-meow), CC0),
+trimmed and leveled. Everything else, including all pixel art, is drawn in code.

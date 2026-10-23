@@ -394,6 +394,19 @@ MainActor.assumeIsolated {
         check("im Call ohne Aufgaben-Erlaubnis: nichts", s.popNext(where: { _ in false }) == nil && s.queue.count == 1)
     }
 
+    print("\nName und Einrichtung")
+    do {
+        let settings = AppSettings()
+        let before = (settings.catName, settings.onboardingDone)
+        settings.catName = "  "
+        check("ohne Namen heißt sie Pixelcat", settings.displayName == "Pixelcat")
+        settings.catName = " Mochi "
+        check("Name ohne Leerzeichen am Rand", settings.displayName == "Mochi")
+        check("Einrichtung hat acht Schritte", OnboardingView.Step.allCases.count == 8)
+        settings.catName = before.0
+        settings.onboardingDone = before.1
+    }
+
     print(failed == 0 ? "\nAlle Szenarien bestanden." : "\n\(failed) Szenario(s) fehlgeschlagen.")
     exit(failed == 0 ? 0 : 1)
 }

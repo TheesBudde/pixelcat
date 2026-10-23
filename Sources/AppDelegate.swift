@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let focusMonitor = FocusMonitor()
     private lazy var settingsWindow = SettingsWindow(settings: settings, focus: focusMonitor)
     private lazy var tasksWindow = TasksWindow(settings: settings)
+    private lazy var onboardingWindow = OnboardingWindow(settings: settings)
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             cat.apply(settings)
             buildMenu() // Sprache könnte sich geändert haben
             buildMainMenu()
+            statusItem.button?.toolTip = settings.displayName
         }
         // „Jetzt zeigen“ in den Einstellungen bzw. bei einer Aufgabe
         settings.onPreview = { [weak self] kind in
@@ -55,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             cat.showTaskNow(id)
         }
         settings.onOpenTasks = { [weak self] in self?.openTasks() }
+        settings.onOpenSetup = { [weak self] in self?.onboardingWindow.show() }
 
         // Start mit --demo: aktive Nachmittagskatze, die viel klettert
         if CommandLine.arguments.contains("--demo") { cat.enableDemo() }
@@ -76,13 +79,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = Frames.menuBarIcon()
         statusItem.button?.imagePosition = .imageLeft
-        statusItem.button?.toolTip = "Pixelcat"
+        statusItem.button?.toolTip = settings.displayName
         buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         if ProcessInfo.processInfo.environment["PIXELCAT_CALIBRATE"] != nil {
             cat.runCalibration()
         } else {
             cat.show()
+        }
+        // Beim allerersten Start (oder mit --onboarding): die Einrichtung, sobald die Katze auf dem Dock ist
+        let selfTesting = CommandLine.arguments.contains("--selftest")
+        if CommandLine.arguments.contains("--onboarding") || (!settings.onboardingDone && !selfTesting) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.onboardingWindow.show() }
         }
     }
 
@@ -121,9 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         infoItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         infoItem.isEnabled = false
         menu.addItem(infoItem)
-        reminderItem = item(t("Pausen-Erinnerung", "Break reminder"), #selector(toggleReminders))
+        reminderItem = item(t("Pausenerinnerung", "Break reminder"), #selector(toggleReminders))
         menu.addItem(reminderItem)
-        drinkItem = item(t("Trink-Erinnerung", "Drink reminder"), #selector(toggleDrinking))
+        drinkItem = item(t("Trinkerinnerung", "Drink reminder"), #selector(toggleDrinking))
         menu.addItem(drinkItem)
         eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks))
         menu.addItem(eyeItem)
@@ -146,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if !settings.taskItems.isEmpty { taskMenu.addItem(.separator()) }
         taskMenu.addItem(item(t("Aufgaben hinzufügen und bearbeiten …", "Add and edit tasks …"), #selector(openTasks)))
-        taskItem = NSMenuItem(title: t("Aufgaben-Erinnerung", "Task reminder"), action: nil, keyEquivalent: "")
+        taskItem = NSMenuItem(title: t("Aufgabenerinnerung", "Task reminder"), action: nil, keyEquivalent: "")
         taskItem.submenu = taskMenu
         menu.addItem(taskItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
@@ -239,16 +247,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let pomodoro = cat.pomodoro {
             let minutes = minutesLeft(pomodoro.ends)
             info = pomodoro.stage == .focus
-                ? t("Fokus: noch \(minutes) Min. – die Katze schläft", "Focus: \(minutes) min left – the cat is asleep")
+                ? t("Fokus: noch \(minutes) Min. Die Katze schläft.", "Focus: \(minutes) min left. The cat is asleep.")
                 : t("Pause: noch \(minutes) Min.", "Break: \(minutes) min left")
         } else if let timer = cat.timer {
             let minutes = minutesLeft(timer.ends)
             if timer.finished {
-                info = t("Zeit um – streichle oder klick die Katze", "Time's up – pet or click the cat")
+                info = t("Zeit um. Streichle oder klick die Katze.", "Time's up. Pet or click the cat.")
             } else {
                 info = timer.breakEnds == nil
-                    ? t("Noch \(minutes) Min. – die Katze schläft", "\(minutes) min left – the cat is asleep")
-                    : t("Noch \(minutes) Min. – gerade Pause", "\(minutes) min left – on a break")
+                    ? t("Noch \(minutes) Min. Die Katze schläft.", "\(minutes) min left. The cat is asleep.")
+                    : t("Noch \(minutes) Min. Gerade Pause.", "\(minutes) min left. On a break.")
             }
         }
         if let reason = cat.hiddenBecause {
@@ -301,8 +309,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let alert = NSAlert()
         alert.messageText = L10n.s("Timer stellen", "Set timer")
         alert.informativeText = L10n.s(
-            "Wie lange soll die Katze schlafen?\nMinuten eingeben, z. B. 25 – oder 1:30 für anderthalb Stunden.",
-            "How long should the cat sleep?\nEnter minutes, e.g. 25 – or 1:30 for an hour and a half.")
+            "Wie lange soll die Katze schlafen?\nMinuten eingeben, z. B. 25 oder 1:30 für anderthalb Stunden.",
+            "How long should the cat sleep?\nEnter minutes, e.g. 25, or 1:30 for an hour and a half.")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
         field.placeholderString = L10n.s("Minuten", "Minutes")
         field.stringValue = UserDefaults.standard.string(forKey: "lastTimer") ?? ""
