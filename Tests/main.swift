@@ -527,6 +527,66 @@ MainActor.assumeIsolated {
     birdScenario("aus dem Katzenkorb: heraus, jagen, schnell zurück", roaming: true)
     birdScenario("ohne Korb und Streifzug: jagen, danach normal weiter", roaming: false)
 
+    print("\nPausenfrage")
+    do {
+        var snooze = BreakSnooze()
+        var steps = [snooze.minutes(base: 50)]
+        for _ in 0..<4 {
+            snooze.snoozed()
+            steps.append(snooze.minutes(base: 50))
+        }
+        check("weggedrückt: jedes Mal früher, aber nie unter 15 Minuten", steps == [50, 30, 18, 15, 15], "\(steps)")
+        snooze.rested()
+        check("nach einer echten Pause wieder der volle Abstand", snooze.minutes(base: 50) == 50)
+        snooze.snoozed()
+        check("kurzer Abstand bleibt mindestens 15 Minuten", snooze.minutes(base: 20) == 15 && snooze.minutes(base: 15) == 15)
+
+        @MainActor func bedCat() -> CatBrain {
+            let b = CatBrain()
+            b.clock = { afternoon }
+            b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 300
+            b.useBasket = true
+            b.emergeDelay = 2
+            b.locateBasket = { b.basketX = 1200; b.basketFloorY = 27 }
+            b.roaming = true
+            for _ in 0..<Int(25 / dt) { b.update(dt: dt) }
+            return b
+        }
+        // Daumen runter: Sie geht gleich wieder in den Korb
+        let no = bedCat()
+        no.callToCenter(visitLength: ErrandScheduler.motivationSpacing)
+        for _ in 0..<Int(20 / dt) { no.update(dt: dt) }
+        let cameOut = !no.isAway
+        no.declineBreak()
+        var backAfter: Double?
+        for i in 0..<Int(40 / dt) {
+            no.update(dt: dt)
+            if no.isAway, backAfter == nil { backAfter = Double(i) * dt }
+        }
+        check("Daumen runter: aus dem Korb gekommen und gleich wieder zurück", cameOut && backAfter != nil,
+              "draußen: \(cameOut), zurück nach \(backAfter.map { String(format: "%.0f s", $0) } ?? "–")")
+        // Daumen hoch: Sie freut sich und bleibt, bis die Pause vorbei ist
+        let yes = bedCat()
+        yes.callToCenter(visitLength: ErrandScheduler.motivationSpacing)
+        for _ in 0..<Int(20 / dt) { yes.update(dt: dt) }
+        yes.mode = .focusBreak
+        yes.rejoice()
+        let happy = "\(yes.phase)" == "petted"
+        var stayed = true
+        for _ in 0..<Int(5 * 60 / dt) {
+            yes.update(dt: dt)
+            if yes.isAway { stayed = false }
+        }
+        yes.mode = .normal
+        var returned = false
+        for _ in 0..<Int(40 / dt) {
+            yes.update(dt: dt)
+            if yes.isAway { returned = true }
+        }
+        check("Daumen hoch: freut sich, bleibt die ganze Pause und geht danach zurück", happy && stayed && returned,
+              "freut sich: \(happy), geblieben: \(stayed), zurück: \(returned)")
+    }
+
     print("\nName und Einrichtung")
     do {
         let settings = AppSettings()

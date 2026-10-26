@@ -591,6 +591,26 @@ final class CatBrain {
         callToCenter()
     }
 
+    /// Pause angenommen (Daumen hoch): Sie freut sich – zufrieden blinzeln und anschmiegen wie beim Streicheln.
+    func rejoice() {
+        guard !isAirborne, phase != .away, !isAboveDock else { return }
+        timeSinceStroke = -0.8 // etwas länger als ein kurzes Streicheln
+        pettedWhileLying = false
+        goal = .wander
+        enter(.petted)
+    }
+
+    /// Pause abgelehnt (Daumen runter): nicht mehr in die Mitte, im Streifzug bzw. Korb gleich wieder zurück.
+    func declineBreak() {
+        reminderPending = false
+        breakRoutine = false
+        if case .center = goal { goal = .wander }
+        if roaming, isVisiting, !visitIsErrand {
+            visitTimeLeft = 0
+            if !isAirborne, phase != .away { leaveScreen() }
+        }
+    }
+
     /// Zeit für eine Pause (Erinnerung, abgelaufener Timer): aufwachen, in die Bildschirmmitte
     /// laufen, strecken und gähnen. Im Streifzug kommt sie dafür 5 Minuten herein.
     /// `untilAcknowledged`: Sie bleibt in der Mitte, bis man sie streichelt oder anklickt.

@@ -307,6 +307,24 @@ struct OutfitTimes {
     }
 }
 
+/// Pause weggedrückt: Bei Pausen nach Aktivität kommt die nächste Erinnerung früher – jedes Mal etwas früher,
+/// aber nie öfter als alle 15 Minuten. Nach einer echten Pause gilt wieder der volle Abstand.
+struct BreakSnooze {
+    static let shortest = 15.0
+    /// Pro Wegdrücken bleibt so viel vom Abstand übrig
+    static let factor = 0.6
+    private(set) var count = 0
+
+    /// Minuten Arbeit am Stück bis zur nächsten Erinnerung
+    func minutes(base: Int) -> Double {
+        let shortened = Double(base) * pow(Self.factor, Double(count))
+        return max(min(Double(base), Self.shortest), shortened)
+    }
+
+    mutating func snoozed() { count += 1 }
+    mutating func rested() { count = 0 }
+}
+
 /// Zählt, wie lange am Stück gearbeitet wird (Tastatur, Maus, Trackpad) – für Pausen nach echter Aktivität.
 /// Wer länger als `restAfter` nichts tut, hat Pause gemacht: dann fängt die Zählung von vorne an.
 struct ActivityTracker {

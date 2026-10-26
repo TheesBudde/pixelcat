@@ -2,6 +2,7 @@ import AppKit
 
 /// Gedankenblase über der Katze, wenn sie an eine Pause erinnert („PAUSE“ bzw. „BREAK“).
 /// Sie folgt dem Kopf und platzt mit einer kleinen Animation – beim Klick oder wenn die Pause vorbei ist.
+/// Als Frage („PAUSE?“) hat sie unten zwei Daumen: hoch heißt ja, runter heißt später.
 @MainActor
 final class ThoughtBubble {
     /// Wann die Pause vorbei ist und die Blase von selbst platzt
@@ -15,13 +16,32 @@ final class ThoughtBubble {
     var isPopping: Bool { popTime != nil }
     var isGone: Bool { (popTime ?? 0) >= Self.popLength }
 
-    init(text: String, ends: Date, scale: CGFloat) {
+    /// Mit `onChoice` ist es eine Frage: Nur die Daumen sind klickbar (true = Daumen hoch)
+    init(text: String, ends: Date, scale: CGFloat, onChoice: ((Bool) -> Void)? = nil) {
         self.ends = ends
-        frames = BubbleFrames(text: text)
+        frames = BubbleFrames(text: text, choices: onChoice != nil)
         window = PropWindow(columns: frames.width, rows: frames.height, scale: scale)
         window.view.colors = BubbleFrames.colors
         window.view.sprite = frames.whole
-        window.view.onMouseDown = { [weak self] _ in self?.pop() }
+        if let onChoice {
+            window.view.onMouseDown = { [weak self] point in
+                guard let self, !self.isPopping, let answer = self.choice(at: point) else { return }
+                onChoice(answer)
+            }
+        } else {
+            window.view.onMouseDown = { [weak self] _ in self?.pop() }
+        }
+    }
+
+    /// Welcher Daumen liegt an dieser Stelle (Bildschirmpunkte)? nil = keiner
+    private func choice(at point: NSPoint) -> Bool? {
+        guard let rows = frames.choiceRows else { return nil }
+        let frame = window.panel.frame
+        let column = Int((point.x - frame.minX) / window.scale)
+        let row = frames.height - 1 - Int((point.y - frame.minY) / window.scale)
+        // etwas großzügig um die Daumen herum
+        guard row >= rows.lowerBound - 2, row <= rows.upperBound + 2 else { return nil }
+        return column < frames.choiceSplit
     }
 
     func pop() {
@@ -66,24 +86,57 @@ struct BubbleFrames {
     let dust: Sprite
     let width: Int
     let height: Int
+    /// Bei einer Frage: Zeilen der Daumen (von oben) und die Spalte zwischen ihnen
+    let choiceRows: ClosedRange<Int>?
+    let choiceSplit: Int
 
-    /// "K" Umriss, "W" Wolke, "g" Schatten, "T" Schrift
-    static let colors = rgbPalette(["K": 0x2B1D16, "W": 0xFFFFFF, "g": 0xE4DED6, "T": 0x2B1D16])
+    /// "K" Umriss, "W" Wolke, "g" Schatten, "T" Schrift, "G"/"R" Daumen hoch/runter
+    static let colors = rgbPalette(["K": 0x2B1D16, "W": 0xFFFFFF, "g": 0xE4DED6, "T": 0x2B1D16,
+                                    "G": 0x5DBB63, "R": 0xE5675F])
+
+    /// Daumen hoch (grün); der Daumen runter ist derselbe, umgedreht und rot
+    static let thumbUp = [
+        "......KK....",
+        ".....KGGK...",
+        ".....KGGK...",
+        "....KGGK....",
+        "KKKKKGGKKKK.",
+        "KggKGGGGGGGK",
+        "KggKGGGGKKKK",
+        "KggKGGGGGGGK",
+        "KggKGGGGKKKK",
+        "KggKGGGGGGK.",
+        "KKKKKKKKKKK.",
+    ]
+    static let thumbDown = thumbUp.reversed().map { $0.replacingOccurrences(of: "G", with: "R") }
+    /// Abstand zwischen den Daumen und zum Text
+    private static let thumbGap = 9
+    private static let thumbTop = 4
 
     /// Längste Zeile in Pixeln und höchstens so viele Zeilen – längere Texte enden mit „…“
     static let maxTextWidth = 89
     static let maxLines = 3
 
-    init(text: String) {
+    init(text: String, choices: Bool = false) {
         let lines = PixelFont.lines(text, maxWidth: Self.maxTextWidth, maxLines: Self.maxLines)
-        let textWidth = max(9, lines.map(PixelFont.width(of:)).max() ?? 0)
-        let textHeight = lines.count * PixelFont.height + max(0, lines.count - 1) * PixelFont.lineGap
+        let thumbWidth = Self.thumbUp[0].count, thumbHeight = Self.thumbUp.count
+        let thumbsWidth = choices ? 2 * thumbWidth + Self.thumbGap : 0
+        let textWidth = max(9, thumbsWidth, lines.map(PixelFont.width(of:)).max() ?? 0)
+        let wordsHeight = lines.count * PixelFont.height + max(0, lines.count - 1) * PixelFont.lineGap
+        let textHeight = wordsHeight + (choices ? Self.thumbTop + thumbHeight : 0)
         // Wolke: Körper plus Beulen oben, unten und an den Seiten
         let cloudW = textWidth + 10, cloudH = max(1, textHeight) + 8
         let w = cloudW + 8, h = cloudH + 9      // Rand für die Platz-Wölkchen, unten Platz für die Punkte
         width = w
         height = h
         let ox = 4, oy = 2                       // Lage der Wolke im Bild
+        if choices {
+            let top = oy + (cloudH - textHeight) / 2 + wordsHeight + Self.thumbTop
+            choiceRows = top...(top + thumbHeight - 1)
+        } else {
+            choiceRows = nil
+        }
+        choiceSplit = ox + cloudW / 2
 
         var mask = [[Bool]](repeating: [Bool](repeating: false, count: w), count: h)
         func circle(_ cx: Double, _ cy: Double, _ r: Double) {
@@ -143,6 +196,19 @@ struct BubbleFrames {
                         tx += PixelFont.width(of: character) + PixelFont.letterGap
                     }
                     ty += PixelFont.height + PixelFont.lineGap
+                }
+                if choices {
+                    // Unter dem Text: Daumen hoch links, Daumen runter rechts
+                    let top = oy + (cloudH - textHeight) / 2 + wordsHeight + Self.thumbTop
+                    let left = ox + (cloudW - thumbsWidth) / 2
+                    for (row, line) in Self.thumbUp.enumerated() {
+                        for (col, c) in line.enumerated() where c != "." { out[top + row][left + col] = c }
+                    }
+                    for (row, line) in Self.thumbDown.enumerated() {
+                        for (col, c) in line.enumerated() where c != "." {
+                            out[top + row][left + thumbWidth + Self.thumbGap + col] = c
+                        }
+                    }
                 }
             }
             return out

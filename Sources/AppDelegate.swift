@@ -59,6 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         settings.onOpenTasks = { [weak self] in self?.openTasks() }
         // Während der Einrichtung ist die Katze nicht auf dem Dock, danach kommt sie
+        settings.onPreviewBreak = { [weak self] in
+            guard let self else { return }
+            cat.show()
+            cat.askForBreakNow()
+        }
         settings.onOpenSetup = { [weak self] in
             self?.cat.hide()
             self?.onboardingWindow.show()
@@ -270,6 +275,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             info = pomodoro.stage == .focus
                 ? t("Fokus: noch \(minutes) Min. Die Katze schläft.", "Focus: \(minutes) min left. The cat is asleep.")
                 : t("Pause: noch \(minutes) Min.", "Break: \(minutes) min left")
+        } else if let breakEnds = cat.breakEnds {
+            let minutes = minutesLeft(breakEnds)
+            info = t("Pause: noch \(minutes) Min. Die Katze bleibt bei dir.", "Break: \(minutes) min left. The cat stays with you.")
         } else if let timer = cat.timer {
             let minutes = minutesLeft(timer.ends)
             if timer.finished {

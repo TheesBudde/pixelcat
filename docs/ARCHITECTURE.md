@@ -158,6 +158,12 @@ flowchart LR
     Run --> Back[back to bed or roaming]
 ```
 
+The break reminder is a question: a thought bubble “Break?” with a thumbs up and a thumbs down (`BubbleFrames` with
+choices, only the thumbs are clickable). Thumbs up sets `CatBrain.mode` to `.focusBreak` for the break length, so she
+stays on screen even when roaming, and the menu bar counts down. Thumbs down calls `declineBreak()` and starts the
+count again. By activity, `BreakSnooze` shortens the next interval to 60 % each time, down to 15 minutes, and resets
+after a real break.
+
 Motivation has its own times: each day the scheduler picks one between 9 and 10 in the morning and one 30 to 75
 minutes before the end of the workday, plus one in the middle when the day is longer than eight hours. Two sayings are
 always at least four hours apart. Like every reminder except tasks, it waits while a call is going on.

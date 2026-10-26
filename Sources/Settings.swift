@@ -98,6 +98,8 @@ final class AppSettings: ObservableObject {
     var onOpenTasks: (() -> Void)?
     /// Die Einrichtung noch einmal zeigen
     var onOpenSetup: (() -> Void)?
+    /// Die Pausenfrage gleich zeigen
+    var onPreviewBreak: (() -> Void)?
     /// Was die Katze gerade trägt (Hut, Fliege), damit sie in der Einrichtung genauso aussieht
     var currentOutfit: (() -> Frames.Outfit)?
     private var loading = true
@@ -394,6 +396,12 @@ struct SettingsView: View {
     private var reminderSection: some View {
         Section {
             Toggle(t("Pausenerinnerung", "Break reminder"), isOn: $settings.breakReminders)
+            HStack {
+                hint(t("Sie fragt mit einer Blase. Daumen hoch startet die Pause, Daumen runter verschiebt sie.",
+                       "She asks with a bubble. Thumbs up starts the break, thumbs down puts it off."))
+                Spacer()
+                Button(t("Jetzt fragen", "Ask now")) { settings.onPreviewBreak?() }
+            }
             LabeledContent(t("Erinnern", "Remind")) {
                 Picker("", selection: $settings.breakByActivity) {
                     Text(t("In festen Abständen", "At set intervals")).tag(false)
@@ -404,17 +412,17 @@ struct SettingsView: View {
             if settings.breakByActivity {
                 minutesSlider(t("Nach Arbeit am Stück", "After working for"), value: $settings.activityMinutes,
                               range: 15...120, step: 5)
-                hint(t("Zählt nur, wenn du tippst, klickst oder die Maus bewegst. Bist du 5 Minuten weg, war das eine Pause und es beginnt neu.",
-                       "Counts only while you type, click or move the mouse. Five minutes away count as a break and it starts over."))
+                hint(t("Zählt nur, wenn du tippst, klickst oder die Maus bewegst. Bist du 5 Minuten weg, war das eine Pause und es beginnt neu. Drückst du die Pause weg, fragt sie früher wieder, höchstens alle 15 Minuten.",
+                       "Counts only while you type, click or move the mouse. Five minutes away count as a break and it starts over. Put a break off and she asks again sooner, at most every 15 minutes."))
             } else {
                 minutesSlider(t("Frühestens nach", "No sooner than"), value: $settings.reminderMin, range: 10...180, step: 5)
                 minutesSlider(t("Spätestens nach", "No later than"), value: $settings.reminderMax, range: 10...180, step: 5)
-                hint(t("Der Zeitpunkt dazwischen ist zufällig. Das wirkt natürlicher.",
-                       "The moment in between is random. It feels more natural."))
+                hint(t("Der Zeitpunkt dazwischen ist zufällig. Drückst du die Pause weg, beginnt die Zeit neu.",
+                       "The moment in between is random. Put a break off and the time starts over."))
             }
             minutesSlider(t("Pausenlänge", "Break length"), value: $settings.breakLength, range: 1...30, step: 1)
-            hint(t("Gilt für Pausenerinnerungen und für Pausenbesuche aus Katzenkorb oder Streifzug.",
-                   "Applies to break reminders and to break visits from the cat bed or roaming."))
+            hint(t("So lange läuft die Pause nach Daumen hoch. Sie bleibt dabei bei dir, auch aus Katzenkorb oder Streifzug.",
+                   "How long the break runs after thumbs up. She stays with you, even from the cat bed or roaming."))
         } header: {
             SectionTitle(t("Pausen", "Breaks"), icon: "cup.and.saucer.fill", color: .brown)
         }

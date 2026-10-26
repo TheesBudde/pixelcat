@@ -51,6 +51,11 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 - **Break reminder:** Every 45 to 55 minutes, or **by activity**: Pixelcat then only counts the time you type,
   click or move the mouse. Five minutes away count as a break and the count starts over. Pixelcat only asks macOS
   how long ago the last input was. No keys are read and no permission is needed.
+  She asks with a thought bubble, “Break?”, and two thumbs. **Thumbs up:** she is happy, the break time counts down
+  in the menu bar and she stays with you until the break is over, even from her bed or roaming. **Thumbs down:** she
+  goes back to what she was doing and the count starts over. By activity, every time you put a break off she asks a
+  little sooner, but never more often than every 15 minutes. No answer within three minutes counts as a break if you
+  were away, otherwise as thumbs down.
 - **Drink reminder:** About every 45 minutes she puts down a blue water bowl, laps for a while and thinks “Drink”.
 - **Eye break:** About every 20 minutes a small window pops up with sky, sun, hills and a drifting cloud. She sits
   on the sill and gazes out for half a minute. Look into the distance with her.

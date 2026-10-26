@@ -122,6 +122,7 @@ final class SelfTest {
         await motivation()
         await bubbleClick()
         await quittingTime()
+        await breakQuestion()
 
         section("Streifzug bzw. Katzenkorb")
         cat.roaming = true
@@ -243,6 +244,26 @@ final class SelfTest {
         await waitUntil("erledigt", 75) { $0.errand == nil }
         await pause(3)
         log("   Outfit vorher: \(hatBefore ?? "keins"), jetzt: \(cat.snapshot().hat ?? "keins")")
+    }
+
+    private func breakQuestion() async {
+        section("Pausenfrage")
+        cat.askForBreakNow()
+        await waitUntil("Blase „Pause?“ mit Daumen über der Katze", 30) { self.bubbleAboveCat($0) }
+        cat.answerBreak(true, now: Date())
+        await waitUntil("Daumen hoch: Blase platzt", 3) { $0.bubble == nil }
+        check("Pause läuft, Restzeit oben in der Menüleiste", cat.breakEnds != nil)
+        await pause(4)
+        check("sie bleibt im Bild", !cat.snapshot().isAway)
+        cat.endBreak()
+        check("Pause vorbei", cat.breakEnds == nil)
+        await pause(3)
+        cat.askForBreakNow()
+        await waitUntil("noch einmal gefragt", 30) { self.bubbleAboveCat($0) }
+        cat.answerBreak(false, now: Date())
+        await waitUntil("Daumen runter: Blase platzt", 3) { $0.bubble == nil }
+        check("keine Pause", cat.breakEnds == nil)
+        await pause(3)
     }
 
     // MARK: Werkzeuge

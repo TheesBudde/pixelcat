@@ -188,6 +188,13 @@ final class CatController {
     private(set) var pomodoro: Pomodoro?
     private(set) var timer: CatTimer?
     private var nextReminder = Date.distantFuture
+    /// Pausenfrage („Pause?“ mit Daumen) offen bis hierhin
+    private var breakQuestionUntil: Date?
+    /// Angenommene Pause läuft bis hierhin (Restzeit oben in der Menüleiste)
+    private(set) var breakEnds: Date?
+    /// Weggedrückte Pausen (nach Aktivität: nächste Erinnerung früher)
+    private var snooze = BreakSnooze()
+    static let breakQuestionTimeout: TimeInterval = 3 * 60
     private var perchRefresh = 0.0
     private var sensorRefresh = 0.0
     private var statusText: String?
@@ -596,6 +603,7 @@ final class CatController {
     func startPomodoro() {
         guard timer == nil else { return }
         cancelErrand()
+        cancelBreak()
         pomodoro = Pomodoro(stage: .focus, ends: Date().addingTimeInterval(Double(focusMinutes) * 60))
         setPlaying(false)
         removeBowl()
@@ -614,6 +622,7 @@ final class CatController {
     func startTimer(minutes: Double) {
         guard pomodoro == nil else { return }
         cancelErrand()
+        cancelBreak()
         timer = CatTimer(ends: Date().addingTimeInterval(minutes * 60))
         setPlaying(false)
         removeBowl()
@@ -807,12 +816,15 @@ final class CatController {
         let now = CACurrentMediaTime()
         let dt = now - lastActivityCheck
         lastActivityCheck = now
-        guard breakReminders, breakByActivity, pomodoro == nil else {
+        guard breakReminders, breakByActivity, pomodoro == nil, breakQuestionUntil == nil, breakEnds == nil else {
             activity.reset()
             return false
         }
-        activity.update(dt: dt, idle: Self.secondsSinceInput)
-        return activity.activeSeconds >= Double(activityMinutes) * 60
+        let idle = Self.secondsSinceInput
+        activity.update(dt: dt, idle: idle)
+        // Eine echte Pause (lange nichts getan): wieder der volle Abstand
+        if idle >= activity.restAfter { snooze.rested() }
+        return activity.activeSeconds >= snooze.minutes(base: activityMinutes) * 60
     }
 
     /// Pausen-Erinnerung: zur Mitte, strecken, Blase „Pause“ – während eines Timers als Pause im Timer.
@@ -820,12 +832,85 @@ final class CatController {
         if let timer {
             // Wartet sie schon auf Streicheln, ist ohnehin Pause
             if !timer.finished { takeBreakDuringTimer(now: now) }
-        } else {
-            pendingMeow = (.reminder, now)
-            brain.remindToTakeBreak()
-            showBubble(until: now.addingTimeInterval(breakLength))
+            scheduleReminder()
+            return
         }
-        scheduleReminder()
+        guard breakQuestionUntil == nil, breakEnds == nil, brain.mode == .normal else { return }
+        // Sie kommt in die Mitte und fragt: Pause? Daumen hoch oder runter
+        pendingMeow = (.reminder, now)
+        brain.callToCenter(visitLength: Self.breakQuestionTimeout + 30)
+        let until = now.addingTimeInterval(Self.breakQuestionTimeout)
+        breakQuestionUntil = until
+        nextReminder = .distantFuture
+        bubble?.remove()
+        bubble = ThoughtBubble(text: L10n.s("Pause?", "Break?"), ends: until, scale: scale) { [weak self] yes in
+            self?.answerBreak(yes, now: Date())
+        }
+    }
+
+    /// „Jetzt fragen“ in den Einstellungen (und Selbsttest): die Pausenfrage gleich zeigen
+    func askForBreakNow() {
+        remindToTakeBreak(now: Date())
+    }
+
+    /// Angenommene Pause vorzeitig beenden (Selbsttest)
+    func endBreak() {
+        guard breakEnds != nil else { return }
+        breakEnds = Date()
+        updateBreak(now: Date())
+    }
+
+    /// Antwort auf die Pausenfrage
+    func answerBreak(_ yes: Bool, now: Date) {
+        guard breakQuestionUntil != nil else { return }
+        breakQuestionUntil = nil
+        bubble?.pop()
+        if yes {
+            // Pause: Sie freut sich und bleibt da, bis die Pause vorbei ist; oben läuft die Restzeit
+            snooze.rested()
+            activity.reset()
+            breakEnds = now.addingTimeInterval(breakLength)
+            brain.mode = .focusBreak
+            brain.rejoice()
+            updateStatusText(force: true)
+        } else {
+            // Später: zurück zum Gewohnten; die nächste Erinnerung zählt neu (nach Aktivität früher)
+            brain.declineBreak()
+            if breakByActivity { snooze.snoozed() }
+            scheduleReminder()
+        }
+    }
+
+    /// Pausenfrage ohne Antwort und angenommene Pause zu Ende bringen
+    private func updateBreak(now: Date) {
+        if let until = breakQuestionUntil, now >= until {
+            if Self.secondsSinceInput >= 120 {
+                // Niemand da: Das war ohnehin eine Pause
+                breakQuestionUntil = nil
+                bubble?.pop()
+                snooze.rested()
+                brain.declineBreak()
+                scheduleReminder()
+            } else {
+                answerBreak(false, now: now) // weitergearbeitet: wie Daumen runter
+            }
+        }
+        if let ends = breakEnds, now >= ends {
+            breakEnds = nil
+            brain.mode = .normal
+            meow(.backToWork)
+            scheduleReminder()
+            updateStatusText(force: true)
+        }
+    }
+
+    /// Pomodoro oder Timer beginnt: Pausenfrage und Pause sind vorbei
+    private func cancelBreak() {
+        if breakQuestionUntil != nil {
+            breakQuestionUntil = nil
+            bubble?.pop()
+        }
+        breakEnds = nil
     }
 
     // MARK: Sensoren
@@ -1048,6 +1133,7 @@ final class CatController {
     private func updateStatusText(force: Bool = false) {
         let text = pomodoro?.label(at: Date())
             ?? timer.map { $0.finished ? "0:00" : countdownText(until: $0.ends, from: Date()) }
+            ?? breakEnds.map { L10n.s("Pause", "Break") + " " + countdownText(until: $0, from: Date()) }
         if text != statusText || force {
             statusText = text
             onStatusChange?(text)
@@ -1646,6 +1732,7 @@ final class CatController {
         }
         updatePomodoro(now: date)
         updateTimer(now: date)
+        updateBreak(now: date)
         updateStatusText()
         if pomodoro == nil, date >= nextReminder {
             remindToTakeBreak(now: date)
