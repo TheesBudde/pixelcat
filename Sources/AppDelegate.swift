@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var drinkItem: NSMenuItem!
     private var eyeItem: NSMenuItem!
     private var motivationItem: NSMenuItem!
+    private var breakNowItem: NSMenuItem!
     private var taskItem: NSMenuItem!
     private var taskOnItem: NSMenuItem!
     private var taskCallsItem: NSMenuItem!
@@ -151,6 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(infoItem)
         reminderItem = item(t("Pausenerinnerung", "Break reminder"), #selector(toggleReminders), icon: "cup.and.saucer")
         menu.addItem(reminderItem)
+        // Jederzeit eine Pause: sofort, ohne zu fragen (während einer Pause: beenden)
+        breakNowItem = item(t("Pause machen", "Take a break"), #selector(breakNow), icon: "pause.circle")
+        menu.addItem(breakNowItem)
         drinkItem = item(t("Trinkerinnerung", "Drink reminder"), #selector(toggleDrinking), icon: "drop")
         menu.addItem(drinkItem)
         eyeItem = item(t("Augenpause", "Eye break"), #selector(toggleEyeBreaks), icon: "mountain.2")
@@ -307,6 +311,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         drinkItem.state = settings.drinkReminders ? .on : .off
         eyeItem.state = settings.eyeBreaks ? .on : .off
         motivationItem.state = settings.motivationEnabled ? .on : .off
+        let onBreak = cat.breakEnds != nil
+        breakNowItem.title = onBreak ? t("Pause beenden", "End break") : t("Pause machen", "Take a break")
+        breakNowItem.image = Self.symbol(onBreak ? "play.circle" : "pause.circle")
+        breakNowItem.isEnabled = cat.pomodoro == nil && cat.timer == nil
         taskItem.state = settings.taskReminders ? .on : .off
         taskOnItem.state = settings.taskReminders ? .on : .off
         taskCallsItem.state = settings.tasksDuringCalls ? .on : .off
@@ -397,6 +405,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleDrinking() {
         settings.drinkReminders.toggle()
+    }
+
+    @objc private func breakNow() {
+        if cat.breakEnds != nil {
+            cat.endBreak()
+        } else {
+            settings.silentMode = false // eine Pause ist kein Ruhemodus
+            cat.show()
+            cat.startBreakNow()
+        }
     }
 
     @objc private func toggleMotivation() {

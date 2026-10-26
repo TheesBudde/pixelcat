@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// Was an einem Tag los war: Pausen, aktive Arbeit, Pomodoros, Trinken.
 struct DayStats: Codable, Equatable {
@@ -9,14 +9,50 @@ struct DayStats: Codable, Equatable {
     var pomodoros = 0
     var drinks = 0
     var drinksSkipped = 0
+    /// Davon aktiv, während Musik (oder anderer Ton) lief – ohne Videocalls
+    var musicSeconds = 0.0
+    /// Aktive Zeit in ausgewählten Apps (Bundle-ID → Sekunden)
+    var apps: [String: Double] = [:]
 
     static func + (a: DayStats, b: DayStats) -> DayStats {
         DayStats(breaksTaken: a.breaksTaken + b.breaksTaken, breaksSkipped: a.breaksSkipped + b.breaksSkipped,
                  activeSeconds: a.activeSeconds + b.activeSeconds, pomodoros: a.pomodoros + b.pomodoros,
-                 drinks: a.drinks + b.drinks, drinksSkipped: a.drinksSkipped + b.drinksSkipped)
+                 drinks: a.drinks + b.drinks, drinksSkipped: a.drinksSkipped + b.drinksSkipped,
+                 musicSeconds: a.musicSeconds + b.musicSeconds, apps: a.apps.merging(b.apps, uniquingKeysWith: +))
     }
 
     var isEmpty: Bool { self == DayStats() }
+}
+
+/// Ältere Statistik-Dateien kennen noch nicht alle Felder – was fehlt, ist 0
+extension DayStats {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        breaksTaken = try values.decodeIfPresent(Int.self, forKey: .breaksTaken) ?? 0
+        breaksSkipped = try values.decodeIfPresent(Int.self, forKey: .breaksSkipped) ?? 0
+        activeSeconds = try values.decodeIfPresent(Double.self, forKey: .activeSeconds) ?? 0
+        pomodoros = try values.decodeIfPresent(Int.self, forKey: .pomodoros) ?? 0
+        drinks = try values.decodeIfPresent(Int.self, forKey: .drinks) ?? 0
+        drinksSkipped = try values.decodeIfPresent(Int.self, forKey: .drinksSkipped) ?? 0
+        musicSeconds = try values.decodeIfPresent(Double.self, forKey: .musicSeconds) ?? 0
+        apps = try values.decodeIfPresent([String: Double].self, forKey: .apps) ?? [:]
+    }
+}
+
+/// Name und Symbol einer App aus ihrer Bundle-ID (für Einstellungen und Statistik)
+enum AppInfo {
+    static func url(_ bundleID: String) -> URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) }
+
+    static func name(_ bundleID: String) -> String {
+        guard let url = url(bundleID) else { return bundleID }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
+
+    static func icon(_ bundleID: String) -> NSImage? { url(bundleID).map { NSWorkspace.shared.icon(forFile: $0.path) } }
+
+    /// Beliebte Apps zum Lernen und Arbeiten – als Vorschlag, wenn sie installiert sind
+    static let suggestions = ["net.ankiweb.dtop", "md.obsidian", "notion.id", "com.microsoft.Word", "com.apple.dt.Xcode"]
 }
 
 /// Eine Woche: die sieben Tage (in der Reihenfolge des Kalenders, bei uns Montag bis Sonntag) und die Summe

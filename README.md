@@ -45,7 +45,9 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 ### Gentle reminders
 
 - **Pomodoro:** 25 minutes of focus while she sleeps deeply and can't be disturbed. Then she wakes up, stretches
-  and strolls around for 5 minutes. The time left is shown next to the menu bar icon.
+  and strolls around for 5 minutes. The time left is shown next to the menu bar icon. With guided Pomodoro breaks
+  she fills the break with exercises, just like a guided break.
+- **Take a break:** Any time from the menu, without waiting for a reminder.
 - **Timer:** Set your own time (5 to 60 minutes or a custom value like `25` or `1:30`). She sleeps until it runs
   out, then walks to the middle of the screen, meows and asks for attention until you pet or click her.
 - **Break reminder:** Every 45 to 55 minutes, or **by activity**: Pixelcat then only counts the time you type,
@@ -79,7 +81,10 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 
 A statistics window (menu › Statistics …) shows this week and the weeks before: breaks taken and put off, active
 work time, Pomodoros and drinks, each compared with the week before (this week only up to the same weekday). Two
-small charts show active hours and breaks per day, hover a day for its numbers. Everything stays on your Mac in
+small charts show active hours (split into with and without music) and breaks per day, hover a day for its numbers.
+Music means sound was playing while you worked, outside of calls; Pixelcat only asks macOS whether audio is playing.
+Under **Apps to watch** you can pick apps like Anki in the settings, and the statistics show how long you were
+active in each of them (only the time, never any content). Everything stays on your Mac in
 `~/Library/Application Support/Pixelcat/Statistics.json`.
 
 ### Outfits
@@ -138,6 +143,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Pomodoro | Focus and breaks in turns (checkmark = running) |
 | Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |
 | Break reminder | Regular breaks (on/off) |
+| Take a break / End break | A break right now, without asking (guided if turned on) |
 | Drink reminder · Eye break | Small reminders (on/off) |
 | Task reminder ▸ | On · Also during video calls · Your tasks with their times · Add and edit tasks … |
 | Motivation | Sayings in the morning and towards the end of the day (on/off) |

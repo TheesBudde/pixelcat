@@ -56,6 +56,7 @@ struct StatsView: View {
     /// Geprüfte Farben (hell/dunkel) für die beiden Reihen
     private var blue: Color { colorScheme == .dark ? Color(hex: 0x3987E5) : Color(hex: 0x2A78D6) }
     private var orange: Color { colorScheme == .dark ? Color(hex: 0xD95926) : Color(hex: 0xEB6834) }
+    private var green: Color { colorScheme == .dark ? Color(hex: 0x199E70) : Color(hex: 0x1BAF7A) }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -77,6 +78,7 @@ struct StatsView: View {
                 summary
                 card(title: t("Aktiv gearbeitet", "Active work"), icon: "keyboard", color: .blue) { activeChart }
                 card(title: t("Pausen", "Breaks"), icon: "cup.and.saucer.fill", color: .brown) { breakChart }
+                card(title: t("Apps im Blick", "Apps to watch"), icon: "square.grid.2x2.fill", color: .teal) { appsList }
                 pastWeeks
             }
             .padding(.horizontal, 26)
@@ -152,7 +154,9 @@ struct StatsView: View {
                      detail: now.breaksSkipped > 0 ? t("\(now.breaksSkipped) weggedrückt", "\(now.breaksSkipped) put off") : nil,
                      change: delta(now.breaksTaken, before.breaksTaken))
             StatTile(icon: "keyboard", color: .blue, value: Self.hoursText(now.activeSeconds),
-                     caption: t("aktiv gearbeitet", "active work"), detail: nil,
+                     caption: t("aktiv gearbeitet", "active work"),
+                     detail: now.musicSeconds >= 60 ? t("davon \(Self.hoursText(now.musicSeconds)) mit Musik",
+                                                        "\(Self.hoursText(now.musicSeconds)) with music") : nil,
                      change: delta(Int(now.activeSeconds / 3600), Int(before.activeSeconds / 3600), unit: t("Std.", "h")))
             StatTile(icon: "timer", color: .red, value: "\(now.pomodoros)",
                      caption: t("Pomodoros", "Pomodoros"), detail: nil,
@@ -189,31 +193,95 @@ struct StatsView: View {
     private var activeChart: some View {
         let values = dayValues
         let busiest = values.max { $0.hours < $1.hours }
-        return Chart {
-            ForEach(values) { day in
-                BarMark(x: .value(t("Tag", "Day"), day.id), y: .value(t("Stunden", "Hours"), day.hours), width: .ratio(0.5))
-                    .foregroundStyle(blue.opacity(hoveredActiveDay == nil || hoveredActiveDay == day.id ? 1 : 0.45))
-                    .cornerRadius(4)
-                    .annotation(position: .top) {
-                        // Nur der fleißigste Tag (oder der unter der Maus) bekommt eine Zahl
-                        if day.hours > 0, day.id == (hoveredActiveDay ?? busiest?.id) {
-                            Text(Self.hoursText(day.stats.activeSeconds))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
+        let quiet = t("Ohne Musik", "Without music"), music = t("Mit Musik", "With music")
+        let total = week.total
+        let share = total.activeSeconds > 0 ? Int((total.musicSeconds / total.activeSeconds * 100).rounded()) : 0
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                LegendChip(color: blue, text: quiet)
+                LegendChip(color: green, text: music)
+                Spacer()
+                if let id = hoveredActiveDay, let day = values.first(where: { $0.id == id }) {
+                    Text(t("\(id): \(Self.hoursText(day.stats.activeSeconds)), davon \(Self.hoursText(day.stats.musicSeconds)) mit Musik",
+                           "\(id): \(Self.hoursText(day.stats.activeSeconds)), \(Self.hoursText(day.stats.musicSeconds)) with music"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if total.activeSeconds > 0 {
+                    Label(t("\(share) % mit Musik", "\(share) % with music"), systemImage: "music.note")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Chart {
+                ForEach(values) { day in
+                    let faded = hoveredActiveDay != nil && hoveredActiveDay != day.id
+                    BarMark(x: .value(t("Tag", "Day"), day.id),
+                            y: .value(quiet, max(0, day.stats.activeSeconds - day.stats.musicSeconds) / 3600), width: .ratio(0.5))
+                        .foregroundStyle(by: .value(t("Art", "Kind"), quiet))
+                        .cornerRadius(4)
+                        .opacity(faded ? 0.45 : 1)
+                    BarMark(x: .value(t("Tag", "Day"), day.id), y: .value(music, day.stats.musicSeconds / 3600), width: .ratio(0.5))
+                        .foregroundStyle(by: .value(t("Art", "Kind"), music))
+                        .cornerRadius(4)
+                        .opacity(faded ? 0.45 : 1)
+                        .annotation(position: .top) {
+                            // Nur der fleißigste Tag (oder der unter der Maus) bekommt eine Zahl
+                            if day.hours > 0, day.id == (hoveredActiveDay ?? busiest?.id) {
+                                Text(Self.hoursText(day.stats.activeSeconds))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
                         }
+                }
+            }
+            .chartForegroundStyleScale([quiet: blue, music: green])
+            .chartLegend(.hidden) // eigene Legende oben, in Textfarbe
+            .chartXScale(domain: values.map(\.id))
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine().foregroundStyle(Color.secondary.opacity(0.15))
+                    AxisValueLabel { if let hours = value.as(Double.self) { Text("\(Int(hours)) h") } }
+                }
+            }
+            .chartXAxis { AxisMarks { _ in AxisValueLabel() } }
+            .chartOverlay { proxy in hoverLayer(proxy) { hoveredActiveDay = $0 } }
+            .frame(height: 170)
+        }
+    }
+
+    /// Ausgewählte Apps: aktive Zeit diese Woche, längste zuerst
+    private var appsList: some View {
+        let times = week.total.apps
+        let apps = settings.trackedApps.map { (id: $0, seconds: times[$0] ?? 0) }.sorted { $0.seconds > $1.seconds }
+        let longest = max(1, apps.first?.seconds ?? 1)
+        return VStack(alignment: .leading, spacing: 10) {
+            if apps.isEmpty {
+                Text(t("Wähle in den Einstellungen unter „Apps im Blick“ Apps wie Anki, dann siehst du hier, wie lange du darin aktiv warst.",
+                       "Pick apps like Anki in Settings under “Apps to watch” to see here how long you were active in them."))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(apps, id: \.id) { app in
+                HStack(spacing: 10) {
+                    if let icon = AppInfo.icon(app.id) {
+                        Image(nsImage: icon).resizable().frame(width: 22, height: 22)
                     }
+                    Text(AppInfo.name(app.id))
+                        .frame(width: 130, alignment: .leading)
+                        .lineLimit(1)
+                    GeometryReader { geometry in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(blue)
+                            .frame(width: max(app.seconds > 0 ? 4 : 0, geometry.size.width * app.seconds / longest))
+                    }
+                    .frame(height: 10)
+                    Text(Self.hoursText(app.seconds))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 90, alignment: .trailing)
+                }
             }
         }
-        .chartXScale(domain: values.map(\.id))
-        .chartYAxis {
-            AxisMarks(position: .leading) { value in
-                AxisGridLine().foregroundStyle(Color.secondary.opacity(0.15))
-                AxisValueLabel { if let hours = value.as(Double.self) { Text("\(Int(hours)) h") } }
-            }
-        }
-        .chartXAxis { AxisMarks { _ in AxisValueLabel() } }
-        .chartOverlay { proxy in hoverLayer(proxy) { hoveredActiveDay = $0 } }
-        .frame(height: 170)
     }
 
     private var breakChart: some View {

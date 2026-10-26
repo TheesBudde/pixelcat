@@ -74,6 +74,10 @@ final class AppSettings: ObservableObject {
     @Published var silentMode: Bool { didSet { changed() } }
     /// Geführte Pause: Nach Daumen hoch macht sie Übungen vor
     @Published var guidedBreaks: Bool { didSet { changed() } }
+    /// Pomodoro-Pausen ebenfalls mit Übungen
+    @Published var guidedPomodoros: Bool { didSet { changed() } }
+    /// Apps, deren aktive Zeit in der Statistik erscheint (Bundle-IDs)
+    @Published var trackedApps: [String] { didSet { changed() } }
     @Published var respectFocus: Bool { didSet { changed() } }
     // Allgemein
     @Published var language: Language { didSet { L10n.language = language; changed() } }
@@ -131,7 +135,7 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
             "taskReminders": false, "tasksDuringCalls": false, "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
-            "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
+            "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "guidedPomodoros": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
         catName = defaults.string(forKey: "catName") ?? ""
@@ -182,6 +186,8 @@ final class AppSettings: ObservableObject {
         hideDuringCalls = defaults.bool(forKey: "hideDuringCalls")
         silentMode = defaults.bool(forKey: "silentMode")
         guidedBreaks = defaults.bool(forKey: "guidedBreaks")
+        guidedPomodoros = defaults.bool(forKey: "guidedPomodoros")
+        trackedApps = defaults.stringArray(forKey: "trackedApps") ?? []
         respectFocus = defaults.bool(forKey: "respectFocus")
         language = Language(rawValue: defaults.string(forKey: "language") ?? "") ?? .system
         // Wer Pixelcat schon benutzt hat (gespeichertes Fell), bekommt die Einrichtung nicht ungefragt
@@ -220,7 +226,8 @@ final class AppSettings: ObservableObject {
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "motivation": motivationEnabled, "motivationSayings": motivationSayings,
             "tasksDuringCalls": tasksDuringCalls, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
-            "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
+            "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks,
+            "guidedPomodoros": guidedPomodoros, "trackedApps": trackedApps, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
     }
@@ -310,6 +317,7 @@ struct SettingsView: View {
                 outfitSection
                 taskSection
                 motivationSection
+                appsSection
                 birdSection
                 soundSection
                 considerateSection
@@ -394,6 +402,9 @@ struct SettingsView: View {
         Section {
             minutesSlider(t("Fokus", "Focus"), value: $settings.pomodoroFocus, range: 5...120, step: 5)
             minutesSlider(t("Pause", "Break"), value: $settings.pomodoroBreak, range: 1...30, step: 1)
+            Toggle(t("Geführte Pomodoro-Pausen", "Guided Pomodoro breaks"), isOn: $settings.guidedPomodoros)
+            hint(t("In der Pomodoro-Pause macht sie Übungen vor, wie bei der geführten Pause.",
+                   "During the Pomodoro break she shows you exercises, like in a guided break."))
         } header: {
             SectionTitle("Pomodoro", icon: "timer", color: .red)
         }
@@ -584,6 +595,55 @@ struct SettingsView: View {
                 guard settings.motivationSayings.indices.contains(index) else { return }
                 settings.motivationSayings[index] = String(value.prefix(TasksView.maxLength))
             })
+    }
+
+    private var appsSection: some View {
+        Section {
+            hint(t("Pixelcat zählt, wie lange du in diesen Apps aktiv bist, und zeigt es in der Statistik. Nur die Zeit, keine Inhalte. Alles bleibt auf deinem Mac.",
+                   "Pixelcat counts how long you're active in these apps and shows it in your statistics. Only the time, no content. Everything stays on your Mac."))
+            ForEach(settings.trackedApps, id: \.self) { id in
+                HStack(spacing: 10) {
+                    if let icon = AppInfo.icon(id) {
+                        Image(nsImage: icon).resizable().frame(width: 20, height: 20)
+                    }
+                    Text(AppInfo.name(id))
+                    Spacer()
+                    Button {
+                        settings.trackedApps.removeAll { $0 == id }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(t("Nicht mehr zählen", "Stop counting"))
+                }
+            }
+            let suggestions = AppInfo.suggestions.filter { AppInfo.url($0) != nil && !settings.trackedApps.contains($0) }
+            HStack(spacing: 8) {
+                ForEach(suggestions, id: \.self) { id in
+                    Button {
+                        settings.trackedApps.append(id)
+                    } label: {
+                        Label(AppInfo.name(id), systemImage: "plus")
+                    }
+                }
+                Spacer()
+                Button(t("App wählen …", "Choose app …")) { chooseApp() }
+            }
+        } header: {
+            SectionTitle(t("Apps im Blick", "Apps to watch"), icon: "square.grid.2x2.fill", color: .teal)
+        }
+    }
+
+    /// Eine App aus dem Programme-Ordner wählen
+    private func chooseApp() {
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.prompt = t("Hinzufügen", "Add")
+        guard panel.runModal() == .OK, let url = panel.url,
+              let id = Bundle(url: url)?.bundleIdentifier, !settings.trackedApps.contains(id) else { return }
+        settings.trackedApps.append(id)
     }
 
     private var birdSection: some View {

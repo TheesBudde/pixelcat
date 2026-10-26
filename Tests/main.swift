@@ -607,6 +607,13 @@ MainActor.assumeIsolated {
         check("zurückblättern nur, wenn es davor Daten gibt",
               store.hasData(before: week.start) && !store.hasData(before: store.week(containing: at(22, 12), offset: -1).start))
         check("aktive Zeit lesbar", StatsView.hoursText(45 * 60) == "45 min" && StatsView.hoursText(3.5 * 3600) == "3 h 30 min")
+        // Ältere Dateien ohne Musik und Apps lassen sich weiter lesen
+        let old = Data(#"{"breaksTaken":2,"activeSeconds":600}"#.utf8)
+        let decoded = try? JSONDecoder().decode(DayStats.self, from: old)
+        check("alte Statistik-Dateien bleiben lesbar", decoded?.breaksTaken == 2 && decoded?.musicSeconds == 0
+              && decoded?.apps.isEmpty == true)
+        let merged = DayStats(musicSeconds: 60, apps: ["anki": 100]) + DayStats(musicSeconds: 30, apps: ["anki": 50, "word": 10])
+        check("Musik und Apps werden zusammengezählt", merged.musicSeconds == 90 && merged.apps == ["anki": 150, "word": 10])
     }
 
     print("\nGeführte Pause")

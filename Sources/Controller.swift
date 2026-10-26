@@ -199,6 +199,10 @@ final class CatController {
     private var guided: (plan: GuidedBreak, start: Date, step: Int?)?
     /// Statistik (Pausen, aktive Arbeit, Pomodoros, Trinken)
     var stats: StatsStore?
+    /// Apps, deren aktive Zeit mitgezählt wird (Bundle-IDs)
+    var trackedApps: Set<String> = []
+    /// Pomodoro-Pausen mit Übungen wie die geführte Pause
+    var guidedPomodoros = true
     private var lastActiveCheck = Date()
 
     /// Ruhemodus: Sie geht in den Korb bzw. aus dem Bild – keine Erinnerungen, keine Töne, kein Vogel
@@ -393,6 +397,8 @@ final class CatController {
         }
         silent = settings.silentMode
         guidedBreaks = settings.guidedBreaks
+        guidedPomodoros = settings.guidedPomodoros
+        trackedApps = Set(settings.trackedApps)
         motivationEnabled = settings.motivationEnabled
         motivationSayings = settings.motivationSayings
         errands.configureMotivation(enabled: motivationEnabled, workdayEnd: quittingTime?.minutes,
@@ -642,6 +648,7 @@ final class CatController {
     }
 
     func stopPomodoro() {
+        stopGuided()
         bubble?.pop()
         pomodoro = nil
         brain.mode = .normal
@@ -896,16 +903,7 @@ final class CatController {
         breakQuestionUntil = nil
         bubble?.pop()
         if yes {
-            // Pause: Sie freut sich und bleibt da, bis die Pause vorbei ist; oben läuft die Restzeit
-            snooze.rested()
-            activity.reset()
-            stats?.record { $0.breaksTaken += 1 }
-            breakEnds = now.addingTimeInterval(breakLength)
-            brain.mode = .focusBreak
-            brain.rejoice()
-            // Geführt: Nach dem Freuen macht sie Übungen vor
-            if guidedBreaks { guided = (GuidedBreak(length: breakLength), now.addingTimeInterval(1.5), nil) }
-            updateStatusText(force: true)
+            beginBreak(now: now)
         } else {
             // Später: zurück zum Gewohnten; die nächste Erinnerung zählt neu (nach Aktivität früher)
             stats?.record { $0.breaksSkipped += 1 }
@@ -913,6 +911,32 @@ final class CatController {
             if breakByActivity { snooze.snoozed() }
             scheduleReminder()
         }
+    }
+
+    /// Pause beginnt (Daumen hoch oder „Pause machen“ im Menü): Sie freut sich und bleibt da, bis die Pause
+    /// vorbei ist; oben läuft die Restzeit. Geführt macht sie danach Übungen vor.
+    private func beginBreak(now: Date) {
+        snooze.rested()
+        activity.reset()
+        nextReminder = .distantFuture
+        stats?.record { $0.breaksTaken += 1 }
+        breakEnds = now.addingTimeInterval(breakLength)
+        brain.mode = .focusBreak
+        brain.rejoice()
+        if guidedBreaks { startGuided(length: breakLength, now: now) }
+        updateStatusText(force: true)
+    }
+
+    /// Menü „Pause machen“: jederzeit eine Pause, ohne zu fragen
+    func startBreakNow() {
+        guard pomodoro == nil, timer == nil, breakEnds == nil else { return }
+        if breakQuestionUntil != nil {
+            answerBreak(true, now: Date()) // die offene Frage gleich mit beantworten
+            return
+        }
+        cancelErrand()
+        bubble?.pop()
+        beginBreak(now: Date())
     }
 
     /// Pausenfrage ohne Antwort und angenommene Pause zu Ende bringen
@@ -933,9 +957,7 @@ final class CatController {
         updateGuidedBreak(now: now)
         if let ends = breakEnds, now >= ends {
             breakEnds = nil
-            guided = nil
-            brain.exercise = nil
-            bubble?.pop()
+            stopGuided()
             brain.mode = .normal
             meow(.backToWork)
             scheduleReminder()
@@ -945,7 +967,7 @@ final class CatController {
 
     /// Geführte Pause: zur rechten Zeit die nächste Übung, darüber der Satz in der Gedankenblase
     private func updateGuidedBreak(now: Date) {
-        guard var guided, breakEnds != nil else { return }
+        guard var guided else { return }
         let index = guided.plan.stepIndex(at: now.timeIntervalSince(guided.start))
         guard index != guided.step else { return }
         guided.step = index
@@ -955,6 +977,19 @@ final class CatController {
         brain.exercise = step.exercise
         bubble?.remove()
         bubble = ThoughtBubble(text: step.text, ends: guided.start.addingTimeInterval(step.end), scale: scale)
+    }
+
+    /// Übungsfolge für eine Pause dieser Länge – nach kurzem Freuen geht es los
+    private func startGuided(length: TimeInterval, now: Date) {
+        guided = (GuidedBreak(length: length), now.addingTimeInterval(1.5), nil)
+    }
+
+    /// Übungen vorbei: Blase weg, normal weiter
+    private func stopGuided() {
+        guard guided != nil else { return }
+        guided = nil
+        brain.exercise = nil
+        bubble?.pop()
     }
 
     /// Pomodoro, Timer oder Ruhemodus beginnt: Pausenfrage und Pause sind vorbei
@@ -977,7 +1012,15 @@ final class CatController {
         let elapsed = now.timeIntervalSince(lastActiveCheck)
         lastActiveCheck = now
         if elapsed > 0, elapsed < 30, Self.secondsSinceInput < 60 {
-            stats?.record(at: now) { $0.activeSeconds += elapsed }
+            // Musik: Es läuft Ton, aber kein Call (und nicht gerade ihr eigenes Schnurren)
+            let music = CallDetector.audioIsPlaying() && hiddenBecause == nil && !brain.isBeingPetted
+                && !CallDetector.microphoneInUse()
+            let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            stats?.record(at: now) {
+                $0.activeSeconds += elapsed
+                if music { $0.musicSeconds += elapsed }
+                if let app, trackedApps.contains(app) { $0.apps[app, default: 0] += elapsed }
+            }
         }
         stats?.save()
     }
@@ -1189,8 +1232,14 @@ final class CatController {
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Double(breakMinutes) * 60))
             brain.mode = .focusBreak
             pendingMeow = (.breakStarts, now)
-            showBubble(until: pomodoro.ends)
+            // Geführt: Übungen statt der Blase „Pause“
+            if guidedPomodoros {
+                startGuided(length: pomodoro.ends.timeIntervalSince(now), now: now)
+            } else {
+                showBubble(until: pomodoro.ends)
+            }
         case .rest:
+            stopGuided()
             pomodoro = Pomodoro(stage: .focus, ends: now.addingTimeInterval(Double(focusMinutes) * 60))
             setPlaying(false)
             removeBowl()

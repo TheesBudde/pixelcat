@@ -72,11 +72,14 @@ MainActor.assumeIsolated {
             $0.pomodoros = random(0...5)
             $0.drinks = random(2...7)
             $0.drinksSkipped = random(0...2)
+            $0.musicSeconds = $0.activeSeconds * Double(random(10...70)) / 100
+            $0.apps = ["com.apple.Safari": Double(random(30...120)) * 60, "com.apple.Notes": Double(random(5...40)) * 60]
         }
     }
+    settings.trackedApps = ["com.apple.Safari", "com.apple.Notes"]
     for coat in [Coat.orange, Coat.black] {
         settings.coat = coat
-        shoot(StatsView(store: stats, settings: settings), width: 640, height: 1080,
+        shoot(StatsView(store: stats, settings: settings), width: 640, height: 1320,
               to: base.replacingOccurrences(of: "einstellungen", with: "statistik-\(coat.rawValue)"),
               appearance: coat == .black ? .darkAqua : .aqua)
     }

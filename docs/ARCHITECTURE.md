@@ -170,6 +170,11 @@ about four fifths of the break, then the rest is just relaxing. The controller s
 to the middle and shows it in the `.exercising` phase (new poses `exerciseUp`, `exerciseArch`, `sitBreathIn`), and a
 thought bubble says what to do.
 
+The same exercises can fill the Pomodoro break (guided Pomodoro breaks), and “Take a break” in the menu starts a break
+at once. For the statistics, every two seconds of activity are counted as active time, as music time when the
+default output device is playing and no call is going on (`CallDetector.audioIsPlaying()`), and per app when the
+frontmost app is one of the apps to watch.
+
 Silent mode makes the cat roam (bed or out of sight), suppresses visits, clears the reminder queue and mutes all
 sounds until it is turned off.
 

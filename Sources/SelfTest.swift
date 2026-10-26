@@ -269,6 +269,15 @@ final class SelfTest {
         check("keine Pause", cat.breakEnds == nil)
         await pause(3)
 
+        section("Pause machen (Menü)")
+        cat.startBreakNow()
+        check("Pause läuft sofort, ohne Frage", cat.breakEnds != nil)
+        await pause(3)
+        check("sie bleibt im Bild", !cat.snapshot().isAway)
+        cat.endBreak()
+        check("Pause beendet", cat.breakEnds == nil)
+        await pause(3)
+
         section("Ruhemodus")
         cat.silent = true
         await waitUntil("geht weg (Körbchen oder zur Seite hinaus)", 90) { $0.isAway }
