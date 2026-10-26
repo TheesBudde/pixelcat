@@ -108,6 +108,8 @@ final class AppSettings: ObservableObject {
     var onOpenSetup: (() -> Void)?
     /// Die Pausenfrage gleich zeigen
     var onPreviewBreak: (() -> Void)?
+    /// Die Statistik öffnen
+    var onOpenStats: (() -> Void)?
     /// Was die Katze gerade trägt (Hut, Fliege), damit sie in der Einrichtung genauso aussieht
     var currentOutfit: (() -> Frames.Outfit)?
     private var loading = true
@@ -317,6 +319,7 @@ struct SettingsView: View {
                 outfitSection
                 taskSection
                 motivationSection
+                statsSection
                 appsSection
                 birdSection
                 soundSection
@@ -595,6 +598,37 @@ struct SettingsView: View {
                 guard settings.motivationSayings.indices.contains(index) else { return }
                 settings.motivationSayings[index] = String(value.prefix(TasksView.maxLength))
             })
+    }
+
+    /// Was die Statistik zählt – vor allem, was „mit Musik“ bedeutet
+    private var statsSection: some View {
+        Section {
+            explanation(t("Aktiv gearbeitet", "Active work"),
+                        t("Zählt, solange du tippst, klickst oder die Maus bewegst. Bis zu einer Minute Lesen ohne Eingabe zählt mit.",
+                          "Counts while you type, click or move the mouse. Up to a minute of reading without input counts too."))
+            explanation(t("Mit Musik", "With music"),
+                        t("Heißt: Während du aktiv warst, lief auf deinem Mac Ton über Lautsprecher oder Kopfhörer. Das ist meist Musik, kann aber auch ein Video, ein Podcast oder ein anderer Ton sein. Videocalls und das Schnurren der Katze zählen nicht mit. Pixelcat fragt dafür nur, ob gerade Ton läuft, nicht was.",
+                          "Means: While you were active, sound was playing on your Mac through speakers or headphones. Usually that's music, but it can also be a video, a podcast or another sound. Video calls and the cat's purring don't count. Pixelcat only asks whether sound is playing, not what."))
+            explanation(t("Pausen und Trinken", "Breaks and drinks"),
+                        t("Als gemachte Pause zählen Daumen hoch, „Pause machen“ im Menü und Pausen, in denen du weg vom Rechner warst. Daumen runter zählt als weggedrückt. Beim Trinken zählt Daumen hoch als getrunken und Daumen runter als ausgelassen.",
+                          "Taken breaks are thumbs up, “Take a break” in the menu and breaks while you were away from your Mac. Thumbs down counts as put off. For drinks, thumbs up counts as a drink and thumbs down as skipped."))
+            HStack {
+                hint(t("Alles bleibt auf deinem Mac.", "Everything stays on your Mac."))
+                Spacer()
+                Button(t("Statistik öffnen …", "Open statistics …")) { settings.onOpenStats?() }
+            }
+        } header: {
+            SectionTitle(t("Statistik", "Statistics"), icon: "chart.bar.fill", color: .indigo)
+        }
+    }
+
+    /// Begriff fett, Erklärung klein darunter
+    private func explanation(_ term: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(term).font(.callout.weight(.semibold))
+            hint(text)
+        }
+        .padding(.vertical, 2)
     }
 
     private var appsSection: some View {

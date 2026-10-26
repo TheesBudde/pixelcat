@@ -25,7 +25,7 @@ MainActor.assumeIsolated {
     }
 
     // Ganze Seite: so hoch, dass alles hineinpasst
-    shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 2900, to: base)
+    shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 3800, to: base)
     shoot(SettingsView(settings: settings, focus: FocusMonitor()), width: 520, height: 660,
           to: base.replacingOccurrences(of: ".png", with: "-dunkel.png"), appearance: .darkAqua)
     shoot(TasksView(settings: settings), width: 560, height: 620,

@@ -64,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         settings.onOpenTasks = { [weak self] in self?.openTasks() }
         // Während der Einrichtung ist die Katze nicht auf dem Dock, danach kommt sie
+        settings.onOpenStats = { [weak self] in self?.openStats() }
         settings.onPreviewBreak = { [weak self] in
             guard let self else { return }
             cat.show()
