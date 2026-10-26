@@ -48,6 +48,7 @@ flowchart LR
 | `Reminders.swift` | `ErrandScheduler`, `TaskItem`, `OutfitTimes`, `ActivityTracker`. Pure logic, no windows |
 | `Basket.swift` | `BasketArt` (the plush bed), `BasketTileView` (Dock icon), `DockLocator` (where the bed sits) |
 | `Lookout.swift` | The eye break window: frame, sky, sun, hills and a drifting cloud |
+| `Stats.swift`, `StatsWindow.swift` | Day by day statistics (stored locally as JSON) and the statistics window with Swift Charts |
 | `Bird.swift` | The bird she chases while you're away: steering flight, swoops, dodging, flying off |
 | `Bubble.swift`, `PixelFont.swift` | Thought bubbles with a hand drawn pixel font (letters, umlauts, digits, punctuation) |
 | `Sensors.swift` | `CallDetector` (camera, microphone, screen sharing), `FocusMonitor` |
@@ -163,6 +164,14 @@ choices, only the thumbs are clickable). Thumbs up sets `CatBrain.mode` to `.foc
 stays on screen even when roaming, and the menu bar counts down. Thumbs down calls `declineBreak()` and starts the
 count again. By activity, `BreakSnooze` shortens the next interval to 60 % each time, down to 15 minutes, and resets
 after a real break.
+
+With guided breaks on, `GuidedBreak` splits the break into steps: each exercise (`Exercise`) takes 15 to 45 seconds,
+about four fifths of the break, then the rest is just relaxing. The controller sets `CatBrain.exercise`, the cat walks
+to the middle and shows it in the `.exercising` phase (new poses `exerciseUp`, `exerciseArch`, `sitBreathIn`), and a
+thought bubble says what to do.
+
+Silent mode makes the cat roam (bed or out of sight), suppresses visits, clears the reminder queue and mutes all
+sounds until it is turned off.
 
 Motivation has its own times: each day the scheduler picks one between 9 and 10 in the morning and one 30 to 75
 minutes before the end of the workday, plus one in the middle when the day is longer than eight hours. Two sayings are

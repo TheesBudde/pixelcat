@@ -194,6 +194,34 @@ final class CatController {
     private(set) var breakEnds: Date?
     /// Weggedrückte Pausen (nach Aktivität: nächste Erinnerung früher)
     private var snooze = BreakSnooze()
+    /// Geführte Pause: Übungen nach Daumen hoch
+    var guidedBreaks = true
+    private var guided: (plan: GuidedBreak, start: Date, step: Int?)?
+    /// Statistik (Pausen, aktive Arbeit, Pomodoros, Trinken)
+    var stats: StatsStore?
+    private var lastActiveCheck = Date()
+
+    /// Ruhemodus: Sie geht in den Korb bzw. aus dem Bild – keine Erinnerungen, keine Töne, kein Vogel
+    var silent = false {
+        didSet {
+            guard silent != oldValue else { return }
+            if silent {
+                cancelErrand()
+                cancelBreak()
+                errands.clearQueue()
+                removeBird()
+                setPlaying(false)
+                removeBowl()
+                bubble?.pop()
+                nextReminder = .distantFuture
+            } else {
+                scheduleReminder()
+            }
+            brain.suppressVisits = hiddenBecause != nil || silent
+            brain.roaming = userRoaming || hiddenBecause != nil || silent
+            updateStatusText(force: true)
+        }
+    }
     static let breakQuestionTimeout: TimeInterval = 3 * 60
     private var perchRefresh = 0.0
     private var sensorRefresh = 0.0
@@ -329,7 +357,7 @@ final class CatController {
         get { userRoaming }
         set {
             userRoaming = newValue
-            brain.roaming = userRoaming || hiddenBecause != nil
+            brain.roaming = userRoaming || hiddenBecause != nil || silent
         }
     }
 
@@ -363,6 +391,8 @@ final class CatController {
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
             quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
         }
+        silent = settings.silentMode
+        guidedBreaks = settings.guidedBreaks
         motivationEnabled = settings.motivationEnabled
         motivationSayings = settings.motivationSayings
         errands.configureMotivation(enabled: motivationEnabled, workdayEnd: quittingTime?.minutes,
@@ -384,7 +414,7 @@ final class CatController {
     /// Die Katze schläft fest (Pomodoro-Fokus oder laufender Timer).
     var isInFocus: Bool { brain.mode == .focus }
     /// Miauen erlaubt: eingeschaltet, kein macOS-Fokus, kein Videocall
-    var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil }
+    var soundsAllowed: Bool { sounds && !focusActive && hiddenBecause == nil && !silent }
     /// Auch bei Aufgaben-Erinnerungen miauen
     var meowForTasks = false
     /// Vogel jagen, wenn so lange niemand am Rechner war (Minuten, nil = aus)
@@ -816,7 +846,7 @@ final class CatController {
         let now = CACurrentMediaTime()
         let dt = now - lastActivityCheck
         lastActivityCheck = now
-        guard breakReminders, breakByActivity, pomodoro == nil, breakQuestionUntil == nil, breakEnds == nil else {
+        guard breakReminders, breakByActivity, pomodoro == nil, !silent, breakQuestionUntil == nil, breakEnds == nil else {
             activity.reset()
             return false
         }
@@ -869,12 +899,16 @@ final class CatController {
             // Pause: Sie freut sich und bleibt da, bis die Pause vorbei ist; oben läuft die Restzeit
             snooze.rested()
             activity.reset()
+            stats?.record { $0.breaksTaken += 1 }
             breakEnds = now.addingTimeInterval(breakLength)
             brain.mode = .focusBreak
             brain.rejoice()
+            // Geführt: Nach dem Freuen macht sie Übungen vor
+            if guidedBreaks { guided = (GuidedBreak(length: breakLength), now.addingTimeInterval(1.5), nil) }
             updateStatusText(force: true)
         } else {
             // Später: zurück zum Gewohnten; die nächste Erinnerung zählt neu (nach Aktivität früher)
+            stats?.record { $0.breaksSkipped += 1 }
             brain.declineBreak()
             if breakByActivity { snooze.snoozed() }
             scheduleReminder()
@@ -889,14 +923,19 @@ final class CatController {
                 breakQuestionUntil = nil
                 bubble?.pop()
                 snooze.rested()
+                stats?.record { $0.breaksTaken += 1 }
                 brain.declineBreak()
                 scheduleReminder()
             } else {
                 answerBreak(false, now: now) // weitergearbeitet: wie Daumen runter
             }
         }
+        updateGuidedBreak(now: now)
         if let ends = breakEnds, now >= ends {
             breakEnds = nil
+            guided = nil
+            brain.exercise = nil
+            bubble?.pop()
             brain.mode = .normal
             meow(.backToWork)
             scheduleReminder()
@@ -904,13 +943,43 @@ final class CatController {
         }
     }
 
-    /// Pomodoro oder Timer beginnt: Pausenfrage und Pause sind vorbei
+    /// Geführte Pause: zur rechten Zeit die nächste Übung, darüber der Satz in der Gedankenblase
+    private func updateGuidedBreak(now: Date) {
+        guard var guided, breakEnds != nil else { return }
+        let index = guided.plan.stepIndex(at: now.timeIntervalSince(guided.start))
+        guard index != guided.step else { return }
+        guided.step = index
+        self.guided = guided
+        guard let index else { return }
+        let step = guided.plan.steps[index]
+        brain.exercise = step.exercise
+        bubble?.remove()
+        bubble = ThoughtBubble(text: step.text, ends: guided.start.addingTimeInterval(step.end), scale: scale)
+    }
+
+    /// Pomodoro, Timer oder Ruhemodus beginnt: Pausenfrage und Pause sind vorbei
     private func cancelBreak() {
         if breakQuestionUntil != nil {
             breakQuestionUntil = nil
             bubble?.pop()
         }
-        breakEnds = nil
+        if breakEnds != nil {
+            breakEnds = nil
+            bubble?.pop()
+            if brain.mode == .focusBreak, pomodoro == nil, timer == nil { brain.mode = .normal }
+        }
+        guided = nil
+        brain.exercise = nil
+    }
+
+    /// Aktive Arbeit für die Statistik: Zeit, in der in der letzten Minute etwas getippt oder geklickt wurde
+    private func countActiveTime(now: Date) {
+        let elapsed = now.timeIntervalSince(lastActiveCheck)
+        lastActiveCheck = now
+        if elapsed > 0, elapsed < 30, Self.secondsSinceInput < 60 {
+            stats?.record(at: now) { $0.activeSeconds += elapsed }
+        }
+        stats?.save()
     }
 
     // MARK: Sensoren
@@ -933,8 +1002,8 @@ final class CatController {
     private func setHidden(because reason: CallDetector.Reason?) {
         guard (reason == nil) != (hiddenBecause == nil) || reason != hiddenBecause else { return }
         hiddenBecause = reason
-        brain.suppressVisits = reason != nil
-        brain.roaming = userRoaming || reason != nil
+        brain.suppressVisits = reason != nil || silent
+        brain.roaming = userRoaming || reason != nil || silent
     }
 
     /// Fokus aktiv → leise und ruhig.
@@ -1116,6 +1185,7 @@ final class CatController {
         switch pomodoro.stage {
         case .focus:
             // Fokuszeit vorbei: aufwachen, strecken, Pause machen
+            stats?.record { $0.pomodoros += 1 }
             pomodoro = Pomodoro(stage: .rest, ends: now.addingTimeInterval(Double(breakMinutes) * 60))
             brain.mode = .focusBreak
             pendingMeow = (.breakStarts, now)
@@ -1410,6 +1480,11 @@ final class CatController {
     /// Fällige Erinnerungen einsammeln; läuft keine, die nächste starten – sobald die Katze frei ist.
     private func updateErrands(now: Date) {
         errands.collectDue(now: now)
+        // Ruhemodus: nichts erinnern (verpasste Erinnerungen holt sie danach nicht nach)
+        if silent {
+            errands.clearQueue()
+            return
+        }
         if let active = activeErrand {
             if errandFinished(active.errand, since: active.since, now: now) { finishErrand(now: now) }
             return
@@ -1443,8 +1518,11 @@ final class CatController {
         activeErrand = (errand, now)
         switch errand.kind {
         case .drink:
+            // Napf hinstellen und fragen: Trinkst du mit? Daumen hoch zählt in der Statistik
             placeBowl(water: true)
-            showErrandBubble(L10n.s("Trinken", "Drink"), for: 4 * 60)
+            showErrandBubble(L10n.s("Trinken?", "Drink?"), for: 4 * 60) { [weak self] yes in
+                self?.answerDrink(yes)
+            }
             meow(.reminder)
         case .lookout:
             placeLookout()
@@ -1527,7 +1605,7 @@ final class CatController {
     private func checkForBird(now: Date) {
         let idle = Self.secondsSinceInput
         if idle < 5 { birdDoneForIdle = false }
-        guard let minutes = birdAfterMinutes, !birdDoneForIdle, idle >= Double(minutes) * 60, activeErrand == nil,
+        guard let minutes = birdAfterMinutes, !silent, !birdDoneForIdle, idle >= Double(minutes) * 60, activeErrand == nil,
               canRunErrand, hiddenBecause == nil, !brain.calm else { return }
         birdDoneForIdle = true
         startErrand(Errand(kind: .bird), now: now)
@@ -1613,9 +1691,22 @@ final class CatController {
         brain.lookout = nil
     }
 
-    private func showErrandBubble(_ text: String, for seconds: TimeInterval) {
+    /// Antwort auf „Trinken?“: Daumen hoch – sie freut sich und trinkt mit; runter – der Napf kommt weg
+    func answerDrink(_ yes: Bool) {
+        guard activeErrand?.errand.kind == .drink else { return }
+        errandBubble?.pop()
+        if yes {
+            stats?.record { $0.drinks += 1 }
+            brain.rejoice()
+        } else {
+            stats?.record { $0.drinksSkipped += 1 }
+            removeBowl()
+        }
+    }
+
+    private func showErrandBubble(_ text: String, for seconds: TimeInterval, onChoice: ((Bool) -> Void)? = nil) {
         bubble?.remove()
-        let new = ThoughtBubble(text: text, ends: Date().addingTimeInterval(seconds), scale: scale)
+        let new = ThoughtBubble(text: text, ends: Date().addingTimeInterval(seconds), scale: scale, onChoice: onChoice)
         bubble = new
         errandBubble = new
     }
@@ -1727,6 +1818,7 @@ final class CatController {
             updateOutfit()
             if isActivityBreakDue() { remindToTakeBreak(now: date) }
             checkForBird(now: date)
+            countActiveTime(now: date)
             // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
             if hiddenBecause != nil, activeErrand?.errand.kind == .task, screenIsShared { errandBubble?.pop() }
         }
@@ -1734,7 +1826,7 @@ final class CatController {
         updateTimer(now: date)
         updateBreak(now: date)
         updateStatusText()
-        if pomodoro == nil, date >= nextReminder {
+        if pomodoro == nil, !silent, date >= nextReminder {
             remindToTakeBreak(now: date)
         }
 

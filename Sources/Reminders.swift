@@ -222,6 +222,11 @@ final class ErrandScheduler {
         queue.insert(Errand(kind: .task, text: task.text, taskID: id), at: 0)
     }
 
+    /// Ruhemodus: Was ansteht, fällt aus
+    func clearQueue() {
+        queue.removeAll()
+    }
+
     /// Welche Erinnerungen gerade warten (für den Selbsttest)
     var queuedKinds: [ErrandKind] { queue.map(\.kind) }
 
@@ -304,6 +309,58 @@ struct OutfitTimes {
     /// Liegt `minutes` in [from, to) – auch über Mitternacht hinweg?
     private static func contains(_ minutes: Int, from: Int, to: Int) -> Bool {
         from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to
+    }
+}
+
+/// Übungen der geführten Pause – jede mit einem kurzen Satz für die Gedankenblase
+enum Exercise: CaseIterable, Equatable {
+    case stretchUp, lookAround, arch, breathe, bow, blink, walk
+
+    var text: String {
+        switch self {
+        case .stretchUp: return L10n.s("Streck die Arme hoch!", "Stretch your arms up!")
+        case .lookAround: return L10n.s("Kopf langsam links und rechts.", "Turn your head left and right.")
+        case .arch: return L10n.s("Mach einen Katzenbuckel!", "Arch your back like a cat!")
+        case .breathe: return L10n.s("Atme tief ein und aus.", "Breathe in deeply and out.")
+        case .bow: return L10n.s("Arme nach vorn, Rücken lang.", "Reach forward, long back.")
+        case .blink: return L10n.s("Blinzle und schau in die Ferne.", "Blink and look far away.")
+        case .walk: return L10n.s("Steh auf, geh ein paar Schritte.", "Get up, walk a few steps.")
+        }
+    }
+}
+
+/// Geführte Pause: Die Katze macht Übungen vor, eine nach der anderen. Sie nehmen etwa vier Fünftel der Pause ein
+/// (jede 15 bis 45 Sekunden), danach heißt es einfach ausruhen.
+struct GuidedBreak {
+    struct Step: Equatable {
+        /// nil = ausruhen
+        let exercise: Exercise?
+        let text: String
+        let start: TimeInterval
+        let end: TimeInterval
+    }
+
+    let steps: [Step]
+
+    init(length: TimeInterval) {
+        let order = Exercise.allCases
+        let each = min(45, max(15, length * 0.8 / Double(order.count)))
+        var steps: [Step] = []
+        var time = 0.0
+        for exercise in order where time + each <= length {
+            steps.append(Step(exercise: exercise, text: exercise.text, start: time, end: time + each))
+            time += each
+        }
+        if length - time >= 5 {
+            steps.append(Step(exercise: nil, text: L10n.s("Jetzt einfach ausruhen.", "Now just relax."),
+                              start: time, end: length))
+        }
+        self.steps = steps
+    }
+
+    /// Welcher Schritt gerade dran ist (Sekunden seit Beginn)
+    func stepIndex(at elapsed: TimeInterval) -> Int? {
+        steps.firstIndex { elapsed >= $0.start && elapsed < $0.end }
     }
 }
 

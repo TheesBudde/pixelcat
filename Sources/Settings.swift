@@ -70,6 +70,10 @@ final class AppSettings: ObservableObject {
     /// Auch bei Aufgaben-Erinnerungen miauen
     @Published var meowForTasks: Bool { didSet { changed() } }
     @Published var hideDuringCalls: Bool { didSet { changed() } }
+    /// Ruhemodus: Sie geht in den Korb bzw. aus dem Bild – keine Erinnerungen, keine Töne
+    @Published var silentMode: Bool { didSet { changed() } }
+    /// Geführte Pause: Nach Daumen hoch macht sie Übungen vor
+    @Published var guidedBreaks: Bool { didSet { changed() } }
     @Published var respectFocus: Bool { didSet { changed() } }
     // Allgemein
     @Published var language: Language { didSet { L10n.language = language; changed() } }
@@ -127,7 +131,7 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
             "taskReminders": false, "tasksDuringCalls": false, "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
-            "sounds": true, "purring": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
+            "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
         catName = defaults.string(forKey: "catName") ?? ""
@@ -176,6 +180,8 @@ final class AppSettings: ObservableObject {
         purring = defaults.bool(forKey: "purring")
         meowForTasks = defaults.bool(forKey: "meowForTasks")
         hideDuringCalls = defaults.bool(forKey: "hideDuringCalls")
+        silentMode = defaults.bool(forKey: "silentMode")
+        guidedBreaks = defaults.bool(forKey: "guidedBreaks")
         respectFocus = defaults.bool(forKey: "respectFocus")
         language = Language(rawValue: defaults.string(forKey: "language") ?? "") ?? .system
         // Wer Pixelcat schon benutzt hat (gespeichertes Fell), bekommt die Einrichtung nicht ungefragt
@@ -214,7 +220,7 @@ final class AppSettings: ObservableObject {
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "motivation": motivationEnabled, "motivationSayings": motivationSayings,
             "tasksDuringCalls": tasksDuringCalls, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
-            "sounds": sounds, "purring": purring, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
+            "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
     }
@@ -421,6 +427,9 @@ struct SettingsView: View {
                        "The moment in between is random. Put a break off and the time starts over."))
             }
             minutesSlider(t("Pausenlänge", "Break length"), value: $settings.breakLength, range: 1...30, step: 1)
+            Toggle(t("Geführte Pause", "Guided break"), isOn: $settings.guidedBreaks)
+            hint(t("Nach Daumen hoch macht sie dir kleine Übungen vor: strecken, Katzenbuckel, atmen, Kopf drehen. In der Blase steht, was du tun sollst.",
+                   "After thumbs up she shows you small exercises: stretching, a cat arch, breathing, turning your head. The bubble says what to do."))
             hint(t("So lange läuft die Pause nach Daumen hoch. Sie bleibt dabei bei dir, auch aus Katzenkorb oder Streifzug.",
                    "How long the break runs after thumbs up. She stays with you, even from the cat bed or roaming."))
         } header: {
@@ -433,8 +442,8 @@ struct SettingsView: View {
             Toggle(t("Trinkerinnerung", "Drink reminder"), isOn: $settings.drinkReminders)
             minutesSlider(t("Ungefähr alle", "About every"), value: $settings.drinkInterval, range: 10...120, step: 5)
             HStack {
-                hint(t("Sie stellt einen Napf hin, trinkt und denkt „Trinken“. Ein Klick lässt die Blase platzen.",
-                       "She puts down a bowl, drinks and thinks “Drink”. A click pops the bubble."))
+                hint(t("Sie stellt einen Napf hin und fragt „Trinken?“. Daumen hoch zählt in der Statistik, Daumen runter räumt den Napf weg.",
+                       "She puts down a bowl and asks “Drink?”. Thumbs up counts in your statistics, thumbs down clears the bowl."))
                 Spacer()
                 previewButton(.drink)
             }
@@ -601,6 +610,7 @@ struct SettingsView: View {
                    "Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, the end of the day and motivation. Never in video calls or Focus."))
             Toggle(t("Auch bei Aufgaben miauen", "Also meow for tasks"), isOn: $settings.meowForTasks)
                 .disabled(!settings.sounds)
+            hint(t("Sonst erscheint bei Aufgaben nur die Blase, ohne Ton.", "Otherwise tasks only show the bubble, without sound."))
             Toggle(t("Schnurren beim Streicheln", "Purr when petted"), isOn: $settings.purring)
         } header: {
             SectionTitle(t("Töne", "Sounds"), icon: "speaker.wave.2.fill", color: .pink)
@@ -609,6 +619,9 @@ struct SettingsView: View {
 
     private var considerateSection: some View {
         Section {
+            Toggle(t("Ruhemodus", "Silent mode"), isOn: $settings.silentMode)
+            hint(t("Sie geht in den Korb oder aus dem Bild. Keine Erinnerungen, keine Töne, bis du ihn ausschaltest. Auch im Menü mit ⌘K.",
+                   "She goes to her bed or out of sight. No reminders, no sounds until you turn it off. Also in the menu with ⌘K."))
             Toggle(t("Bei Videocalls und Bildschirmfreigabe verstecken", "Hide during video calls and screen sharing"),
                    isOn: $settings.hideDuringCalls)
             hint(t("Bei Kamera, Mikrofon oder geteiltem Bildschirm versteckt sie sich. Erinnerungen warten so lange. Aufgaben auf Wunsch nicht, siehe Aufgabenfenster.",

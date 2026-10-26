@@ -56,7 +56,11 @@ of your tasks and call it a day. She never gets in the way and hides during vide
   goes back to what she was doing and the count starts over. By activity, every time you put a break off she asks a
   little sooner, but never more often than every 15 minutes. No answer within three minutes counts as a break if you
   were away, otherwise as thumbs down.
-- **Drink reminder:** About every 45 minutes she puts down a blue water bowl, laps for a while and thinks “Drink”.
+- **Guided breaks:** Optional. After thumbs up she shows you small exercises, one after another, and her thought
+  bubble says what to do: stretch your arms up, turn your head, arch your back like a cat, breathe deeply, reach
+  forward, blink and look far away, walk a few steps. Then: just relax.
+- **Drink reminder:** About every 45 minutes she puts down a blue water bowl and asks “Drink?”. Thumbs up and she
+  drinks with you (it counts in your statistics), thumbs down clears the bowl.
 - **Eye break:** About every 20 minutes a small window pops up with sky, sun, hills and a drifting cloud. She sits
   on the sill and gazes out for half a minute. Look into the distance with her.
 - **End of the workday:** At your chosen time (weekdays only if you like) she puts on a top hat and bow tie, walks
@@ -70,6 +74,13 @@ of your tasks and call it a day. She never gets in the way and hides during vide
   every four hours and never during video calls.
 - **One at a time:** Reminders wait for each other and for breaks, Pomodoro and timers. Every reminder can be
   previewed in the settings with **Show now**. A click pops the thought bubble.
+
+### Statistics
+
+A statistics window (menu › Statistics …) shows this week and the weeks before: breaks taken and put off, active
+work time, Pomodoros and drinks, each compared with the week before (this week only up to the same weekday). Two
+small charts show active hours and breaks per day, hover a day for its numbers. Everything stays on your Mac in
+`~/Library/Application Support/Pixelcat/Statistics.json`.
 
 ### Outfits
 
@@ -86,6 +97,8 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 - **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
 - **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks and the end of the day.
   Purring while you pet her. Never in video calls or Focus. Everything can be turned off.
+- **Silent mode:** One click (⌘K) and she goes to her bed or out of sight. No reminders, no sounds, no bird until
+  you turn it off. The menu bar icon turns pale meanwhile.
 - **Languages:** English and German.
 
 ## Install
@@ -121,7 +134,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 
 | Menu item | What it does |
 |---|---|
-| Hide / Show cat (⌘K) | Turn her on and off |
+| Silent mode (⌘K) | She goes to her bed or out of sight: no reminders, no sounds until you turn it off |
 | Pomodoro | Focus and breaks in turns (checkmark = running) |
 | Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |
 | Break reminder | Regular breaks (on/off) |
@@ -132,6 +145,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Cat Bed | Replaces Roaming when the cat bed is in the Dock: she sleeps in the bed |
 | Feed · Play with yarn · Startle · Put to sleep | Actions |
 | Settings … (⌘,) | Everything else |
+| Statistics … | This week and the weeks before |
 | Quit Pixelcat (⌘Q) | Quit |
 
 The **settings window** is one scrolling page with her portrait on top. All windows follow her coat: dark for the

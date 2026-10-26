@@ -587,6 +587,63 @@ MainActor.assumeIsolated {
               "freut sich: \(happy), geblieben: \(stayed), zurück: \(returned)")
     }
 
+    print("\nStatistik")
+    do {
+        let store = StatsStore(url: nil)
+        store.calendar = berlin
+        store.calendar.firstWeekday = 2 // Montag
+        store.record(at: at(19, 10)) { $0.breaksTaken += 2; $0.activeSeconds += 3600 }   // Montag
+        store.record(at: at(21, 15)) { $0.breaksSkipped += 1; $0.pomodoros += 3 }       // Mittwoch
+        store.record(at: at(25, 9)) { $0.drinks += 4 }                                   // Sonntag
+        store.record(at: at(13, 9)) { $0.breaksTaken += 1 }                              // Woche davor
+        let week = store.week(containing: at(22, 12))
+        check("die Woche geht von Montag bis Sonntag", week.days.count == 7
+              && berlin.component(.day, from: week.days.first!.date) == 19
+              && berlin.component(.day, from: week.days.last!.date) == 25)
+        let total = week.total
+        check("Wochensumme stimmt", total.breaksTaken == 2 && total.breaksSkipped == 1 && total.pomodoros == 3
+              && total.drinks == 4 && total.activeSeconds == 3600, "\(total)")
+        check("Woche davor einzeln", store.week(containing: at(22, 12), offset: -1).total.breaksTaken == 1)
+        check("zurückblättern nur, wenn es davor Daten gibt",
+              store.hasData(before: week.start) && !store.hasData(before: store.week(containing: at(22, 12), offset: -1).start))
+        check("aktive Zeit lesbar", StatsView.hoursText(45 * 60) == "45 min" && StatsView.hoursText(3.5 * 3600) == "3 h 30 min")
+    }
+
+    print("\nGeführte Pause")
+    do {
+        let five = GuidedBreak(length: 5 * 60)
+        check("fünf Minuten: alle Übungen, dann ausruhen", five.steps.count == Exercise.allCases.count + 1
+              && five.steps.last?.exercise == nil && five.steps.last?.end == 5 * 60, "\(five.steps.count) Schritte")
+        let one = GuidedBreak(length: 60)
+        check("eine Minute: nur so viele Übungen, wie hineinpassen", one.steps.count == 4
+              && one.steps.allSatisfy { $0.end <= 60 }, "\(one.steps.map(\.end))")
+        check("Schritte folgen lückenlos aufeinander", zip(five.steps, five.steps.dropFirst()).allSatisfy { $0.end == $1.start })
+        let texts = Exercise.allCases.map(\.text) + [L10n.s("Jetzt einfach ausruhen.", "Now just relax.")]
+        let fits = texts.allSatisfy { text in
+            let lines = PixelFont.lines(text, maxWidth: BubbleFrames.maxTextWidth, maxLines: BubbleFrames.maxLines)
+            return !(lines.last?.hasSuffix("…") ?? true)
+        }
+        check("jeder Satz passt ganz in die Blase", fits)
+        // Die Katze geht in die Mitte und macht vor
+        let b = CatBrain()
+        b.clock = { afternoon }
+        b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 100
+        b.mode = .focusBreak
+        b.exercise = .arch
+        var exercised = false
+        for _ in 0..<Int(30 / dt) {
+            b.update(dt: dt)
+            if "\(b.phase)" == "exercising" { exercised = true }
+        }
+        let middle = (b.minX + b.maxX) / 2
+        check("Übung in der Bildschirmmitte vorgemacht", exercised && abs(b.x - middle) < 60,
+              "x \(Int(b.x)), Mitte \(Int(middle))")
+        check("beim Katzenbuckel sieht man den Buckel", b.look.sprite === Frames.exerciseArch || b.look.sprite === Frames.stand)
+        b.exercise = nil
+        for _ in 0..<Int(2 / dt) { b.update(dt: dt) }
+        check("ohne Übung geht es normal weiter", "\(b.phase)" != "exercising")
+    }
+
     print("\nName und Einrichtung")
     do {
         let settings = AppSettings()

@@ -53,4 +53,32 @@ MainActor.assumeIsolated {
     shoot(OnboardingView(settings: settings, start: .done), width: 620, height: 500,
           to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-abend"), appearance: .darkAqua)
     settings.currentOutfit = nil
+
+    // Statistik mit Beispieldaten: diese Woche bis heute und die Wochen davor
+    let stats = StatsStore(url: nil)
+    var seed: UInt64 = 7
+    func random(_ range: ClosedRange<Int>) -> Int {
+        seed = seed &* 6364136223846793005 &+ 1442695040888963407
+        return range.lowerBound + Int((seed >> 33) % UInt64(range.count))
+    }
+    for back in 0..<30 {
+        let date = Calendar.current.date(byAdding: .day, value: -back, to: Date())!
+        let weekday = Calendar.current.component(.weekday, from: date)
+        guard weekday != 1, weekday != 7 else { continue }
+        stats.record(at: date) {
+            $0.activeSeconds = Double(random(200...420)) * 60
+            $0.breaksTaken = random(2...6)
+            $0.breaksSkipped = random(0...3)
+            $0.pomodoros = random(0...5)
+            $0.drinks = random(2...7)
+            $0.drinksSkipped = random(0...2)
+        }
+    }
+    for coat in [Coat.orange, Coat.black] {
+        settings.coat = coat
+        shoot(StatsView(store: stats, settings: settings), width: 640, height: 1080,
+              to: base.replacingOccurrences(of: "einstellungen", with: "statistik-\(coat.rawValue)"),
+              appearance: coat == .black ? .darkAqua : .aqua)
+    }
+    settings.coat = .black
 }

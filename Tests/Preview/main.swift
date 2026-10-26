@@ -29,6 +29,9 @@ MainActor.assumeIsolated {
     for (i, text) in bubbles.enumerated() {
         sheet("blase-\(i)", [(BubbleFrames(text: text).whole, BubbleFrames.colors)])
     }
+    sheet("uebungen", [(Frames.exerciseUp, Coat.orange.colors), (Frames.exerciseArch, Coat.orange.colors),
+                       (Frames.sitBreathIn, Coat.orange.colors), (Frames.exerciseUp, Coat.black.colors),
+                       (Frames.exerciseArch, Coat.gray.colors), (Frames.sitBreathIn, Coat.gray.colors)])
     sheet("pausenfrage", [(BubbleFrames(text: "Pause?", choices: true).whole, BubbleFrames.colors),
                           (BubbleFrames(text: "Break?", choices: true).whole, BubbleFrames.colors)])
     sheet("schrift", ["ABCDEFGHIJKLM", "NOPQRSTUVWXYZ", "ÄÖÜ ß 0123456789", ".,!?:;-+'\"()/&%#@=*_…"]

@@ -334,6 +334,61 @@ enum Frames {
         Sprite(sitRows.enumerated().map { i, row in rows[i] ?? row })
     }
 
+    /// Geführte Pause: Katzenbuckel – Rücken hoch gewölbt, Beine gestreckt
+    static let exerciseArch = Sprite([
+        "........................",
+        ".......KKKKK............",
+        ".....KKhhhhhKK..........",
+        "...KKhhOOsOOhhKK........",
+        ".KKhhOsOOsOOsOhKK...K...",
+        "KOhsOOsOOsOOsOKPKKKKPK..",
+        "OKOsOOsOOOOOsOKhhhhhhK..",
+        "OKOsOOOWWWWWOOKOEOOEOK..",
+        "OKOOOWWKKKKKWWKOEOOEOK..",
+        "KKOOWKOK..KOKwKOWPPWOKw.",
+        ".KOOKKOK..KOKKKWWWWWWKw.",
+        "..KOKKOK..KOKhhKWWWWK...",
+        "..KOKKOK..KOKKOK........",
+        "..KWKKWK..KWKKWK........",
+        "...K..K....K..K.........",
+    ])
+
+    /// Geführte Pause: aufgerichtet, beide Vorderpfoten hoch über dem Kopf
+    static let exerciseUp = Sprite([
+        ".....KWK........KWK.....",
+        ".....KOK........KOK.....",
+        ".....KOKK....K..KOK.....",
+        ".....KOKPKKKKPK.KOK.....",
+        ".....KOKhhhhhhK.KOK.....",
+        ".....KOKOEOOEOK.KOK.....",
+        ".....KOKOEOOEOK.KOK.....",
+        ".....KwKOWPPWOKwKOK.....",
+        ".....KKKWWWWWWKwKOK.....",
+        ".....KhhKWWWWKOsKOK.....",
+        ".....KOKOOOWWWOOKOK.....",
+        "......KKOOOWWWOOKK......",
+        ".......KsOOWWWOsK.......",
+        "....K..KOOOWWWOOK.......",
+        "...KOK.KOOOWWWOOK.......",
+        "...KOK.KsOOWWWOsK.......",
+        "...KOK.KOOOWWWOOK.......",
+        "....KOKKOOOWWWOOK.......",
+        ".....KOOsOOWWWOsK.......",
+        "......KKOOOWWWOOK.......",
+        ".......KOOKKKKOOK.......",
+        ".......KWWK..KWWK.......",
+        "........KK....KK........",
+    ])
+
+    /// Geführte Pause: tief eingeatmet, die Brust etwas breiter, Augen zu
+    static let sitBreathIn = sitVariant([
+        8: "........KhOOOsOOKKKK....",
+        9: ".......KhOOOOsOOWK......",
+        10: ".......KOOOOOOOOWK......",
+        11: ".......KOOOOOOOWWK......",
+        12: ".......KOOOOOOKOK.......",
+    ]).withClosedEyes
+
     static let yawn = sitVariant([
         5: ".............wKOWKKWOKw.",
         6: "...........KKKKWKPPKWKw.",

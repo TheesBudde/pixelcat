@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var settingsWindow = SettingsWindow(settings: settings, focus: focusMonitor)
     private lazy var tasksWindow = TasksWindow(settings: settings)
     private lazy var onboardingWindow = OnboardingWindow(settings: settings)
+    private let stats = StatsStore()
+    private lazy var statsWindow = StatsWindow(store: stats, settings: settings)
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
@@ -37,7 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         cat = CatController(scale: settings.scale, coat: settings.coat, focusMonitor: focusMonitor)
-        if settings.awayMode { cat.startRoamingOutside() }
+        cat.stats = stats
+        if settings.awayMode || settings.silentMode { cat.startRoamingOutside() }
         cat.apply(settings)
         settings.onChange = { [weak self] in
             guard let self else { return }
@@ -45,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             buildMenu() // Sprache könnte sich geändert haben
             buildMainMenu()
             statusItem.button?.toolTip = settings.displayName
+            statusItem.button?.appearsDisabled = settings.silentMode // im Ruhemodus blass
         }
         // „Jetzt zeigen“ in den Einstellungen bzw. bei einer Aufgabe
         settings.onPreview = { [weak self] kind in
@@ -93,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = Frames.menuBarIcon()
         statusItem.button?.imagePosition = .imageLeft
         statusItem.button?.toolTip = settings.displayName
+        statusItem.button?.appearsDisabled = settings.silentMode
         buildMenu()
         cat.onStatusChange = { [weak self] text in self?.showStatus(text) }
         // Beim allerersten Start (oder mit --onboarding) erst die Einrichtung, danach kommt die Katze
@@ -121,7 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
 
-        toggleItem = item("", #selector(toggleCat), key: "k")
+        // Ruhemodus: Sie geht weg, keine Erinnerungen, keine Töne
+        toggleItem = item(t("Ruhemodus", "Silent mode"), #selector(toggleSilent), key: "k", icon: "bell.slash")
         menu.addItem(toggleItem)
         menu.addItem(.separator())
 
@@ -198,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         menu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ",", icon: "gearshape"))
+        menu.addItem(item(t("Statistik …", "Statistics …"), #selector(openStats), icon: "chart.bar"))
         let quit = NSMenuItem(title: t("Pixelcat beenden", "Quit Pixelcat"),
                               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
@@ -212,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
         let appMenu = NSMenu()
         appMenu.addItem(item(t("Einstellungen …", "Settings …"), #selector(openSettings), key: ","))
+        appMenu.addItem(item(t("Statistik …", "Statistics …"), #selector(openStats)))
         appMenu.addItem(.separator())
         let quit = NSMenuItem(title: t("Pixelcat beenden", "Quit Pixelcat"),
                               action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -251,8 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
-        toggleItem.title = cat.isVisible ? t("Katze ausblenden", "Hide cat") : t("Katze einblenden", "Show cat")
-        toggleItem.image = Self.symbol(cat.isVisible ? "eye.slash" : "eye")
+        toggleItem.state = settings.silentMode ? .on : .off
 
         // Haken = läuft; nochmal anklicken beendet. Pomodoro und Timer schließen sich aus.
         pomodoroItem.state = cat.pomodoro == nil ? .off : .on
@@ -316,8 +323,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Aktionen
 
-    @objc private func toggleCat() {
-        cat.isVisible ? cat.hide() : cat.show()
+    @objc private func toggleSilent() {
+        settings.silentMode.toggle()
+    }
+
+    @objc private func openStats() {
+        statsWindow.show()
+    }
+
+    /// Statistik beim Beenden sicher speichern
+    func applicationWillTerminate(_ notification: Notification) {
+        stats.save(force: true)
     }
 
     @objc private func togglePomodoro() {

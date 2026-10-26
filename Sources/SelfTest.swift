@@ -253,6 +253,10 @@ final class SelfTest {
         cat.answerBreak(true, now: Date())
         await waitUntil("Daumen hoch: Blase platzt", 3) { $0.bubble == nil }
         check("Pause läuft, Restzeit oben in der Menüleiste", cat.breakEnds != nil)
+        if cat.guidedBreaks {
+            await waitUntil("geführte Pause: Blase mit der ersten Übung", 8) { self.bubbleAboveCat($0) }
+            await waitUntil("macht die Übung vor", 20) { $0.phase == "exercising" }
+        }
         await pause(4)
         check("sie bleibt im Bild", !cat.snapshot().isAway)
         cat.endBreak()
@@ -263,6 +267,16 @@ final class SelfTest {
         cat.answerBreak(false, now: Date())
         await waitUntil("Daumen runter: Blase platzt", 3) { $0.bubble == nil }
         check("keine Pause", cat.breakEnds == nil)
+        await pause(3)
+
+        section("Ruhemodus")
+        cat.silent = true
+        await waitUntil("geht weg (Körbchen oder zur Seite hinaus)", 90) { $0.isAway }
+        cat.showErrandNow(.drink)
+        await pause(4)
+        let quiet = cat.snapshot()
+        check("keine Erinnerung im Ruhemodus", quiet.errand == nil && quiet.bubble == nil && quiet.bowl == nil)
+        cat.silent = false
         await pause(3)
     }
 

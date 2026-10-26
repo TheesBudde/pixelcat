@@ -151,6 +151,8 @@ final class CatBrain {
         case leavingBasket
         /// Auf Streifzug: außerhalb des Bildschirms
         case away
+        /// Geführte Pause: eine Übung vormachen (strecken, Buckel, atmen …)
+        case exercising
     }
 
     enum Mode {
@@ -224,6 +226,22 @@ final class CatBrain {
     var ball: Ball?
     /// Vogel, der umherfliegt, während niemand am Rechner ist
     var bird: Bird?
+    /// Geführte Pause: welche Übung sie gerade vormacht (nil = keine)
+    var exercise: Exercise? {
+        didSet {
+            guard exercise != oldValue else { return }
+            if phase == .exercising {
+                phaseTime = 0
+                animTime = 0
+            } else if exercise != nil, oldValue == nil, !isAirborne, !isAboveDock,
+                      [.standing, .walking, .sittingDown, .lyingDown, .sleeping, .grooming, .headWashing, .yawning,
+                       .watching, .slowBlinking].contains(phase) {
+                if case .exit = goal { return } // geht gerade hinaus – kommt die Pause, kommt sie zurück
+                enter(.standing, for: 0.2) // gleich anfangen
+            }
+        }
+    }
+    private var exerciseDirection: CGFloat = 1
     /// Nach dem Hereinkommen erst ein paarmal nach links und rechts schauen
     var peeksLeft = 0
     /// Nach dem Vogel schnell wieder hinaus bzw. zurück ins Körbchen
@@ -323,7 +341,7 @@ final class CatBrain {
     var needsSmoothMotion: Bool {
         [.walking, .fleeing, .chasing, .jumping, .falling, .climbingUp, .climbingDown, .stalking, .startled, .batting,
          .reachingDown, .reachingUp, .enteringBasket, .leavingBasket]
-            .contains(phase)
+            .contains(phase) || (phase == .exercising && exercise == .walk)
     }
 
     /// Während Videocalls: keine Pausenbesuche, sie bleibt draußen
@@ -468,6 +486,8 @@ final class CatBrain {
             updateJump()
         case .stalking:
             updateStalk(dt)
+        case .exercising:
+            updateExercise(dt)
         case .enteringBasket, .leavingBasket:
             updateBasketMove()
         case .falling:
@@ -716,7 +736,7 @@ final class CatBrain {
             startJump(toX: clampX(x + dir * 14 * unit), toY: dockY, landing: .dock,
                       arc: phase == .reachingDown ? 8 * unit : nil)
         case .walking, .fleeing, .petted, .chasing, .climbingUp, .climbingDown, .jumping, .falling, .away, .stalking,
-             .enteringBasket, .leavingBasket:
+             .enteringBasket, .leavingBasket, .exercising:
             break
         }
     }
@@ -728,7 +748,7 @@ final class CatBrain {
             return
         }
         let needsDock = (bowl?.food ?? 0) > 0 || lookout != nil || reminderPending || ball != nil
-            || awaitingAcknowledgement || bird.map { !$0.isLeaving } == true
+            || awaitingAcknowledgement || bird.map { !$0.isLeaving } == true || exercise != nil
         if mode == .focus {
             enter(.sittingDown, for: 1.0) // schläft auch gern oben auf einem Fenster
         } else if perchID != nil, needsDock || !mayClimb {
@@ -744,6 +764,15 @@ final class CatBrain {
             reminderPending = false
             goal = .center
             walk(to: (minX + maxX) / 2, speed: 60 * unit)
+        } else if exercise != nil, mode != .focus {
+            // Geführte Pause: in die Mitte, dann vormachen
+            let middle = (minX + maxX) / 2
+            if abs(x - middle) > 40 * unit {
+                goal = .wander
+                walk(to: middle, speed: 70 * unit)
+            } else {
+                enter(.exercising)
+            }
         } else if let bird, !bird.isLeaving {
             if peeksLeft > 0 {
                 // Noch etwas verlegen: erst nach links und rechts schauen
@@ -1649,6 +1678,24 @@ final class CatBrain {
         speed = chaseSpeed
     }
 
+    /// Übung vormachen; beim Gehen ein paar Schritte hin und her um die Mitte
+    private func updateExercise(_ dt: Double) {
+        guard let exercise else {
+            enter(.standing, for: 0.4)
+            return
+        }
+        guard exercise == .walk else { return }
+        let middle = (minX + maxX) / 2
+        let target = middle + exerciseDirection * 45 * unit
+        let step = 35 * unit * CGFloat(dt)
+        if abs(target - x) <= step {
+            exerciseDirection = -exerciseDirection
+        } else {
+            facingRight = target > x
+            x += target > x ? step : -step
+        }
+    }
+
     /// Dem Vogel hinterher: unter ihn laufen, nach ihm schlagen, wenn er tief fliegt, und springen,
     /// wenn er etwas höher ist. Fliegt er zu hoch, wartet sie darunter.
     private func updateBirdChase(_ dt: Double, _ bird: Bird) {
@@ -1864,6 +1911,28 @@ final class CatBrain {
             look.sprite = Frames.bat         // Vorderpfote tastet nach unten
         case .reachingUp:
             look.sprite = Frames.crouch      // ducken, gleich geht's hinauf
+        case .exercising:
+            let t = phaseTime
+            switch exercise {
+            case .stretchUp:
+                look.sprite = t.truncatingRemainder(dividingBy: 3.2) < 1.0 ? Frames.stand : Frames.exerciseUp
+            case .arch:
+                look.sprite = t.truncatingRemainder(dividingBy: 3.0) < 1.2 ? Frames.stand : Frames.exerciseArch
+            case .lookAround:
+                look.sprite = blinking ? Frames.sitBlink : Frames.sit
+                look.facingRight = Int(t / 1.8) % 2 == 0
+            case .breathe:
+                look.sprite = t.truncatingRemainder(dividingBy: 4) < 2 ? Frames.sitBreathIn : Frames.sitBlink
+            case .bow:
+                look.sprite = alternate(Frames.stretchBowA, Frames.stretchBowB, every: 0.9)
+            case .blink:
+                look.sprite = t.truncatingRemainder(dividingBy: 1.6) < 0.3 ? Frames.sitBlink : Frames.sit
+            case .walk:
+                let cycle = [Frames.walkA, Frames.stand, Frames.walkB, Frames.stand]
+                look.sprite = cycle[Int(animTime / 0.16) % cycle.count]
+            case nil:
+                look.sprite = Frames.stand
+            }
         case .stalking:
             look.sprite = Frames.crouch
             // vor dem Sprung wackelt das Hinterteil
