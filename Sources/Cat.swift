@@ -621,6 +621,21 @@ final class CatBrain {
     }
 
     /// Pause abgelehnt (Daumen runter): nicht mehr in die Mitte, im Streifzug bzw. Korb gleich wieder zurück.
+    /// Angeklickt mitten in einer Erinnerung: aufhören – nicht weitertrinken, nicht weiter hinausschauen
+    /// (sie beendet es so, wie sie es sonst auch tut: Schnäuzchen putzen bzw. recken)
+    func stopErrand() {
+        lookout = nil
+        switch goal {
+        case .lookout, .bowl, .center: goal = .wander
+        default: break
+        }
+        if phase == .gazing {
+            enter(.stretching, for: Self.stretchLength)
+        } else if phase == .drinking {
+            enter(.headWashing, for: .random(in: 2...3))
+        }
+    }
+
     func declineBreak() {
         reminderPending = false
         breakRoutine = false

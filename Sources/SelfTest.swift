@@ -300,6 +300,19 @@ final class SelfTest {
         await waitUntil("Daumen runter: Blase platzt, sie fragt später wieder", 3) { $0.bubble == nil }
         await pause(3)
 
+        section("Klick auf die Katze beendet")
+        cat.showErrandNow(.lookout)
+        await waitUntil("Augenpausen-Fenster steht", 30) { $0.lookout?.frame != nil }
+        await waitUntil("die Katze sitzt vor dem Fenster, nicht dahinter", 60) { $0.lookout?.catAbove == true }
+        cat.endCurrentActivity(now: Date())
+        await waitUntil("Klick: Fenster und Erinnerung sind weg", 5) { $0.lookout == nil && $0.errand == nil }
+        await pause(2)
+        cat.startBreakNow()
+        check("Pause läuft", cat.breakEnds != nil)
+        cat.endCurrentActivity(now: Date())
+        check("Klick: Pause beendet", cat.breakEnds == nil)
+        await pause(3)
+
         section("Ruhemodus")
         cat.silent = true
         await waitUntil("geht weg (Körbchen oder zur Seite hinaus)", 90) { $0.isAway }

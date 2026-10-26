@@ -77,7 +77,7 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
 
 struct OnboardingView: View {
     enum Step: Int, CaseIterable {
-        case welcome, language, name, coat, home, bedAccess, reminders
+        case welcome, language, name, coat, home, bedAccess, reminders, motivation
         /// Kleine Führung: was sie kann
         case tourReminders, tourTasks, tourAway, petting, menu, done
 
@@ -236,6 +236,21 @@ struct OnboardingView: View {
                     ReminderTile(title: t("Motivation", "Motivation"), icon: "sparkles", color: .orange,
                                  isOn: $settings.motivationEnabled)
                 }
+            }
+        case .motivation:
+            OnboardingPage(title: t("Was motiviert dich?", "What keeps you going?"),
+                           text: t("Schreib ein paar Sätze auf, die dir Mut machen. Ich denke morgens und vor Feierabend daran.",
+                                   "Write down a few lines that lift you up. I'll think of them in the morning and before you finish."),
+                           compact: true) {
+                // Etwas kleiner als sonst, damit unten Platz für die Sprüche bleibt
+                VStack(spacing: 2) {
+                    PixelSprite(sprite: BubbleFrames(text: settings.motivationSayings.last ?? t("Du schaffst das!", "You've got this!")).whole,
+                                colors: BubbleFrames.colors, scale: 2)
+                        .offset(x: 12)
+                    PixelCat(coat: settings.coat, pose: .sit, scale: 3)
+                }
+            } below: {
+                SayingsEditor(settings: settings)
             }
         case .tourReminders:
             OnboardingPage(title: t("Ich erinnere dich", "I remind you"),
@@ -399,23 +414,27 @@ private struct OnboardingPage<Art: View, Below: View>: View {
     let text: String
     let art: Art
     let below: Below
+    /// Seiten mit viel Inhalt unten kommen mit einer kleineren Bildfläche aus
+    var compact = false
 
-    init(title: String, text: String, @ViewBuilder art: () -> Art, @ViewBuilder below: () -> Below) {
+    init(title: String, text: String, compact: Bool = false, @ViewBuilder art: () -> Art,
+         @ViewBuilder below: () -> Below) {
         self.title = title
         self.text = text
+        self.compact = compact
         self.art = art()
         self.below = below()
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 40)
+            Spacer(minLength: compact ? 20 : 40)
             art
-                .frame(minHeight: 150, alignment: .bottom)
+                .frame(minHeight: compact ? 90 : 150, alignment: .bottom)
             Text(title)
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
-                .padding(.top, 28)
+                .padding(.top, compact ? 16 : 28)
             Text(text)
                 .font(.system(size: 15, design: .rounded))
                 .foregroundStyle(.secondary)
@@ -489,6 +508,137 @@ struct CapsuleButtonStyle: ButtonStyle {
 }
 
 /// Großes Namensfeld mit ein paar Vorschlägen
+/// Eigene Motivationssprüche: eintragen, Vorschläge antippen, wieder entfernen
+private struct SayingsEditor: View {
+    @ObservedObject var settings: AppSettings
+    @State private var newSaying = ""
+    @FocusState private var focused: Bool
+
+    private var suggestions: [String] {
+        L10n.isGerman
+            ? ["Du schaffst das!", "Ein Schritt nach dem anderen.", "Fertig ist besser als perfekt.", "Heute wird ein guter Tag!"]
+            : ["You've got this!", "One step at a time.", "Done is better than perfect.", "Today is going to be great!"]
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Toggle(L10n.s("Motivieren", "Motivate me"), isOn: $settings.motivationEnabled)
+                .toggleStyle(.switch)
+                .font(.system(.callout, design: .rounded))
+            HStack(spacing: 8) {
+                TextField("", text: $newSaying, prompt: Text(L10n.s("Dein Spruch", "Your saying")))
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .rounded))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+                    .focused($focused)
+                    .onSubmit { add(newSaying) }
+                    .onChange(of: newSaying) { value in
+                        if value.count > TasksView.maxLength { newSaying = String(value.prefix(TasksView.maxLength)) }
+                    }
+                Button(L10n.s("Hinzufügen", "Add")) { add(newSaying) }
+                    .disabled(newSaying.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .frame(width: 420)
+            // Eigene Sprüche als Kapseln, mit × zum Entfernen
+            if !settings.motivationSayings.isEmpty {
+                FlowRow(items: settings.motivationSayings) { saying in
+                    HStack(spacing: 6) {
+                        Text(saying).font(.system(.callout, design: .rounded))
+                        Button { settings.motivationSayings.removeAll { $0 == saying } } label: {
+                            Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.2)))
+                }
+            }
+            // Vorschläge zum Antippen
+            let open = suggestions.filter { !settings.motivationSayings.contains($0) }
+            if !open.isEmpty {
+                FlowRow(items: open) { saying in
+                    Button { add(saying) } label: {
+                        Label(saying, systemImage: "plus")
+                            .font(.system(.caption, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.primary.opacity(0.07)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: 520)
+    }
+
+    /// Ein Spruch dazu – damit ist die Motivation auch eingeschaltet
+    private func add(_ saying: String) {
+        let text = saying.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        if !settings.motivationSayings.contains(text) { settings.motivationSayings.append(text) }
+        settings.motivationEnabled = true
+        newSaying = ""
+    }
+}
+
+/// Kapseln nebeneinander, die in die nächste Zeile umbrechen
+private struct FlowRow<Item: Hashable, Content: View>: View {
+    let items: [Item]
+    @ViewBuilder var content: (Item) -> Content
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items, id: \.self) { content($0) }
+        }
+        .frame(maxWidth: 520)
+    }
+}
+
+private struct FlowLayout: SwiftUI.Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? 520, subviews: subviews)
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: proposal.width ?? 520, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: LayoutSubviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            // Jede Zeile mittig
+            var x = bounds.minX + (bounds.width - row.width) / 2
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: LayoutSubviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = ([index], size.width, size.height)
+            } else {
+                current = (current.indices + [index], needed, max(current.height, size.height))
+            }
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+}
+
 private struct NameField: View {
     @ObservedObject var settings: AppSettings
     @FocusState private var focused: Bool

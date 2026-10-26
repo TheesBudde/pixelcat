@@ -486,7 +486,7 @@ final class CatController {
         self.focusMonitor = focusMonitor
         view.coat = coat
         panel.contentView = view
-        view.onClick = { [weak self] in self?.brain.clicked() }
+        view.onClick = { [weak self] in self?.catClicked() }
         // Miauen erst, wenn sie sich zur Pause streckt
         brain.onBreakStretch = { [weak self] in
             guard let self, let meow = pendingMeow else { return }
@@ -798,6 +798,8 @@ final class CatController {
 
     /// Fensterebene knapp über dem Dock – damit sie sichtbar ins Körbchen steigen kann.
     private static let aboveDockLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
+    /// Für das Augenpausen-Fenster: über normalen Fenstern, aber immer hinter der Katze
+    private static let belowCatLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
 
     /// So groß ist ein Katzenpixel im Dock-Symbol (Symbolgröße aus den Dock-Einstellungen).
     private var basketCatScale: CGFloat { BasketArt.shared.scale(forTile: dockTileSize) }
@@ -945,6 +947,59 @@ final class CatController {
             nextDayAsk = now.addingTimeInterval(dayRitualRepeat)
         }
         popQuestion()
+    }
+
+    // MARK: Klick auf die Katze
+
+    /// Klick auf die Katze: Läuft gerade etwas (Frage, Pause, Erinnerung), endet es. Sonst erschrickt sie wie gewohnt.
+    private func catClicked() {
+        if endCurrentActivity(now: Date()) { return }
+        brain.clicked()
+    }
+
+    /// Was gerade läuft, beenden. true, wenn es etwas zu beenden gab.
+    /// Offene Fragen gelten als Daumen runter, Pausen enden sofort, Erinnerungen verschwinden, der Vogel fliegt davon.
+    @discardableResult
+    func endCurrentActivity(now: Date) -> Bool {
+        if breakQuestionUntil != nil {
+            answerBreak(false, now: now)
+            return true
+        }
+        if dayQuestion != nil {
+            answerDay(false, now: now)
+            return true
+        }
+        if breakEnds != nil {
+            endBreak()
+            return true
+        }
+        if var pomodoro, pomodoro.stage == .rest {
+            // Pomodoro-Pause vorbei: gleich weiter mit dem Fokus
+            pomodoro.ends = now
+            self.pomodoro = pomodoro
+            bubble?.pop()
+            updatePomodoro(now: now)
+            return true
+        }
+        if var timer, timer.breakEnds != nil, !timer.finished {
+            // Pause im Timer vorbei: Sie schläft weiter, der Timer läuft
+            timer.breakEnds = now
+            self.timer = timer
+            bubble?.pop()
+            updateTimer(now: now)
+            return true
+        }
+        if let kind = activeErrand?.errand.kind {
+            if kind == .bird {
+                bird?.leave() // fliegt davon, danach geht sie wie gewohnt zurück
+            } else {
+                finishErrand(now: now)
+                brain.declineBreak()
+                brain.stopErrand()
+            }
+            return true
+        }
+        return false
     }
 
     /// „Jetzt fragen“ in den Einstellungen (und Selbsttest): die Pausenfrage gleich zeigen
@@ -1840,6 +1895,8 @@ final class CatController {
         }
         removeLookout()
         let window = PropWindow(columns: LookoutArt.width, rows: LookoutArt.height, scale: scale)
+        // Eine Ebene unter der Katze: Sie sitzt immer davor, egal in welcher Reihenfolge die Fenster kamen
+        window.panel.level = Self.belowCatLevel
         window.view.colors = LookoutArt.colors
         window.view.sprite = LookoutArt.frames[0]
         window.panel.alphaValue = 0

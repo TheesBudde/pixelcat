@@ -21,7 +21,9 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 
 - **Petting:** Move the pointer over her without clicking. She wakes up, squints happily, leans into your hand
   and purrs. Then she settles down again.
-- **Startling:** A click makes her jump and run off a little.
+- **Startling:** A click makes her jump and run off a little. If something is going on (a reminder, a question, a
+  break, a Pomodoro break), a click ends it instead: questions count as thumbs down, breaks end right away,
+  reminders disappear and the bird flies off.
 - **Feeding:** A bowl appears, she walks over, eats it all up and grooms herself afterwards.
 - **Yarn ball:** A ball of yarn drops in. She chases it and swats it with her paw. You can grab, lift and throw it.
 - **Climbing:** In climbing mode she wants to go up. She climbs the side of a window or jumps on top, balances
@@ -142,7 +144,8 @@ Update with `brew upgrade --cask pixelcat`. Without Homebrew: download the ZIP f
 Applications folder and open it with right click › Open the first time.
 
 On first launch a short setup welcomes you, one small step per page. You pick English or German, give your cat a
-name, choose her coat and where she lives (in her cat bed, on the Dock or roaming) and pick your reminders. A little
+name, choose her coat and where she lives (in her cat bed, on the Dock or roaming), pick your reminders and write
+down a few sayings that keep you going. A little
 tour then shows how she reminds you, remembers your tasks, heads out and likes to be petted. When you click Done she
 wakes up, jumps out of the window and drops onto your Dock, shrinking to her size on the way down. Then she heads to
 her bed, walks off or stays, just as you chose. You can open the setup again in the settings.

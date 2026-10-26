@@ -767,6 +767,26 @@ MainActor.assumeIsolated {
               && journal?.todos.first?.start == nil && journal?.lunch == nil)
     }
 
+    print("\nKlick beendet die Erinnerung")
+    do {
+        // Augenpause: Sie geht zum Fenster, setzt sich davor – ein Klick, und sie hört auf
+        let b = CatBrain()
+        b.clock = { afternoon }
+        b.minX = -12; b.maxX = 1374; b.dockY = 57; b.x = 300
+        b.lookout = 700
+        b.noticeSomething()
+        var gazed = false
+        for _ in 0..<Int(30 / dt) {
+            b.update(dt: dt)
+            if "\(b.phase)" == "gazing" { gazed = true; break }
+        }
+        b.stopErrand()
+        check("vor dem Fenster angeklickt: hört auf und reckt sich", gazed && "\(b.phase)" == "stretching" && b.lookout == nil,
+              "\(b.phase)")
+        for _ in 0..<Int(5 / dt) { b.update(dt: dt) }
+        check("und sitzt nicht mehr auf dem Fensterbrett", b.look.hop == 0)
+    }
+
     print("\nGeführte Pause")
     do {
         let five = GuidedBreak(length: 5 * 60)

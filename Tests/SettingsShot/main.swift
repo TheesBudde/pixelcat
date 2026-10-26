@@ -48,6 +48,12 @@ MainActor.assumeIsolated {
               to: base.replacingOccurrences(of: "einstellungen", with: "fell-\(coat.rawValue)-aufgaben"), appearance: look)
     }
     settings.coat = .black
+    // Einrichtung: Motivation mit eigenen Sprüchen
+    let sayingsBefore = settings.motivationSayings
+    settings.motivationSayings = ["Du schaffst das!", "Heute rockst du das Meeting."]
+    shoot(OnboardingView(settings: settings, start: .motivation), width: 620, height: 500,
+          to: base.replacingOccurrences(of: "einstellungen", with: "einrichtung-motivation"), appearance: .darkAqua)
+    settings.motivationSayings = sayingsBefore
     // Letzte Seite am Abend: mit Zylinder und Fliege
     settings.currentOutfit = { Frames.Outfit(hat: Frames.topHat, collar: Frames.bowTie) }
     shoot(OnboardingView(settings: settings, start: .done), width: 620, height: 500,
