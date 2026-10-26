@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var onboardingWindow = OnboardingWindow(settings: settings)
     private let stats = StatsStore()
     private lazy var statsWindow = StatsWindow(store: stats, settings: settings)
+    private lazy var dayWindow = DayWindow(store: stats, settings: settings)
+    private var dayItem: NSMenuItem!
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
@@ -41,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         cat = CatController(scale: settings.scale, coat: settings.coat, focusMonitor: focusMonitor)
         cat.stats = stats
+        cat.onDayStart = { [weak self] in self?.dayWindow.show(.start) }
+        cat.onDayEnd = { [weak self] in self?.dayWindow.show(.end) }
         if settings.awayMode || settings.silentMode { cat.startRoamingOutside() }
         cat.apply(settings)
         settings.onChange = { [weak self] in
@@ -130,6 +134,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Ruhemodus: Sie geht weg, keine Erinnerungen, keine Töne
         toggleItem = item(t("Ruhemodus", "Silent mode"), #selector(toggleSilent), key: "k", icon: "bell.slash")
         menu.addItem(toggleItem)
+        // Tag starten bzw. beenden – einmal am Tag
+        dayItem = item(t("Tag starten …", "Start your day …"), #selector(dayAction), icon: "sunrise")
+        menu.addItem(dayItem)
         menu.addItem(.separator())
 
         pomodoroItem = item("Pomodoro", #selector(togglePomodoro), icon: "timer")
@@ -264,6 +271,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
         toggleItem.state = settings.silentMode ? .on : .off
+        let today = stats.journal()
+        if today.ended != nil {
+            dayItem.title = t("Tag beendet", "Day ended")
+            dayItem.image = Self.symbol("moon.stars")
+            dayItem.isEnabled = false
+        } else if today.started != nil {
+            dayItem.title = t("Tag beenden …", "End your day …")
+            dayItem.image = Self.symbol("sunset")
+            dayItem.isEnabled = true
+        } else {
+            dayItem.title = t("Tag starten …", "Start your day …")
+            dayItem.image = Self.symbol("sunrise")
+            dayItem.isEnabled = true
+        }
 
         // Haken = läuft; nochmal anklicken beendet. Pomodoro und Timer schließen sich aus.
         pomodoroItem.state = cat.pomodoro == nil ? .off : .on
@@ -330,6 +351,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: Aktionen
+
+    @objc private func dayAction() {
+        let today = stats.journal()
+        guard today.ended == nil else { return }
+        dayWindow.show(today.started == nil ? .start : .end)
+    }
 
     @objc private func toggleSilent() {
         settings.silentMode.toggle()

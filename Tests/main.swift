@@ -616,6 +616,70 @@ MainActor.assumeIsolated {
         check("Musik und Apps werden zusammengezählt", merged.musicSeconds == 90 && merged.apps == ["anki": 150, "word": 10])
     }
 
+    print("\nTag starten und beenden")
+    do {
+        var ritual = DayRitual(enabled: true, start: 9 * 60, end: 17 * 60 + 30, weekdaysOnly: true)
+        ritual.calendar = berlin
+        let empty = DayJournal()
+        check("vor Arbeitsbeginn wird nicht gefragt", ritual.due(now: at(20, 8, 30), journal: empty, idle: 5, notBefore: nil) == nil)
+        check("ab Arbeitsbeginn: Tag starten?", ritual.due(now: at(20, 9, 5), journal: empty, idle: 5, notBefore: nil) == .start)
+        check("nur, wenn man am Mac ist", ritual.due(now: at(20, 9, 5), journal: empty, idle: 300, notBefore: nil) == nil)
+        check("nach Daumen runter erst später wieder",
+              ritual.due(now: at(20, 9, 10), journal: empty, idle: 5, notBefore: at(20, 9, 20)) == nil
+              && ritual.due(now: at(20, 9, 21), journal: empty, idle: 5, notBefore: at(20, 9, 20)) == .start)
+        var started = DayJournal()
+        started.started = at(20, 9, 5)
+        check("gestartet: tagsüber keine Frage", ritual.due(now: at(20, 14), journal: started, idle: 5, notBefore: nil) == nil)
+        check("ab Feierabend: Tag beenden?", ritual.due(now: at(20, 17, 40), journal: started, idle: 5, notBefore: nil) == .end)
+        check("nach Feierabend wird nicht mehr nach dem Start gefragt",
+              ritual.due(now: at(20, 18), journal: empty, idle: 5, notBefore: nil) == nil)
+        var ended = started
+        ended.ended = at(20, 17, 45)
+        check("beendet: an dem Tag nichts mehr", ritual.due(now: at(20, 19), journal: ended, idle: 5, notBefore: nil) == nil)
+        check("am Wochenende keine Frage (nur werktags)", ritual.due(now: at(24, 10), journal: empty, idle: 5, notBefore: nil) == nil)
+        ritual.enabled = false
+        check("ausgeschaltet: nie", ritual.due(now: at(20, 9, 5), journal: empty, idle: 5, notBefore: nil) == nil)
+
+        // Auswertung
+        func day(_ start: Int?, _ end: Int?, todos: [Bool], goals: [(Bool, GoalReason?)], potential: Int?) -> DayJournal {
+            var journal = DayJournal()
+            journal.started = at(20, 9)
+            journal.ended = end == nil ? nil : at(20, 18)
+            journal.moodStart = start
+            journal.moodEnd = end
+            journal.todos = todos.map { TodoItem(text: "x", done: $0) }
+            journal.goals = goals.map { GoalItem(text: "g", achieved: $0.0, reason: $0.1) }
+            journal.potential = potential
+            return journal
+        }
+        let summary = JournalSummary([
+            day(5, 7, todos: [true, true, false, false], goals: [(true, nil), (false, .time)], potential: 7),
+            day(6, 6, todos: [true, true], goals: [(false, .time), (false, .energy)], potential: 5),
+            day(4, nil, todos: [false], goals: [], potential: nil), // nur gestartet
+            DayJournal(), // nicht benutzt
+        ])
+        check("Tage mit Tagebuch", summary.days == 3, "\(summary.days)")
+        check("Stimmung im Schnitt morgens und abends", summary.moodStart == 5 && summary.moodEnd == 6.5)
+        check("Veränderung nur aus Tagen mit beiden Werten", summary.moodChange == 1, "\(summary.moodChange ?? -99)")
+        check("To-dos pro geplantem Tag", summary.todosPerDay.map { abs($0 - 7.0 / 3) < 0.001 } == true)
+        check("erledigt: nur beendete Tage zählen", summary.todosDone == 4 && summary.todosTotal == 6)
+        check("Ziele erreicht", summary.goalsAchieved == 1 && summary.goalsRated == 4)
+        check("häufigster Grund zuerst", summary.reasons.first?.reason == .time && summary.reasons.first?.count == 2
+              && summary.reasons.count == 2)
+        check("ausgeschöpft im Schnitt", summary.potential == 6)
+
+        // Speichern und wieder lesen
+        let folder = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("build/test-\(UUID().uuidString)")
+        let url = folder.appendingPathComponent("Statistics.json")
+        let store = StatsStore(url: url)
+        store.updateJournal(for: at(20, 9)) { $0 = day(5, 7, todos: [true], goals: [(false, .blocked)], potential: 8) }
+        let reloaded = StatsStore(url: url)
+        check("Tagebuch übersteht Speichern und Laden", reloaded.journal(for: at(20, 12)) == store.journal(for: at(20, 12))
+              && reloaded.journal(for: at(20, 12)).goals.first?.reason == .blocked)
+        try? FileManager.default.removeItem(at: folder)
+    }
+
     print("\nGeführte Pause")
     do {
         let five = GuidedBreak(length: 5 * 60)

@@ -77,15 +77,32 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 - **One at a time:** Reminders wait for each other and for breaks, Pomodoro and timers. Every reminder can be
   previewed in the settings with **Show now**. A click pops the thought bubble.
 
+### Start and end your day
+
+Optional (Settings › Workday). When your workday begins and you're at your Mac, the cat comes to the middle and asks
+“Start your day?” with a thumbs up and down. Thumbs down and she asks again after a few minutes (you choose how
+many). Thumbs up opens a short window to click through, one step per page: how are you feeling (1 to 10), write
+down your to-dos, put them in order (eat the frog: hardest first), and set up to three goals for the day.
+
+At the end of the workday she asks “End your day?”. The review: how are you feeling now, check off what you got
+done, did you reach your goals (and if not, why: not enough time, interruptions, planned too big, other priorities,
+no energy, waiting on others, put it off), and did you make the most of today (1 to 10). You can also start and end
+the day from the menu. Once ended, the day can't be started again.
+
 ### Statistics
 
-A statistics window (menu › Statistics …) shows this week and the weeks before: breaks taken and put off, active
+A statistics window (menu › Statistics …) switches between **day** and **week**. The day view shows active minutes per
+hour and your day: mood morning and evening, to-dos with the frog on top, goals and reasons. The week view shows breaks taken and put off, active
 work time, Pomodoros and drinks, each compared with the week before (this week only up to the same weekday). Two
 small charts show active hours (split into with and without music) and breaks per day, hover a day for its numbers.
 Music means sound was playing while you worked, outside of calls; Pixelcat only asks macOS whether audio is playing.
 Under **Apps to watch** you can pick apps like Anki in the settings, and the statistics show how long you were
 active in each of them (only the time, never any content). Everything stays on your Mac in
-`~/Library/Application Support/Pixelcat/Statistics.json`.
+`~/Library/Application Support/Pixelcat/Statistics.json` and `Journal.json`.
+
+From your day starts and ends it adds a **daily review** for the week (average mood in the morning and evening, the
+change over the day, to-dos per day and how many got done, goals reached, how much you made of the day) and a
+**trend over eight weeks** with the mood line and the most common reasons why goals stayed open.
 
 ### Outfits
 
@@ -139,6 +156,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 
 | Menu item | What it does |
 |---|---|
+| Start your day … / End your day … | The day's start and review, once a day |
 | Silent mode (⌘K) | She goes to her bed or out of sight: no reminders, no sounds until you turn it off |
 | Pomodoro | Focus and breaks in turns (checkmark = running) |
 | Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |

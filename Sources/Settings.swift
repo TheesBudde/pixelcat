@@ -46,6 +46,12 @@ final class AppSettings: ObservableObject {
     @Published var quittingTimeEnabled: Bool { didSet { changed() } }
     /// Feierabend als Minuten nach Mitternacht
     @Published var quittingTime: Int { didSet { changed() } }
+    /// Beginn des Arbeitstags (Minuten nach Mitternacht)
+    @Published var workdayStart: Int { didSet { changed() } }
+    /// Tag starten und beenden: morgens und zum Feierabend fragt sie, abends gibt es einen Rückblick
+    @Published var dayRitual: Bool { didSet { changed() } }
+    /// Nach Daumen runter so viele Minuten später noch einmal fragen
+    @Published var dayRitualRepeat: Int { didSet { changed() } }
     @Published var quittingWeekdaysOnly: Bool { didSet { changed() } }
     /// Schlafmütze ab der Schlafenszeit (Minuten nach Mitternacht)
     @Published var bedtimeEnabled: Bool { didSet { changed() } }
@@ -133,6 +139,7 @@ final class AppSettings: ObservableObject {
             "breakByActivity": false, "activityMinutes": 50,
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
+            "workdayStart": 9 * 60, "dayRitual": false, "dayRitualRepeat": 15,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
             "taskReminders": false, "tasksDuringCalls": false, "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "guidedPomodoros": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
@@ -164,6 +171,9 @@ final class AppSettings: ObservableObject {
         quittingTimeEnabled = defaults.bool(forKey: "quittingTimeEnabled")
         quittingTime = defaults.integer(forKey: "quittingTime")
         quittingWeekdaysOnly = defaults.bool(forKey: "quittingWeekdaysOnly")
+        workdayStart = defaults.integer(forKey: "workdayStart")
+        dayRitual = defaults.bool(forKey: "dayRitual")
+        dayRitualRepeat = defaults.integer(forKey: "dayRitualRepeat")
         bedtimeEnabled = defaults.bool(forKey: "bedtimeEnabled")
         bedtime = defaults.integer(forKey: "bedtime")
         morningOutfit = defaults.bool(forKey: "morningOutfit")
@@ -221,7 +231,8 @@ final class AppSettings: ObservableObject {
             "drinkReminders": drinkReminders, "drinkInterval": drinkInterval,
             "eyeBreaks": eyeBreaks, "eyeInterval": eyeInterval,
             "quittingTimeEnabled": quittingTimeEnabled, "quittingTime": quittingTime,
-            "quittingWeekdaysOnly": quittingWeekdaysOnly,
+            "quittingWeekdaysOnly": quittingWeekdaysOnly, "workdayStart": workdayStart, "dayRitual": dayRitual,
+            "dayRitualRepeat": dayRitualRepeat,
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "motivation": motivationEnabled, "motivationSayings": motivationSayings,
@@ -480,20 +491,33 @@ struct SettingsView: View {
 
     private var quittingSection: some View {
         Section {
-            Toggle(t("An den Feierabend erinnern", "Remind me to call it a day"), isOn: $settings.quittingTimeEnabled)
-            LabeledContent(t("Uhrzeit", "Time")) {
+            LabeledContent(t("Beginn", "Start")) {
+                DatePicker("", selection: clock($settings.workdayStart), displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+            }
+            LabeledContent(t("Feierabend", "End")) {
                 DatePicker("", selection: clock($settings.quittingTime), displayedComponents: .hourAndMinute)
                     .labelsHidden().fixedSize()
             }
             Toggle(t("Nur Montag bis Freitag", "Monday to Friday only"), isOn: $settings.quittingWeekdaysOnly)
+            Toggle(t("Tag starten und beenden", "Start and end your day"), isOn: $settings.dayRitual)
+            hint(t("Zu Beginn fragt sie „Tag starten?“, zum Feierabend „Tag beenden?“. Daumen hoch öffnet ein kurzes Fenster für Stimmung, To-dos und Ziele. Auch im Menü.",
+                   "At the start she asks “Start your day?”, at the end “End your day?”. Thumbs up opens a short window for mood, to-dos and goals. Also in the menu."))
+            if settings.dayRitual {
+                minutesSlider(t("Nochmal fragen nach", "Ask again after"), value: $settings.dayRitualRepeat, range: 5...60, step: 5)
+            }
+            Toggle(t("An den Feierabend erinnern", "Remind me to call it a day"), isOn: $settings.quittingTimeEnabled)
             HStack {
-                hint(t("Sie kommt in die Mitte, setzt Zylinder und Fliege auf und denkt „Feierabend“. Beides trägt sie bis zur Schlafenszeit.",
-                       "She comes to the middle, puts on a top hat and bow tie and thinks “Off work”. She wears both until bedtime."))
+                hint(settings.dayRitual
+                     ? t("Sie setzt zum Feierabend Zylinder und Fliege auf und trägt beides bis zur Schlafenszeit. Die Frage „Tag beenden?“ ersetzt dann die Blase „Feierabend“.",
+                         "At the end of the day she puts on a top hat and bow tie until bedtime. The question “End your day?” replaces the “Off work” bubble.")
+                     : t("Sie kommt in die Mitte, setzt Zylinder und Fliege auf und denkt „Feierabend“. Beides trägt sie bis zur Schlafenszeit.",
+                         "She comes to the middle, puts on a top hat and bow tie and thinks “Off work”. She wears both until bedtime."))
                 Spacer()
                 previewButton(.quittingTime)
             }
         } header: {
-            SectionTitle(t("Feierabend", "End of the workday"), icon: "briefcase.fill", color: .indigo)
+            SectionTitle(t("Arbeitstag", "Workday"), icon: "briefcase.fill", color: .indigo)
         }
     }
 

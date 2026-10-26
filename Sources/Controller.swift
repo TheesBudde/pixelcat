@@ -325,11 +325,27 @@ final class CatController {
     /// Feierabend: Uhrzeit (Minuten nach Mitternacht), nur werktags? (nil = aus)
     var quittingTime: (minutes: Int, weekdaysOnly: Bool)? {
         didSet {
-            errands.configureQuittingTime(hour: (quittingTime?.minutes ?? 0) / 60, minute: (quittingTime?.minutes ?? 0) % 60,
-                                          weekdaysOnly: quittingTime?.weekdaysOnly ?? true, enabled: quittingTime != nil)
+            configureQuittingReminder()
             outfitTimes.quitting = quittingTime
         }
     }
+
+    /// Mit „Tag starten und beenden“ ersetzt die Frage am Abend die Blase „Feierabend“
+    private func configureQuittingReminder() {
+        errands.configureQuittingTime(hour: (quittingTime?.minutes ?? 0) / 60, minute: (quittingTime?.minutes ?? 0) % 60,
+                                      weekdaysOnly: quittingTime?.weekdaysOnly ?? true,
+                                      enabled: quittingTime != nil && !dayRitual.enabled)
+    }
+
+    /// Tag starten und beenden: wann sie fragt
+    var dayRitual = DayRitual()
+    var dayRitualRepeat: TimeInterval = 15 * 60
+    /// Daumen hoch: das Fenster zum Tagesstart bzw. Tagesende öffnen
+    var onDayStart: (() -> Void)?
+    var onDayEnd: (() -> Void)?
+    private var dayQuestion: (ask: DayRitual.Ask, until: Date)?
+    /// Nach Daumen runter (oder ohne Antwort) erst ab dann wieder fragen
+    private var nextDayAsk: Date?
     /// Wann sie was trägt (Feierabend, Schlafenszeit, Morgen)
     var outfitTimes = OutfitTimes() {
         didSet { updateOutfit() }
@@ -399,6 +415,10 @@ final class CatController {
         guidedBreaks = settings.guidedBreaks
         guidedPomodoros = settings.guidedPomodoros
         trackedApps = Set(settings.trackedApps)
+        dayRitual = DayRitual(enabled: settings.dayRitual, start: settings.workdayStart, end: settings.quittingTime,
+                              weekdaysOnly: settings.quittingWeekdaysOnly)
+        dayRitualRepeat = TimeInterval(settings.dayRitualRepeat * 60)
+        configureQuittingReminder()
         motivationEnabled = settings.motivationEnabled
         motivationSayings = settings.motivationSayings
         errands.configureMotivation(enabled: motivationEnabled, workdayEnd: quittingTime?.minutes,
@@ -992,6 +1012,56 @@ final class CatController {
         bubble?.pop()
     }
 
+    // MARK: Tag starten und beenden
+
+    /// Zur Arbeitszeit fragen: „Tag starten?“ bzw. „Tag beenden?“ – nur, wenn gerade nichts anderes läuft
+    private func checkDayRitual(now: Date) {
+        if let question = dayQuestion, now >= question.until {
+            answerDay(false, now: now) // keine Antwort: später noch einmal
+        }
+        guard dayQuestion == nil, let stats, !silent, hiddenBecause == nil, pomodoro == nil, timer == nil,
+              breakQuestionUntil == nil, breakEnds == nil, activeErrand == nil, bubble == nil, brain.mode == .normal,
+              let ask = dayRitual.due(now: now, journal: stats.journal(for: now), idle: Self.secondsSinceInput,
+                                      notBefore: nextDayAsk)
+        else { return }
+        askDay(ask, now: now)
+    }
+
+    /// Sie kommt in die Mitte (aus Korb oder Streifzug) und fragt mit Daumen
+    private func askDay(_ ask: DayRitual.Ask, now: Date) {
+        let until = now.addingTimeInterval(Self.breakQuestionTimeout)
+        dayQuestion = (ask, until)
+        pendingMeow = (.reminder, now)
+        brain.callToCenter(visitLength: Self.breakQuestionTimeout + 30)
+        bubble?.remove()
+        bubble = ThoughtBubble(text: ask == .start ? L10n.s("Tag starten?", "Start your day?")
+                                                   : L10n.s("Tag beenden?", "End your day?"),
+                               ends: until, scale: scale) { [weak self] yes in
+            self?.answerDay(yes, now: Date())
+        }
+    }
+
+    /// Daumen hoch: Sie freut sich, das Fenster geht auf. Daumen runter: später noch einmal.
+    /// (Wird das Fenster nicht zu Ende geklickt, fragt sie nach derselben Zeit wieder.)
+    func answerDay(_ yes: Bool, now: Date) {
+        guard let question = dayQuestion else { return }
+        dayQuestion = nil
+        bubble?.pop()
+        nextDayAsk = now.addingTimeInterval(dayRitualRepeat)
+        if yes {
+            brain.rejoice()
+            question.ask == .start ? onDayStart?() : onDayEnd?()
+        } else {
+            brain.declineBreak()
+        }
+    }
+
+    /// Selbsttest und Vorschau: die Frage gleich stellen
+    func askDayNow(_ ask: DayRitual.Ask) {
+        nextDayAsk = nil
+        askDay(ask, now: Date())
+    }
+
     /// Pomodoro, Timer oder Ruhemodus beginnt: Pausenfrage und Pause sind vorbei
     private func cancelBreak() {
         if breakQuestionUntil != nil {
@@ -1016,8 +1086,10 @@ final class CatController {
             let music = CallDetector.audioIsPlaying() && hiddenBecause == nil && !brain.isBeingPetted
                 && !CallDetector.microphoneInUse()
             let app = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            let hour = String(Calendar.current.component(.hour, from: now))
             stats?.record(at: now) {
                 $0.activeSeconds += elapsed
+                $0.hours[hour, default: 0] += elapsed
                 if music { $0.musicSeconds += elapsed }
                 if let app, trackedApps.contains(app) { $0.apps[app, default: 0] += elapsed }
             }
@@ -1868,6 +1940,7 @@ final class CatController {
             if isActivityBreakDue() { remindToTakeBreak(now: date) }
             checkForBird(now: date)
             countActiveTime(now: date)
+            checkDayRitual(now: date)
             // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
             if hiddenBecause != nil, activeErrand?.errand.kind == .task, screenIsShared { errandBubble?.pop() }
         }

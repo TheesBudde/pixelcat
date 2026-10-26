@@ -13,12 +13,15 @@ struct DayStats: Codable, Equatable {
     var musicSeconds = 0.0
     /// Aktive Zeit in ausgewählten Apps (Bundle-ID → Sekunden)
     var apps: [String: Double] = [:]
+    /// Aktive Zeit pro Stunde des Tages ("9" → Sekunden), für die Tagesansicht
+    var hours: [String: Double] = [:]
 
     static func + (a: DayStats, b: DayStats) -> DayStats {
         DayStats(breaksTaken: a.breaksTaken + b.breaksTaken, breaksSkipped: a.breaksSkipped + b.breaksSkipped,
                  activeSeconds: a.activeSeconds + b.activeSeconds, pomodoros: a.pomodoros + b.pomodoros,
                  drinks: a.drinks + b.drinks, drinksSkipped: a.drinksSkipped + b.drinksSkipped,
-                 musicSeconds: a.musicSeconds + b.musicSeconds, apps: a.apps.merging(b.apps, uniquingKeysWith: +))
+                 musicSeconds: a.musicSeconds + b.musicSeconds, apps: a.apps.merging(b.apps, uniquingKeysWith: +),
+                 hours: a.hours.merging(b.hours, uniquingKeysWith: +))
     }
 
     var isEmpty: Bool { self == DayStats() }
@@ -37,6 +40,7 @@ extension DayStats {
         drinksSkipped = try values.decodeIfPresent(Int.self, forKey: .drinksSkipped) ?? 0
         musicSeconds = try values.decodeIfPresent(Double.self, forKey: .musicSeconds) ?? 0
         apps = try values.decodeIfPresent([String: Double].self, forKey: .apps) ?? [:]
+        hours = try values.decodeIfPresent([String: Double].self, forKey: .hours) ?? [:]
     }
 }
 
@@ -67,8 +71,11 @@ struct WeekStats {
 @MainActor
 final class StatsStore: ObservableObject {
     @Published private(set) var days: [String: DayStats] = [:]
+    /// Tagebuch (Tag starten und beenden), getrennt gespeichert
+    @Published private(set) var journals: [String: DayJournal] = [:]
     var calendar = Calendar.current
     private let url: URL?
+    private var journalURL: URL? { url?.deletingLastPathComponent().appendingPathComponent("Journal.json") }
     private var dirty = false
     private var lastSave = Date.distantPast
 
@@ -79,6 +86,28 @@ final class StatsStore: ObservableObject {
            let stored = try? JSONDecoder().decode([String: DayStats].self, from: data) {
             days = stored
         }
+        if let journalURL, let data = try? Data(contentsOf: journalURL),
+           let stored = try? JSONDecoder().decode([String: DayJournal].self, from: data) {
+            journals = stored
+        }
+    }
+
+    func journal(for date: Date = Date()) -> DayJournal { journals[key(for: date)] ?? DayJournal() }
+
+    /// Tagebuch ändern – wird sofort gespeichert (passiert nur zweimal am Tag)
+    func updateJournal(for date: Date = Date(), _ change: (inout DayJournal) -> Void) {
+        let key = key(for: date)
+        var journal = journals[key] ?? DayJournal()
+        change(&journal)
+        journals[key] = journal
+        guard let journalURL else { return }
+        try? FileManager.default.createDirectory(at: journalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let data = try? JSONEncoder().encode(journals) { Self.write(data, to: journalURL) }
+    }
+
+    /// Tagebücher der Tage einer Woche
+    func journals(in week: WeekStats) -> [(date: Date, journal: DayJournal)] {
+        week.days.map { ($0.date, journal(for: $0.date)) }
     }
 
     /// Nur in der echten App (in Tests gibt es keine Bundle-ID)
@@ -117,11 +146,18 @@ final class StatsStore: ObservableObject {
     func save(force: Bool = false) {
         guard dirty, let url, force || Date().timeIntervalSince(lastSave) >= 60 else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let data = try? JSONEncoder().encode(days) {
-            try? data.write(to: url, options: .atomic)
+        if let data = try? JSONEncoder().encode(days), Self.write(data, to: url) {
             dirty = false
             lastSave = Date()
         }
+    }
+
+    /// Sicher schreiben: erst daneben, dann in einem Schritt umbenennen (bricht nichts halb ab)
+    @discardableResult
+    private static func write(_ data: Data, to url: URL) -> Bool {
+        let temporary = url.appendingPathExtension("tmp")
+        guard (try? data.write(to: temporary)) != nil else { return false }
+        return rename(temporary.path, url.path) == 0
     }
 
     private func key(for date: Date) -> String {

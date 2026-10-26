@@ -115,6 +115,19 @@ enum PixelArt {
         "..........u.",
         "...........u",
     ])
+    /// Frosch für „Eat the Frog“: das Schwerste zuerst
+    static let frog = Sprite([
+        "..KK....KK..",
+        ".KWEK..KWEK.",
+        ".KGGKKKKGGK.",
+        "KGGGGGGGGGGK",
+        "KGGKGGGGKGGK",
+        "KGGGKKKKGGGK",
+        ".KGGGGGGGGK.",
+        "KGKKKKKKKKGK",
+        "KK........KK",
+    ])
+    static let frogColors = rgbPalette(["K": 0x2B1D16, "G": 0x5DBB63, "W": 0xFFFFFF, "E": 0x2B1D16])
     /// Claudes Funke, als Pixelbild
     static let claudeSpark = Sprite([
         "....K....",

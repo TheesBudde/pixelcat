@@ -471,7 +471,7 @@ enum Home: Equatable {
 }
 
 /// Runder Knopf für „Weiter“: farbig, oder zurückhaltend für die zweite Wahl
-private struct CapsuleButtonStyle: ButtonStyle {
+struct CapsuleButtonStyle: ButtonStyle {
     var prominent = true
 
     func makeBody(configuration: Configuration) -> some View {
@@ -612,7 +612,7 @@ private struct CatInBed: View {
 }
 
 /// Ein Herz, das sanft auf und ab schwebt
-private struct FloatingHeart: View {
+struct FloatingHeart: View {
     var body: some View {
         TimelineView(.animation) { context in
             let phase = context.date.timeIntervalSinceReferenceDate
@@ -896,7 +896,7 @@ struct PettableCat: View {
 // MARK: - Bilder der Führung
 
 /// Die Katze sitzt und denkt an etwas, mit der echten Gedankenblase
-private struct ThinkingCat: View {
+struct ThinkingCat: View {
     let coat: Coat
     let thought: String
 

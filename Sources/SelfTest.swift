@@ -278,6 +278,13 @@ final class SelfTest {
         check("Pause beendet", cat.breakEnds == nil)
         await pause(3)
 
+        section("Tag starten (Frage)")
+        cat.askDayNow(.start)
+        await waitUntil("Blase „Tag starten?“ mit Daumen über der Katze", 30) { self.bubbleAboveCat($0) }
+        cat.answerDay(false, now: Date())
+        await waitUntil("Daumen runter: Blase platzt, sie fragt später wieder", 3) { $0.bubble == nil }
+        await pause(3)
+
         section("Ruhemodus")
         cat.silent = true
         await waitUntil("geht weg (Körbchen oder zur Seite hinaus)", 90) { $0.isAway }

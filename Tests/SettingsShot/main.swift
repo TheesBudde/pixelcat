@@ -76,12 +76,47 @@ MainActor.assumeIsolated {
             $0.apps = ["com.apple.Safari": Double(random(30...120)) * 60, "com.apple.Notes": Double(random(5...40)) * 60]
         }
     }
+    // Tagebuch: die letzten Wochen mit Stimmung, To-dos und Zielen
+    let reasons = GoalReason.allCases
+    for back in 0..<40 {
+        let date = Calendar.current.date(byAdding: .day, value: -back, to: Date())!
+        let weekday = Calendar.current.component(.weekday, from: date)
+        guard weekday != 1, weekday != 7 else { continue }
+        stats.updateJournal(for: date) { journal in
+            journal.started = date
+            journal.moodStart = random(4...8)
+            journal.todos = ["Präsentation fertig machen", "Mails beantworten", "Mama anrufen", "Rechnung zahlen"]
+                .map { TodoItem(text: $0, done: random(0...3) > 0) }
+            journal.goals = ["Präsentation steht", "Inbox leer", "30 Minuten Sport"].map { text in
+                let achieved = random(0...2) > 0
+                return GoalItem(text: text, achieved: achieved, reason: achieved ? nil : reasons[random(0...reasons.count - 1)])
+            }
+            if back > 0 {
+                journal.moodEnd = random(5...9)
+                journal.potential = random(5...9)
+                journal.ended = date
+            }
+        }
+        stats.record(at: date) { day in
+            for hour in 8...17 { day.hours[String(hour)] = Double(random(10...55)) * 60 }
+        }
+    }
     settings.trackedApps = ["com.apple.Safari", "com.apple.Notes"]
     for coat in [Coat.orange, Coat.black] {
         settings.coat = coat
-        shoot(StatsView(store: stats, settings: settings), width: 640, height: 1320,
+        shoot(StatsView(store: stats, settings: settings, mode: .day), width: 640, height: 1100,
+              to: base.replacingOccurrences(of: "einstellungen", with: "statistik-tag-\(coat.rawValue)"),
+              appearance: coat == .black ? .darkAqua : .aqua)
+        shoot(StatsView(store: stats, settings: settings), width: 640, height: 2200,
               to: base.replacingOccurrences(of: "einstellungen", with: "statistik-\(coat.rawValue)"),
               appearance: coat == .black ? .darkAqua : .aqua)
     }
     settings.coat = .black
+    // Tag starten und beenden: alle Seiten
+    for page in 0..<6 {
+        shoot(DayStartView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,
+              to: base.replacingOccurrences(of: "einstellungen", with: "tagesstart-\(page + 1)"), appearance: .darkAqua)
+        shoot(DayEndView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,
+              to: base.replacingOccurrences(of: "einstellungen", with: "tagesende-\(page + 1)"), appearance: .darkAqua)
+    }
 }

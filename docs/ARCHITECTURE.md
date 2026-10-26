@@ -48,6 +48,7 @@ flowchart LR
 | `Reminders.swift` | `ErrandScheduler`, `TaskItem`, `OutfitTimes`, `ActivityTracker`. Pure logic, no windows |
 | `Basket.swift` | `BasketArt` (the plush bed), `BasketTileView` (Dock icon), `DockLocator` (where the bed sits) |
 | `Lookout.swift` | The eye break window: frame, sky, sun, hills and a drifting cloud |
+| `Journal.swift`, `DayWindow.swift` | Day journal (mood, to-dos, goals, reasons), when to ask (`DayRitual`), the summary over many days (`JournalSummary`) and the start and end windows |
 | `Stats.swift`, `StatsWindow.swift` | Day by day statistics (stored locally as JSON) and the statistics window with Swift Charts |
 | `Bird.swift` | The bird she chases while you're away: steering flight, swoops, dodging, flying off |
 | `Bubble.swift`, `PixelFont.swift` | Thought bubbles with a hand drawn pixel font (letters, umlauts, digits, punctuation) |
@@ -174,6 +175,12 @@ The same exercises can fill the Pomodoro break (guided Pomodoro breaks), and “
 at once. For the statistics, every two seconds of activity are counted as active time, as music time when the
 default output device is playing and no call is going on (`CallDetector.audioIsPlaying()`), and per app when the
 frontmost app is one of the apps to watch.
+
+`DayRitual.due` decides when to ask “Start your day?” (from the start of the workday until its end, only while
+someone is at the Mac, not again before the repeat time after thumbs down) and “End your day?” (from the end of the
+workday, once the day was started). The controller asks with the same thumbs bubble as the break question; thumbs up
+opens `DayWindow`. The journal is stored per day next to the statistics, and `JournalSummary` aggregates it for the
+week and the eight week trend.
 
 Silent mode makes the cat roam (bed or out of sight), suppresses visits, clears the reminder queue and mutes all
 sounds until it is turned off.
