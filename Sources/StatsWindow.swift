@@ -50,13 +50,14 @@ struct StatsView: View {
     enum Mode: Hashable { case day, week }
     @State private var mode: Mode
 
-    init(store: StatsStore, settings: AppSettings, mode: Mode = .week) {
+    init(store: StatsStore, settings: AppSettings, mode: Mode = .week, weekOffset: Int = 0) {
         self.store = store
         self.settings = settings
         _mode = State(initialValue: mode)
+        _weekOffset = State(initialValue: weekOffset)
     }
     /// 0 = diese Woche, -1 = letzte Woche …
-    @State private var weekOffset = 0
+    @State private var weekOffset: Int
     /// 0 = heute, -1 = gestern …
     @State private var dayOffset = 0
     @State private var hoveredHour: Int?

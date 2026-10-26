@@ -5,7 +5,7 @@ import SwiftUI
 MainActor.assumeIsolated {
     _ = NSApplication.shared
     let settings = AppSettings()
-    settings.taskItems = [TaskItem(text: "Wasser trinken", time: 9 * 60 + 30), TaskItem(text: "Mama anrufen", time: 12 * 60),
+    settings.taskItems = [TaskItem(text: "Wasser trinken", time: 9 * 60 + 30), TaskItem(text: L10n.s("Mama anrufen", "Call mom"), time: 12 * 60),
                           TaskItem(text: "Steuererklärung abgeben", time: 16 * 60 + 45)]
     settings.motivationSayings = ["Du schaffst das!", "Heute rockst du das Meeting."]
     settings.breakByActivity = CommandLine.arguments.contains("--activity")
@@ -91,9 +91,9 @@ MainActor.assumeIsolated {
         stats.updateJournal(for: date) { journal in
             journal.started = date
             journal.moodStart = random(4...8)
-            journal.todos = ["Präsentation fertig machen", "Mails beantworten", "Mama anrufen", "Rechnung zahlen"]
+            journal.todos = [L10n.s("Präsentation fertig machen", "Finish the presentation"), L10n.s("Mails beantworten", "Answer emails"), L10n.s("Mama anrufen", "Call mom"), L10n.s("Rechnung zahlen", "Pay the bill")]
                 .map { TodoItem(text: $0, done: random(0...3) > 0) }
-            journal.goals = ["Präsentation steht", "Inbox leer", "30 Minuten Sport"].map { text in
+            journal.goals = [L10n.s("Präsentation steht", "Presentation done"), L10n.s("Inbox leer", "Inbox zero"), L10n.s("30 Minuten Sport", "30 minutes of exercise")].map { text in
                 let achieved = random(0...2) > 0
                 return GoalItem(text: text, achieved: achieved, reason: achieved ? nil : reasons[random(0...reasons.count - 1)])
             }
@@ -115,6 +115,9 @@ MainActor.assumeIsolated {
         shoot(StatsView(store: stats, settings: settings, mode: .day), width: 640, height: 1100,
               to: base.replacingOccurrences(of: "einstellungen", with: "statistik-tag-\(coat.rawValue)"),
               appearance: coat == .black ? .darkAqua : .aqua)
+        shoot(StatsView(store: stats, settings: settings, weekOffset: -1), width: 640, height: 2200,
+              to: base.replacingOccurrences(of: "einstellungen", with: "statistik-letzte-\(coat.rawValue)"),
+              appearance: coat == .black ? .darkAqua : .aqua)
         shoot(StatsView(store: stats, settings: settings), width: 640, height: 2200,
               to: base.replacingOccurrences(of: "einstellungen", with: "statistik-\(coat.rawValue)"),
               appearance: coat == .black ? .darkAqua : .aqua)
@@ -122,9 +125,9 @@ MainActor.assumeIsolated {
     settings.coat = .black
     // Tag starten und beenden: alle Seiten
     // Timeboxing: zwei eingeplant (Frosch früh), zwei noch in der Liste
-    let planned = [TodoItem(text: "Präsentation fertig machen", start: 9 * 60, minutes: 120, frog: true),
-                   TodoItem(text: "Mails beantworten", start: 11 * 60 + 15, minutes: 45, frog: false),
-                   TodoItem(text: "Mama anrufen", frog: false), TodoItem(text: "Rechnung zahlen", frog: false)]
+    let planned = [TodoItem(text: L10n.s("Präsentation fertig machen", "Finish the presentation"), start: 9 * 60, minutes: 120, frog: true),
+                   TodoItem(text: L10n.s("Mails beantworten", "Answer emails"), start: 11 * 60 + 15, minutes: 45, frog: false),
+                   TodoItem(text: L10n.s("Mama anrufen", "Call mom"), frog: false), TodoItem(text: L10n.s("Rechnung zahlen", "Pay the bill"), frog: false)]
     shoot(DayStartView(store: stats, settings: settings, page: 3, todos: planned, onFinish: {}), width: 720, height: 660,
           to: base.replacingOccurrences(of: "einstellungen", with: "timeboxing"), appearance: .darkAqua)
     settings.coat = .orange

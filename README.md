@@ -12,8 +12,10 @@ A tiny pixel art cat for your Mac. She lives on top of your Dock, strolls back a
 and gently flicks the tip of her tail while she sleeps. Pick an orange tabby, a black cat or a gray tabby and
 give her a name.
 
-Pixelcat is also a soft productivity buddy: she reminds you to take breaks, drink water, rest your eyes, think
-of your tasks and call it a day. She never gets in the way and hides during video calls.
+Pixelcat is also a soft productivity buddy. She asks you to take breaks (and shows you little exercises), reminds
+you to drink water, rest your eyes and think of your tasks, cheers you on, plans your day with you in the morning
+and looks back on it with you in the evening. A statistics window shows how your days and weeks went. She never
+gets in the way, hides during video calls, and everything stays on your Mac.
 
 ## Features
 
@@ -93,6 +95,10 @@ real calendar, this is just to see the shape of your day. A lunch break from 1 t
 moved or removed. Mark your hardest task as the frog and put it early (eat the frog). You can only go on once every
 to-do has a time.
 
+<p align="center">
+  <img src="docs/img/day-plan.png" width="70%" alt="Timeboxing your day">
+</p>
+
 At the end of the workday she asks “End your day?”. The review: how are you feeling now, check off what you got
 done, did you reach your goals (and if not, why: not enough time, interruptions, planned too big, other priorities,
 no energy, waiting on others, put it off), did you make the most of today (1 to 10), and what can you do better
@@ -102,7 +108,8 @@ the day from the menu. Once ended, the day can't be started again.
 ### Statistics
 
 A statistics window (menu › Statistics …) switches between **day** and **week**. The day view shows active minutes per
-hour and your day: mood morning and evening, to-dos with the frog on top, goals and reasons. The week view shows breaks taken and put off, active
+hour and your day: mood morning and evening, to-dos at their planned times with the frog marked, goals and the
+reasons when they stayed open (including your own words). The week view shows breaks taken and put off, active
 work time, Pomodoros and drinks, each compared with the week before (this week only up to the same weekday). Two
 small charts show active hours (split into with and without music) and breaks per day, hover a day for its numbers.
 Music means sound was playing while you worked, outside of calls; Pixelcat only asks macOS whether audio is playing.
@@ -112,7 +119,13 @@ active in each of them (only the time, never any content). Everything stays on y
 
 From your day starts and ends it adds a **daily review** for the week (average mood in the morning and evening, the
 change over the day, to-dos per day and how many got done, goals reached, how much you made of the day) and a
-**trend over eight weeks** with the mood line and the most common reasons why goals stayed open.
+**trend over eight weeks** with the mood line and the most common reasons why goals stayed open. All of these are
+averages over the days you started or ended. An ⓘ next to each chart explains what is counted.
+
+<p align="center">
+  <img src="docs/img/statistics.png" width="48%" alt="Statistics: a week">
+  <img src="docs/img/statistics-day.png" width="48%" alt="Statistics: a day">
+</p>
 
 ### Outfits
 
@@ -127,7 +140,8 @@ change over the day, to-dos per day and how many got done, goals reached, how mu
 - **Video calls and screen sharing:** While the camera or microphone is on or the screen is shared, she hides
   and comes back afterwards. Reminders wait until then.
 - **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
-- **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks and the end of the day.
+- **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, motivation and the end of
+  the day.
   Purring while you pet her. Never in video calls or Focus. Everything can be turned off.
 - **Silent mode:** One click (⌘K) and she goes to her bed or out of sight. No reminders, no sounds, no bird until
   you turn it off. The menu bar icon turns pale meanwhile.
@@ -180,7 +194,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Cat Bed | Replaces Roaming when the cat bed is in the Dock: she sleeps in the bed |
 | Feed · Play with yarn · Startle · Put to sleep | Actions |
 | Settings … (⌘,) | Everything else |
-| Statistics … | This week and the weeks before |
+| Statistics … | Your day and your week, and the weeks before |
 | Quit Pixelcat (⌘Q) | Quit |
 
 The **settings window** is one scrolling page with her portrait on top. All windows follow her coat: dark for the
@@ -190,14 +204,17 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 
 - **Look:** Name, coat, size
 - **Behavior:** Climbing, chasing the pointer, other displays, cat bed in the Dock, Roaming or Cat Bed
-- **Pomodoro and breaks:** Focus and break length, break reminder at set intervals or by activity, break length
+- **Pomodoro:** Focus and break length, guided Pomodoro breaks
+- **Breaks:** Break reminder at set intervals or by activity, break length, guided breaks, Ask now
 - **Drinking and eyes:** On/off, rough interval, Show now
-- **End of the workday:** On/off, time, Monday to Friday only
+- **Workday:** Start and end, Monday to Friday only, start and end your day (and how soon she asks again),
+  end of workday reminder
 - **Outfits:** Nightcap at bedtime, morning outfit until a set time
 - **Tasks:** Opens the tasks window (tasks with their times)
 - **Motivation:** On/off, your sayings, Show now
+- **Apps to watch:** Apps like Anki whose active time shows up in your statistics
 - **While you're away:** Chase a bird after a set time without input, Show now
-- **Sounds and being considerate:** Meow, meow for tasks, purring, hide during calls, respect Focus
+- **Sounds and being considerate:** Meow, meow for tasks, purring, silent mode, hide during calls, respect Focus
 - **Language:** Same as macOS, Deutsch, English
 
 To keep her around, add Pixelcat under *System Settings › General › Login Items*.
@@ -239,9 +256,10 @@ To draw your own poses, edit the text grids in `Sources/Sprites.swift` and run `
 ```
 
 `test.sh` plays through the cat bed (breaks, timers, reminders, calls, full screen, clicks and a bed moved in the
-Dock, also in the middle of climbing in or out), all reminders (drinking, eye breaks, end of the workday, tasks,
-activity, overlaps with breaks and Pomodoro), the bird chase with and without the bed, and the calm cat on the
-welcome page.
+Dock, also in the middle of climbing in or out), all reminders (drinking, eye breaks, end of the workday, tasks at
+their times, motivation, activity, overlaps with breaks and Pomodoro), the break question and its snoozing, guided
+breaks, the bird chase, the day start and end (when she asks, days past midnight, the journal summary), timeboxing
+(snapping, free gaps, overlaps), the statistics and reading older data files.
 
 On the real screen, with the installed app (it quits afterwards and writes `build/selftest.log`):
 
@@ -256,14 +274,14 @@ sleeping cat, after 6 seconds the last frame of the climbing animation is drawn 
 ### Releasing
 
 ```bash
-./release.sh v6.2
+./release.sh v7.0
 ```
 
-This builds for Apple Silicon and Intel and creates `build/Pixelcat-v6.2.zip`. Upload it on GitHub under
+This builds for Apple Silicon and Intel and creates `build/Pixelcat-v7.0.zip`. Upload it on GitHub under
 *Releases › Draft a new release*, then update Homebrew:
 
 ```bash
-./update-cask.sh v6.2
+./update-cask.sh v7.0
 ```
 
 This downloads the published ZIP, writes version and checksum into the tap
