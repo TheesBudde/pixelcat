@@ -55,6 +55,8 @@ struct DayJournal: Codable, Equatable {
     var goals: [GoalItem] = []
     /// „Hast du herausgeholt, was drin war?“ (1 bis 10)
     var potential: Int?
+    /// „Was kannst du morgen besser machen?“ – erscheint beim nächsten Tagesstart
+    var improvement: String?
 
     var isEmpty: Bool { self == DayJournal() }
 }

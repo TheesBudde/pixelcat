@@ -117,9 +117,15 @@ struct DayStartView: View {
                 }
             default:
                 DayPage(title: t("Los geht's!", "Let's go!"), text: doneText) {
-                    VStack(spacing: 6) {
-                        if !todos.isEmpty { PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 4) }
-                        PixelCat(coat: settings.coat, pose: .petted, scale: 6)
+                    VStack(spacing: 14) {
+                        VStack(spacing: 6) {
+                            if !todos.isEmpty { PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 4) }
+                            PixelCat(coat: settings.coat, pose: .petted, scale: 5)
+                        }
+                        // Was man sich beim letzten Tagesende vorgenommen hat
+                        if let improvement = store.lastImprovement() {
+                            ResolutionCard(title: t("Dein Vorsatz für heute", "Your resolution for today"), text: improvement)
+                        }
                     }
                 }
             }
@@ -183,9 +189,10 @@ struct DayEndView: View {
     @State private var todos: [TodoItem] = []
     @State private var goals: [GoalItem] = []
     @State private var potential: Int?
+    @State private var improvement = ""
     @State private var loaded = false
 
-    private static let pages = 6
+    private static let pages = 7
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
     var body: some View {
@@ -220,6 +227,12 @@ struct DayEndView: View {
                         text: t("1 heißt: gar nicht. 10 heißt: alles, was heute möglich war.",
                                 "1 means not at all. 10 means everything that was possible today.")) {
                     MoodScale(value: $potential, low: t("gar nicht", "not at all"), high: t("alles gegeben", "all in"))
+                }
+            case 5:
+                DayPage(title: t("Was kannst du morgen besser machen?", "What can you do better tomorrow?"),
+                        text: t("Ein Satz reicht. Morgen beim Tagesstart erinnere ich dich daran.",
+                                "One sentence is enough. I'll remind you when you start your day tomorrow.")) {
+                    ImprovementField(text: $improvement)
                 }
             default:
                 DayPage(title: t("Schönen Feierabend!", "Enjoy your evening!"), text: summaryText) {
@@ -273,7 +286,9 @@ struct DayEndView: View {
     private func next() {
         guard page == Self.pages - 1 else { return go(1) }
         let (mood, todos, goals, potential) = (mood, todos, goals, potential)
+        let note = improvement.trimmingCharacters(in: .whitespacesAndNewlines)
         store.updateJournal { journal in
+            journal.improvement = note.isEmpty ? nil : note
             journal.moodEnd = mood
             journal.todos = todos
             journal.goals = goals
@@ -411,6 +426,50 @@ struct MoodScale: View {
             .foregroundStyle(.secondary)
             .frame(width: 472)
         }
+    }
+}
+
+/// Abends: ein Satz für morgen
+private struct ImprovementField: View {
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("", text: $text, prompt: Text(L10n.s("Morgen will ich …", "Tomorrow I'll …")), axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 17, design: .rounded))
+            .lineLimit(3...5)
+            .padding(16)
+            .frame(width: 460)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(focused ? 0.5 : 0), lineWidth: 1.5))
+            .focused($focused)
+            .onAppear { DispatchQueue.main.async { focused = true } }
+    }
+}
+
+/// Morgens: der Vorsatz vom letzten Tagesende
+private struct ResolutionCard: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.yellow.gradient))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(text).font(.system(.body, design: .rounded))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(width: 460)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.06)))
     }
 }
 

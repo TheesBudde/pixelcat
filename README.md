@@ -86,7 +86,8 @@ down your to-dos, put them in order (eat the frog: hardest first), and set up to
 
 At the end of the workday she asks “End your day?”. The review: how are you feeling now, check off what you got
 done, did you reach your goals (and if not, why: not enough time, interruptions, planned too big, other priorities,
-no energy, waiting on others, put it off), and did you make the most of today (1 to 10). You can also start and end
+no energy, waiting on others, put it off), did you make the most of today (1 to 10), and what can you do better
+tomorrow. That resolution greets you on the last page when you start your next day. You can also start and end
 the day from the menu. Once ended, the day can't be started again.
 
 ### Statistics

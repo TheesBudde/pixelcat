@@ -92,6 +92,8 @@ MainActor.assumeIsolated {
                 return GoalItem(text: text, achieved: achieved, reason: achieved ? nil : reasons[random(0...reasons.count - 1)])
             }
             if back > 0 {
+                journal.improvement = ["Handy in die Schublade legen.", "Den Frosch vor 10 Uhr essen.",
+                                       "Mittags wirklich Pause machen."][random(0...2)]
                 journal.moodEnd = random(5...9)
                 journal.potential = random(5...9)
                 journal.ended = date
@@ -113,7 +115,7 @@ MainActor.assumeIsolated {
     }
     settings.coat = .black
     // Tag starten und beenden: alle Seiten
-    for page in 0..<6 {
+    for page in 0..<7 {
         shoot(DayStartView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,
               to: base.replacingOccurrences(of: "einstellungen", with: "tagesstart-\(page + 1)"), appearance: .darkAqua)
         shoot(DayEndView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,

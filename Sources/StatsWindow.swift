@@ -495,6 +495,15 @@ struct StatsView: View {
                             }
                         }
                     }
+                    if let improvement = journal.improvement {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "lightbulb.fill").foregroundStyle(.yellow)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t("Für morgen", "For tomorrow")).font(.callout.weight(.semibold))
+                                Text(improvement).font(.callout).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     if !journal.goals.isEmpty {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(t("Ziele", "Goals")).font(.callout.weight(.semibold))

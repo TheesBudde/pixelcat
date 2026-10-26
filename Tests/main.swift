@@ -677,6 +677,14 @@ MainActor.assumeIsolated {
         let reloaded = StatsStore(url: url)
         check("Tagebuch übersteht Speichern und Laden", reloaded.journal(for: at(20, 12)) == store.journal(for: at(20, 12))
               && reloaded.journal(for: at(20, 12)).goals.first?.reason == .blocked)
+        // Vorsatz: kommt beim nächsten Tagesstart (nach einem Freitag also am Montag)
+        store.updateJournal(for: at(23, 17)) { $0.improvement = "  Früher Pausen machen  " } // Freitag
+        store.updateJournal(for: at(22, 17)) { $0.improvement = "Handy weglegen" }          // Donnerstag
+        check("der Vorsatz vom letzten Tagesende, ohne Leerzeichen am Rand",
+              store.lastImprovement(before: at(26, 9)) == "Früher Pausen machen")
+        check("am selben Tag zählt der eigene Vorsatz noch nicht", store.lastImprovement(before: at(23, 9)) == "Handy weglegen")
+        check("Vorsatz übersteht Speichern und Laden",
+              StatsStore(url: url).lastImprovement(before: at(26, 9)) == "Früher Pausen machen")
         try? FileManager.default.removeItem(at: folder)
     }
 

@@ -105,6 +105,15 @@ final class StatsStore: ObservableObject {
         if let data = try? JSONEncoder().encode(journals) { Self.write(data, to: journalURL) }
     }
 
+    /// Der Vorsatz vom letzten Tagesende vor diesem Tag (nach einem Freitag also am Montag)
+    func lastImprovement(before date: Date = Date()) -> String? {
+        let today = key(for: date)
+        return journals.filter { $0.key < today }
+            .sorted { $0.key > $1.key }
+            .lazy.compactMap { $0.value.improvement?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+    }
+
     /// Tagebücher der Tage einer Woche
     func journals(in week: WeekStats) -> [(date: Date, journal: DayJournal)] {
         week.days.map { ($0.date, journal(for: $0.date)) }
