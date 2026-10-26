@@ -513,8 +513,8 @@ struct StatsView: View {
                                                       : goal.achieved == false ? "xmark.seal" : "seal")
                                         .foregroundStyle(goal.achieved == true ? Color.green : Color.secondary)
                                     Text(goal.text)
-                                    if let reason = goal.reason {
-                                        Text(reason.title).font(.caption).foregroundStyle(.secondary)
+                                    if let reason = goal.reasonText {
+                                        Text(reason).font(.caption).foregroundStyle(.secondary)
                                             .padding(.horizontal, 8).padding(.vertical, 2)
                                             .background(Capsule().fill(Color.primary.opacity(0.07)))
                                     }
@@ -538,6 +538,11 @@ struct StatsView: View {
         if summary.days > 0 {
             card(title: t("Tagesbilanz", "Daily review"), icon: "sun.max.fill", color: .orange, info: journalInfo) {
                 VStack(alignment: .leading, spacing: 12) {
+                    Text(summary.days == 1
+                         ? t("Durchschnitt über 1 Tag mit Tagebuch", "Average over 1 day with a journal")
+                         : t("Durchschnitt über \(summary.days) Tage mit Tagebuch", "Average over \(summary.days) days with a journal"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     journalNumbers(summary)
                     moodChart(days.map { (label: weekdayText($0.date), start: $0.journal.moodStart, end: $0.journal.moodEnd) },
                               domain: week.days.map { weekdayText($0.date) })
@@ -561,7 +566,8 @@ struct StatsView: View {
                         let number = store.calendar.component(.weekOfYear, from: week.start)
                         return (t("KW \(number)", "W\(number)"), s.moodStart.map { Int($0.rounded()) }, s.moodEnd.map { Int($0.rounded()) })
                     }, domain: weeks.map { t("KW \(store.calendar.component(.weekOfYear, from: $0.start))",
-                                              "W\(store.calendar.component(.weekOfYear, from: $0.start))") })
+                                              "W\(store.calendar.component(.weekOfYear, from: $0.start))") },
+                       caption: t("Ø Stimmung pro Woche, 1 bis 10", "Ø mood per week, 1 to 10"))
                     journalNumbers(summary)
                     if !summary.reasons.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
@@ -595,25 +601,27 @@ struct StatsView: View {
         func percent(_ value: Double?) -> String? { value.map { "\(Int(($0 * 100).rounded())) %" } }
         let change = summary.moodChange.map { ($0 >= 0 ? "+" : "") + (number($0) ?? "") }
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], alignment: .leading, spacing: 10) {
-            JournalNumber(title: t("Stimmung morgens", "Mood morning"), value: number(summary.moodStart))
-            JournalNumber(title: t("Stimmung abends", "Mood evening"), value: number(summary.moodEnd))
-            JournalNumber(title: t("Veränderung am Tag", "Change over the day"), value: change)
-            JournalNumber(title: t("To-dos pro Tag", "To-dos per day"), value: number(summary.todosPerDay))
-            JournalNumber(title: t("To-dos erledigt", "To-dos done"), value: percent(summary.todoRate))
-            JournalNumber(title: t("Ziele erreicht", "Goals reached"), value: percent(summary.goalRate))
-            JournalNumber(title: t("Ausgeschöpft", "Made the most"), value: number(summary.potential).map { $0 + "/10" })
+            // Alles Durchschnitte über die Tage mit Tagebuch
+            JournalNumber(title: t("Ø Stimmung morgens", "Ø mood morning"), value: number(summary.moodStart))
+            JournalNumber(title: t("Ø Stimmung abends", "Ø mood evening"), value: number(summary.moodEnd))
+            JournalNumber(title: t("Ø Veränderung am Tag", "Ø change over the day"), value: change)
+            JournalNumber(title: t("Ø To-dos pro Tag", "Ø to-dos per day"), value: number(summary.todosPerDay))
+            JournalNumber(title: t("Ø To-dos erledigt", "Ø to-dos done"), value: percent(summary.todoRate))
+            JournalNumber(title: t("Ø Ziele erreicht", "Ø goals reached"), value: percent(summary.goalRate))
+            JournalNumber(title: t("Ø Ausgeschöpft", "Ø made the most"), value: number(summary.potential).map { $0 + "/10" })
         }
     }
 
     /// Stimmung morgens und abends als zwei Linien (Skala 1 bis 10)
-    private func moodChart(_ values: [(label: String, start: Int?, end: Int?)], domain: [String]) -> some View {
+    private func moodChart(_ values: [(label: String, start: Int?, end: Int?)], domain: [String],
+                           caption: String = L10n.s("Stimmung, 1 bis 10", "Mood, 1 to 10")) -> some View {
         let morning = t("Morgens", "Morning"), evening = t("Abends", "Evening")
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 14) {
                 LegendChip(color: blue, text: morning)
                 LegendChip(color: orange, text: evening)
                 Spacer()
-                Text(t("Stimmung, 1 bis 10", "Mood, 1 to 10")).font(.caption).foregroundStyle(.secondary)
+                Text(caption).font(.caption).foregroundStyle(.secondary)
             }
             Chart {
                 ForEach(values, id: \.label) { value in

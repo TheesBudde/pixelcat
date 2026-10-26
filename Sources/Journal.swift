@@ -9,7 +9,7 @@ struct TodoItem: Codable, Identifiable, Equatable {
 
 /// Warum ein Ziel offen blieb
 enum GoalReason: String, Codable, CaseIterable {
-    case time, interruptions, tooBig, priorities, energy, blocked, procrastinated
+    case time, interruptions, tooBig, priorities, energy, blocked, procrastinated, other
 
     var title: String {
         switch self {
@@ -20,6 +20,7 @@ enum GoalReason: String, Codable, CaseIterable {
         case .energy: return L10n.s("Keine Energie", "No energy")
         case .blocked: return L10n.s("Auf andere gewartet", "Waiting on others")
         case .procrastinated: return L10n.s("Aufgeschoben", "Put it off")
+        case .other: return L10n.s("Andere", "Other")
         }
     }
 
@@ -32,6 +33,7 @@ enum GoalReason: String, Codable, CaseIterable {
         case .energy: return "battery.25"
         case .blocked: return "hourglass"
         case .procrastinated: return "zzz"
+        case .other: return "ellipsis.bubble"
         }
     }
 }
@@ -42,6 +44,17 @@ struct GoalItem: Codable, Identifiable, Equatable {
     var text: String
     var achieved: Bool?
     var reason: GoalReason?
+    /// Bei „Andere“: der Grund in eigenen Worten
+    var note: String?
+
+    /// Der Grund zum Anzeigen (bei „Andere“ mit eigenem Text)
+    var reasonText: String? {
+        guard let reason else { return nil }
+        if reason == .other, let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return L10n.s("Andere: \(note)", "Other: \(note)")
+        }
+        return reason.title
+    }
 }
 
 /// Ein Arbeitstag: morgens Stimmung, To-dos und Ziele, abends Stimmung, Erledigtes, Ziele und wie viel man
@@ -72,19 +85,29 @@ struct DayRitual {
     var end = 17 * 60 + 30
     var weekdaysOnly = true
     var calendar = Calendar.current
+    /// So lange nach dem Start fragt sie frühestens nach dem Ende
+    static let minimumDay: TimeInterval = 60 * 60
 
-    /// Ist gerade eine Frage fällig? `idle`: Sekunden seit der letzten Eingabe
-    func due(now: Date, journal: DayJournal, idle: Double, notBefore: Date?) -> Ask? {
+    /// Ist gerade eine Frage fällig? `idle`: Sekunden seit der letzten Eingabe. `yesterday`: das Tagebuch von
+    /// gestern – wer nach Mitternacht noch arbeitet, wird bis zum nächsten Arbeitsbeginn gefragt, ob er den
+    /// gestrigen Tag beenden möchte.
+    func due(now: Date, journal: DayJournal, yesterday: DayJournal? = nil, idle: Double, notBefore: Date?) -> Ask? {
         guard enabled, journal.ended == nil, idle < 60 else { return nil }
         if let notBefore, now < notBefore { return nil }
-        if weekdaysOnly {
-            let weekday = calendar.component(.weekday, from: now)
-            if weekday == 1 || weekday == 7 { return nil }
-        }
         let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        if journal.started == nil, let yesterday, yesterday.started != nil, yesterday.ended == nil, minutes < start {
+            return .end
+        }
         if journal.started == nil {
+            // Ungefragt nur an Arbeitstagen; wer am Wochenende von Hand startet, wird abends trotzdem gefragt
+            if weekdaysOnly {
+                let weekday = calendar.component(.weekday, from: now)
+                if weekday == 1 || weekday == 7 { return nil }
+            }
             return minutes >= start && minutes < end ? .start : nil
         }
+        // Erst nach Feierabend – und nicht gleich nach dem Start (wer erst abends anfängt, hat gerade begonnen)
+        if let started = journal.started, now.timeIntervalSince(started) < Self.minimumDay { return nil }
         return minutes >= end ? .end : nil
     }
 }

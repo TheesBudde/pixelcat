@@ -54,6 +54,21 @@ final class SelfTest {
         cat.roaming = false
         await waitUntil("Katze ist zu sehen", 60) { !$0.isAway && $0.catFrame != nil }
 
+        section("Call beginnt, während der Napf steht")
+        cat.showErrandNow(.drink)
+        await waitUntil("Napf steht", 30) { $0.bowl != nil }
+        cat.simulatedCall = .camera
+        log("   (Kamera an – nachgespielt)")
+        await waitUntil("Napf verschwindet im Call (geteilter Bildschirm!)", 10) { $0.bowl == nil && $0.bubble == nil }
+        check("Trinken kommt nach dem Call noch einmal", cat.snapshot().queued.contains(.drink), "\(cat.snapshot().queued)")
+        cat.simulatedCall = nil
+        log("   (Call beendet – nachgespielt)")
+        await waitUntil("Katze ist wieder da", 60) { !$0.isAway && $0.catFrame != nil }
+        await waitUntil("Trinken kommt wieder", 60) { $0.errand == .drink }
+        cat.answerDrink(false)
+        await waitUntil("erledigt", 30) { $0.errand == nil }
+        await pause(3)
+
         section("Call mit „Auch während Videocalls“ an")
         cat.tasksDuringCalls = true
         cat.simulatedCall = .camera

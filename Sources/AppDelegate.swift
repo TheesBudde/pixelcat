@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var statsWindow = StatsWindow(store: stats, settings: settings)
     private lazy var dayWindow = DayWindow(store: stats, settings: settings)
     private var dayItem: NSMenuItem!
+    /// `pkill` (z. B. beim Installieren) beendet die App mit SIGTERM – vorher die Statistik sichern
+    private var terminationSignal: DispatchSourceSignal?
 
     private var statusItem: NSStatusItem!
     private var cat: CatController!
@@ -44,7 +46,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         cat = CatController(scale: settings.scale, coat: settings.coat, focusMonitor: focusMonitor)
         cat.stats = stats
         cat.onDayStart = { [weak self] in self?.dayWindow.show(.start) }
-        cat.onDayEnd = { [weak self] in self?.dayWindow.show(.end) }
+        cat.onDayEnd = { [weak self] day in self?.dayWindow.show(.end, date: day) }
+        cat.isDayWindowOpen = { [weak self] in self?.dayWindow.isOpen ?? false }
+        signal(SIGTERM, SIG_IGN)
+        let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        termination.setEventHandler { [weak self] in
+            self?.stats.save(force: true)
+            exit(0)
+        }
+        termination.resume()
+        terminationSignal = termination
         if settings.awayMode || settings.silentMode { cat.startRoamingOutside() }
         cat.apply(settings)
         settings.onChange = { [weak self] in
@@ -271,15 +282,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
         toggleItem.state = settings.silentMode ? .on : .off
-        let today = stats.journal()
-        if today.ended != nil {
-            dayItem.title = t("Tag beendet", "Day ended")
-            dayItem.image = Self.symbol("moon.stars")
-            dayItem.isEnabled = false
-        } else if today.started != nil {
+        if stats.openDay(workdayStart: settings.workdayStart) != nil {
+            // (nach Mitternacht auch der gestrige, noch offene Tag)
             dayItem.title = t("Tag beenden …", "End your day …")
             dayItem.image = Self.symbol("sunset")
             dayItem.isEnabled = true
+        } else if stats.journal().ended != nil {
+            dayItem.title = t("Tag beendet", "Day ended")
+            dayItem.image = Self.symbol("moon.stars")
+            dayItem.isEnabled = false
         } else {
             dayItem.title = t("Tag starten …", "Start your day …")
             dayItem.image = Self.symbol("sunrise")
@@ -353,9 +364,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Aktionen
 
     @objc private func dayAction() {
-        let today = stats.journal()
-        guard today.ended == nil else { return }
-        dayWindow.show(today.started == nil ? .start : .end)
+        if let open = stats.openDay(workdayStart: settings.workdayStart) {
+            dayWindow.show(.end, date: open)
+        } else if stats.journal().ended == nil {
+            dayWindow.show(.start)
+        }
     }
 
     @objc private func toggleSilent() {

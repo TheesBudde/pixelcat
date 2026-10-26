@@ -282,8 +282,11 @@ MainActor.assumeIsolated {
         check("um 17:30 kommt der Feierabend", s.popNext()?.kind == .quittingTime)
         s.collectDue(now: at(22, 22, 0))
         check("am selben Abend nur einmal", s.queue.isEmpty)
+        // Das Programm läuft weiter (es sieht die Uhrzeit, wenn sie erreicht wird)
+        s.collectDue(now: at(23, 17, 29))
+        s.collectDue(now: at(23, 17, 31))
+        check("läuft das Programm bis Freitag weiter: Freitag zählt", s.popNext()?.kind == .quittingTime)
         s.collectDue(now: at(24, 17, 29))
-        check("läuft das Programm bis Samstag weiter: Freitag zählt", s.popNext()?.kind == .quittingTime)
         s.collectDue(now: at(24, 17, 31))
         check("samstags nicht (nur werktags)", s.queue.isEmpty)
 
@@ -292,9 +295,22 @@ MainActor.assumeIsolated {
         late.collectDue(now: at(22, 19, 0))
         late.collectDue(now: at(22, 19, 1))
         check("erst abends gestartet: keine nachträgliche Ankündigung", late.queue.isEmpty)
+        late.collectDue(now: at(24, 17, 29))
         late.collectDue(now: at(24, 17, 31))
         check("über Nacht weiterlaufend: am nächsten Tag wieder (auch am Wochenende, wenn so eingestellt)",
               late.popNext()?.kind == .quittingTime)
+
+        // Mac im Ruhezustand über Nacht: am Morgen kein Feierabend vom Vorabend
+        let sleepy = ErrandScheduler()
+        sleepy.configureQuittingTime(hour: 17, minute: 30, weekdaysOnly: false, enabled: true)
+        sleepy.collectDue(now: at(22, 17, 0))
+        sleepy.collectDue(now: at(23, 8, 0))
+        check("nach einer Nacht im Ruhezustand: kein Feierabend am Morgen", sleepy.queue.isEmpty)
+        let nap = ErrandScheduler()
+        nap.configureQuittingTime(hour: 17, minute: 30, weekdaysOnly: false, enabled: true)
+        nap.collectDue(now: at(22, 17, 20))
+        nap.collectDue(now: at(22, 17, 50))
+        check("kurz zugeklappt: Feierabend kommt beim Aufklappen", nap.popNext()?.kind == .quittingTime)
     }
 
     // Feste Tage in deutscher Zeit (24. Oktober 2026 ist ein Samstag)
@@ -637,6 +653,31 @@ MainActor.assumeIsolated {
         ended.ended = at(20, 17, 45)
         check("beendet: an dem Tag nichts mehr", ritual.due(now: at(20, 19), journal: ended, idle: 5, notBefore: nil) == nil)
         check("am Wochenende keine Frage (nur werktags)", ritual.due(now: at(24, 10), journal: empty, idle: 5, notBefore: nil) == nil)
+        var weekendStart = DayJournal()
+        weekendStart.started = at(24, 10)
+        check("am Wochenende von Hand gestartet: abends trotzdem „Tag beenden?“",
+              ritual.due(now: at(24, 18), journal: weekendStart, idle: 5, notBefore: nil) == .end)
+        var lateStart = DayJournal()
+        lateStart.started = at(21, 18)
+        check("erst abends gestartet: nicht gleich „Tag beenden?“",
+              ritual.due(now: at(21, 18, 5), journal: lateStart, idle: 5, notBefore: nil) == nil
+              && ritual.due(now: at(21, 19, 5), journal: lateStart, idle: 5, notBefore: nil) == .end)
+        check("nach Mitternacht: den gestrigen, offenen Tag beenden?",
+              ritual.due(now: at(21, 0, 30), journal: empty, yesterday: started, idle: 5, notBefore: nil) == .end)
+        check("ab Arbeitsbeginn: der neue Tag (gestern bleibt offen)",
+              ritual.due(now: at(21, 9, 5), journal: empty, yesterday: started, idle: 5, notBefore: nil) == .start)
+        let openStore = StatsStore(url: nil)
+        openStore.calendar = berlin
+        openStore.updateJournal(for: at(20, 9)) { $0.started = at(20, 9) }
+        check("offener Tag nach Mitternacht ist gestern", openStore.openDay(now: at(21, 1), workdayStart: 9 * 60)
+              .map { berlin.isDate($0, inSameDayAs: at(20, 12)) } == true)
+        check("ab dem neuen Arbeitsbeginn ist kein Tag mehr offen", openStore.openDay(now: at(21, 9, 30), workdayStart: 9 * 60) == nil)
+        openStore.updateJournal(for: at(21, 9)) { $0.started = at(21, 9) }
+        check("heute gestartet: heute ist offen", openStore.openDay(now: at(21, 12), workdayStart: 9 * 60)
+              .map { berlin.isDate($0, inSameDayAs: at(21, 12)) } == true)
+        var other = GoalItem(text: "x", achieved: false, reason: .other)
+        other.note = "  Server war down "
+        check("eigener Grund bei „Andere“", other.reasonText == L10n.s("Andere: Server war down", "Other: Server war down"))
         ritual.enabled = false
         check("ausgeschaltet: nie", ritual.due(now: at(20, 9, 5), journal: empty, idle: 5, notBefore: nil) == nil)
 

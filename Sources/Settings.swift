@@ -505,12 +505,17 @@ struct SettingsView: View {
                    "At the start she asks “Start your day?”, at the end “End your day?”. Thumbs up opens a short window for mood, to-dos and goals. Also in the menu."))
             if settings.dayRitual {
                 minutesSlider(t("Nochmal fragen nach", "Ask again after"), value: $settings.dayRitualRepeat, range: 5...60, step: 5)
+                if settings.quittingTime <= settings.workdayStart {
+                    hint(t("Der Feierabend liegt vor dem Beginn. So fragt sie nicht. Über Mitternacht geht es nicht.",
+                           "The end is before the start. She won't ask like that. Spanning midnight isn't supported."))
+                        .foregroundStyle(.orange)
+                }
             }
             Toggle(t("An den Feierabend erinnern", "Remind me to call it a day"), isOn: $settings.quittingTimeEnabled)
             HStack {
                 hint(settings.dayRitual
-                     ? t("Sie setzt zum Feierabend Zylinder und Fliege auf und trägt beides bis zur Schlafenszeit. Die Frage „Tag beenden?“ ersetzt dann die Blase „Feierabend“.",
-                         "At the end of the day she puts on a top hat and bow tie until bedtime. The question “End your day?” replaces the “Off work” bubble.")
+                     ? t("Sie setzt zum Feierabend Zylinder und Fliege auf und trägt beides bis zur Schlafenszeit. Hast du den Tag gestartet, ersetzt die Frage „Tag beenden?“ die Blase „Feierabend“.",
+                         "At the end of the day she puts on a top hat and bow tie until bedtime. If you started your day, the question “End your day?” replaces the “Off work” bubble.")
                      : t("Sie kommt in die Mitte, setzt Zylinder und Fliege auf und denkt „Feierabend“. Beides trägt sie bis zur Schlafenszeit.",
                          "She comes to the middle, puts on a top hat and bow tie and thinks “Off work”. She wears both until bedtime."))
                 Spacer()

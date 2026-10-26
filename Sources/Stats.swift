@@ -105,6 +105,17 @@ final class StatsStore: ObservableObject {
         if let data = try? JSONEncoder().encode(journals) { Self.write(data, to: journalURL) }
     }
 
+    /// Der gestartete, noch nicht beendete Arbeitstag: heute – oder nach Mitternacht noch gestern, solange der
+    /// neue Arbeitstag nicht begonnen hat (wer bis in die Nacht arbeitet, kann den Tag so noch beenden)
+    func openDay(now: Date = Date(), workdayStart: Int) -> Date? {
+        let today = journal(for: now)
+        if today.started != nil { return today.ended == nil ? now : nil }
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: now) else { return nil }
+        let previous = journal(for: yesterday)
+        let minutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
+        return previous.started != nil && previous.ended == nil && minutes < workdayStart ? yesterday : nil
+    }
+
     /// Der Vorsatz vom letzten Tagesende vor diesem Tag (nach einem Freitag also am Montag)
     func lastImprovement(before date: Date = Date()) -> String? {
         let today = key(for: date)

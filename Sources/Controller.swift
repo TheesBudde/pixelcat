@@ -334,7 +334,7 @@ final class CatController {
     private func configureQuittingReminder() {
         errands.configureQuittingTime(hour: (quittingTime?.minutes ?? 0) / 60, minute: (quittingTime?.minutes ?? 0) % 60,
                                       weekdaysOnly: quittingTime?.weekdaysOnly ?? true,
-                                      enabled: quittingTime != nil && !dayRitual.enabled)
+                                      enabled: quittingTime != nil)
     }
 
     /// Tag starten und beenden: wann sie fragt
@@ -342,8 +342,14 @@ final class CatController {
     var dayRitualRepeat: TimeInterval = 15 * 60
     /// Daumen hoch: das Fenster zum Tagesstart bzw. Tagesende öffnen
     var onDayStart: (() -> Void)?
-    var onDayEnd: (() -> Void)?
-    private var dayQuestion: (ask: DayRitual.Ask, until: Date)?
+    var onDayEnd: ((Date) -> Void)?
+    private var dayQuestion: (ask: DayRitual.Ask, until: Date, day: Date)?
+    /// Ist das Fenster für Tagesstart bzw. Tagesende gerade offen? (Dann fragt sie nicht noch einmal)
+    var isDayWindowOpen: (() -> Bool)?
+    /// Die Blase der gerade offenen Frage (Pause oder Tag) – nur diese wird beim Antworten weggeräumt
+    private var questionBubble: ThoughtBubble?
+    /// „Trinken?“ ist schon beantwortet (dann kommt die Frage nach einem Call nicht noch einmal)
+    private var drinkAnswered = false
     /// Nach Daumen runter (oder ohne Antwort) erst ab dann wieder fragen
     private var nextDayAsk: Date?
     /// Wann sie was trägt (Feierabend, Schlafenszeit, Morgen)
@@ -421,8 +427,8 @@ final class CatController {
         configureQuittingReminder()
         motivationEnabled = settings.motivationEnabled
         motivationSayings = settings.motivationSayings
-        errands.configureMotivation(enabled: motivationEnabled, workdayEnd: quittingTime?.minutes,
-                                    weekdaysOnly: quittingTime?.weekdaysOnly ?? false)
+        errands.configureMotivation(enabled: motivationEnabled, workdayEnd: settings.quittingTime,
+                                    weekdaysOnly: settings.quittingWeekdaysOnly)
         let bedtime = settings.bedtimeEnabled ? settings.bedtime : nil
         let morningEnd = settings.morningOutfit ? settings.morningEnd : nil
         if bedtime != outfitTimes.bedtime || morningEnd != outfitTimes.morningEnd {
@@ -893,16 +899,52 @@ final class CatController {
             return
         }
         guard breakQuestionUntil == nil, breakEnds == nil, brain.mode == .normal else { return }
+        // Niemand am Rechner: Das ist schon eine Pause. Keine Frage, nichts gezählt, danach beginnt die Zeit neu
+        if Self.secondsSinceInput >= 300 {
+            snooze.rested()
+            scheduleReminder()
+            return
+        }
+        // Gerade unpassend (Videocall, Einrichtung offen, Tagesfrage, eine Erinnerung läuft): gleich noch einmal
+        guard isVisible, hiddenBecause == nil, dayQuestion == nil, activeErrand == nil, isDayWindowOpen?() != true else {
+            if !breakByActivity { nextReminder = now.addingTimeInterval(60) }
+            return
+        }
         // Sie kommt in die Mitte und fragt: Pause? Daumen hoch oder runter
         pendingMeow = (.reminder, now)
         brain.callToCenter(visitLength: Self.breakQuestionTimeout + 30)
         let until = now.addingTimeInterval(Self.breakQuestionTimeout)
         breakQuestionUntil = until
         nextReminder = .distantFuture
+        showQuestion(L10n.s("Pause?", "Break?"), until: until) { [weak self] yes in self?.answerBreak(yes, now: Date()) }
+    }
+
+    /// Frageblase mit Daumen über der Katze (ersetzt eine eventuelle andere Blase)
+    private func showQuestion(_ text: String, until: Date, onChoice: @escaping (Bool) -> Void) {
         bubble?.remove()
-        bubble = ThoughtBubble(text: L10n.s("Pause?", "Break?"), ends: until, scale: scale) { [weak self] yes in
-            self?.answerBreak(yes, now: Date())
+        let question = ThoughtBubble(text: text, ends: until, scale: scale, onChoice: onChoice)
+        bubble = question
+        questionBubble = question
+    }
+
+    /// Die Frageblase platzen lassen (nur die eigene, nicht etwa eine Übungsblase)
+    private func popQuestion() {
+        questionBubble?.pop()
+        questionBubble = nil
+    }
+
+    /// Offene Fragen ohne Wertung wegräumen (Videocall, Pomodoro, Timer, Ruhemodus): Sie kommen später wieder
+    private func dismissQuestions(now: Date) {
+        if breakQuestionUntil != nil {
+            breakQuestionUntil = nil
+            brain.declineBreak()
+            if breakReminders, !breakByActivity { nextReminder = now.addingTimeInterval(5 * 60) }
         }
+        if dayQuestion != nil {
+            dayQuestion = nil
+            nextDayAsk = now.addingTimeInterval(dayRitualRepeat)
+        }
+        popQuestion()
     }
 
     /// „Jetzt fragen“ in den Einstellungen (und Selbsttest): die Pausenfrage gleich zeigen
@@ -921,7 +963,7 @@ final class CatController {
     func answerBreak(_ yes: Bool, now: Date) {
         guard breakQuestionUntil != nil else { return }
         breakQuestionUntil = nil
-        bubble?.pop()
+        popQuestion()
         if yes {
             beginBreak(now: now)
         } else {
@@ -954,6 +996,7 @@ final class CatController {
             answerBreak(true, now: Date()) // die offene Frage gleich mit beantworten
             return
         }
+        dismissQuestions(now: Date()) // eine offene Tagesfrage kommt später wieder
         cancelErrand()
         bubble?.pop()
         beginBreak(now: Date())
@@ -965,7 +1008,7 @@ final class CatController {
             if Self.secondsSinceInput >= 120 {
                 // Niemand da: Das war ohnehin eine Pause
                 breakQuestionUntil = nil
-                bubble?.pop()
+                popQuestion()
                 snooze.rested()
                 stats?.record { $0.breaksTaken += 1 }
                 brain.declineBreak()
@@ -1019,26 +1062,27 @@ final class CatController {
         if let question = dayQuestion, now >= question.until {
             answerDay(false, now: now) // keine Antwort: später noch einmal
         }
-        guard dayQuestion == nil, let stats, !silent, hiddenBecause == nil, pomodoro == nil, timer == nil,
+        guard dayQuestion == nil, let stats, isVisible, !silent, hiddenBecause == nil, pomodoro == nil, timer == nil,
               breakQuestionUntil == nil, breakEnds == nil, activeErrand == nil, bubble == nil, brain.mode == .normal,
-              let ask = dayRitual.due(now: now, journal: stats.journal(for: now), idle: Self.secondsSinceInput,
-                                      notBefore: nextDayAsk)
+              isDayWindowOpen?() != true
         else { return }
-        askDay(ask, now: now)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now).map { stats.journal(for: $0) }
+        guard let ask = dayRitual.due(now: now, journal: stats.journal(for: now), yesterday: yesterday,
+                                      idle: Self.secondsSinceInput, notBefore: nextDayAsk)
+        else { return }
+        // Welcher Tag: heute – oder nach Mitternacht noch der gestrige, offene
+        let day = ask == .end ? stats.openDay(now: now, workdayStart: dayRitual.start) ?? now : now
+        askDay(ask, day: day, now: now)
     }
 
     /// Sie kommt in die Mitte (aus Korb oder Streifzug) und fragt mit Daumen
-    private func askDay(_ ask: DayRitual.Ask, now: Date) {
+    private func askDay(_ ask: DayRitual.Ask, day: Date, now: Date) {
         let until = now.addingTimeInterval(Self.breakQuestionTimeout)
-        dayQuestion = (ask, until)
+        dayQuestion = (ask, until, day)
         pendingMeow = (.reminder, now)
         brain.callToCenter(visitLength: Self.breakQuestionTimeout + 30)
-        bubble?.remove()
-        bubble = ThoughtBubble(text: ask == .start ? L10n.s("Tag starten?", "Start your day?")
-                                                   : L10n.s("Tag beenden?", "End your day?"),
-                               ends: until, scale: scale) { [weak self] yes in
-            self?.answerDay(yes, now: Date())
-        }
+        showQuestion(ask == .start ? L10n.s("Tag starten?", "Start your day?") : L10n.s("Tag beenden?", "End your day?"),
+                     until: until) { [weak self] yes in self?.answerDay(yes, now: Date()) }
     }
 
     /// Daumen hoch: Sie freut sich, das Fenster geht auf. Daumen runter: später noch einmal.
@@ -1046,11 +1090,11 @@ final class CatController {
     func answerDay(_ yes: Bool, now: Date) {
         guard let question = dayQuestion else { return }
         dayQuestion = nil
-        bubble?.pop()
+        popQuestion()
         nextDayAsk = now.addingTimeInterval(dayRitualRepeat)
         if yes {
             brain.rejoice()
-            question.ask == .start ? onDayStart?() : onDayEnd?()
+            question.ask == .start ? onDayStart?() : onDayEnd?(question.day)
         } else {
             brain.declineBreak()
         }
@@ -1059,15 +1103,12 @@ final class CatController {
     /// Selbsttest und Vorschau: die Frage gleich stellen
     func askDayNow(_ ask: DayRitual.Ask) {
         nextDayAsk = nil
-        askDay(ask, now: Date())
+        askDay(ask, day: Date(), now: Date())
     }
 
     /// Pomodoro, Timer oder Ruhemodus beginnt: Pausenfrage und Pause sind vorbei
     private func cancelBreak() {
-        if breakQuestionUntil != nil {
-            breakQuestionUntil = nil
-            bubble?.pop()
-        }
+        dismissQuestions(now: Date())
         if breakEnds != nil {
             breakEnds = nil
             bubble?.pop()
@@ -1116,9 +1157,20 @@ final class CatController {
 
     private func setHidden(because reason: CallDetector.Reason?) {
         guard (reason == nil) != (hiddenBecause == nil) || reason != hiddenBecause else { return }
+        let callStarts = reason != nil && hiddenBecause == nil
         hiddenBecause = reason
         brain.suppressVisits = reason != nil || silent
         brain.roaming = userRoaming || reason != nil || silent
+        guard callStarts else { return }
+        // Offene Fragen kommen nach dem Call wieder (nicht als weggedrückt gezählt)
+        dismissQuestions(now: Date())
+        // Napf, Augenpausen-Fenster oder Vogel sollen im Call nicht stehen bleiben – beim geteilten Bildschirm
+        // sähen es alle. Die Erinnerung kommt danach noch einmal (Aufgaben dürfen bleiben, der Vogel nicht).
+        if let kind = activeErrand?.errand.kind, kind != .task {
+            let answered = kind == .drink && drinkAnswered // schon beantwortet: nicht noch einmal fragen
+            cancelErrand()
+            if kind != .bird, !answered { errands.requestNow(kind) }
+        }
     }
 
     /// Fokus aktiv → leise und ruhig.
@@ -1610,16 +1662,32 @@ final class CatController {
             if errandFinished(active.errand, since: active.since, now: now) { finishErrand(now: now) }
             return
         }
-        guard now >= nextErrandAllowed, canRunErrand else { return }
+        guard now >= nextErrandAllowed else { return }
         // Im Videocall nur Aufgaben (falls so eingestellt) – und nie, während der Bildschirm geteilt wird
-        let allowed: (ErrandKind) -> Bool = hiddenBecause == nil ? { _ in true }
+        let callAllows: (ErrandKind) -> Bool = hiddenBecause == nil ? { _ in true }
             : { [tasksDuringCalls, screenIsShared] kind in kind == .task && tasksDuringCalls && !screenIsShared }
+        let allowed: (ErrandKind) -> Bool
+        if canRunErrand {
+            allowed = callAllows
+        } else if canShowTaskWhileFocused {
+            // Pomodoro-Fokus oder Timer: Aufgaben haben eine Uhrzeit – nur die Blase, sie wird nicht geweckt
+            allowed = { $0 == .task && callAllows($0) }
+        } else {
+            return
+        }
         guard let errand = errands.popNext(where: allowed) else { return }
+        // Tag gestartet: Am Abend fragt sie „Tag beenden?“ – die Blase „Feierabend“ wäre doppelt
+        if errand.kind == .quittingTime, dayRitual.enabled, stats?.journal(for: now).started != nil { return }
         startErrand(errand, now: now)
     }
 
     /// Frei für eine Erinnerung: sichtbar, kein Fokus/Timer, keine Pause, nichts zu fressen oder zu spielen,
     /// nicht gerade beim Hinein- oder Herausklettern. (Was im Videocall erlaubt ist, entscheidet `updateErrands`.)
+    /// Im Fokus (Pomodoro, Timer) dürfen nur Aufgaben kommen, als Blase über der schlafenden Katze bzw. am Dock
+    private var canShowTaskWhileFocused: Bool {
+        isVisible && brain.mode == .focus && bubble == nil && !brain.isAboveDock && !brain.awaitingAcknowledgement
+    }
+
     private var canRunErrand: Bool {
         isVisible && brain.mode == .normal && pomodoro == nil && timer == nil
             && bubble == nil && bowl == nil && ball == nil && !brain.isAboveDock && !brain.awaitingAcknowledgement
@@ -1640,6 +1708,7 @@ final class CatController {
         switch errand.kind {
         case .drink:
             // Napf hinstellen und fragen: Trinkst du mit? Daumen hoch zählt in der Statistik
+            drinkAnswered = false
             placeBowl(water: true)
             showErrandBubble(L10n.s("Trinken?", "Drink?"), for: 4 * 60) { [weak self] yes in
                 self?.answerDrink(yes)
@@ -1675,10 +1744,11 @@ final class CatController {
         case .task:
             // Nur die Blase – sie wird dafür nicht geweckt; im Streifzug oder Körbchen kommt sie herein
             // (im Videocall bleibt sie versteckt, die Blase steht dann über dem Korb im Dock)
-            if hiddenBecause != nil, basketInDock { locateBasket() }
+            if hiddenBecause != nil || brain.mode == .focus, basketInDock { locateBasket() }
             showErrandBubble(errand.text ?? "", for: 35)
             if meowForTasks { meow(.reminder) } // (im Videocall nie – dann ist sie still)
-            if brain.isOutAndAbout { brain.startErrandVisit(for: 5 * 60) }
+            // Im Fokus bleibt sie, wo sie ist (die Blase steht dann am Dock, wenn sie draußen ist)
+            if brain.isOutAndAbout, brain.mode == .normal { brain.startErrandVisit(for: 5 * 60) }
             return
         }
         // Im Streifzug oder im Körbchen kommt sie dafür herein, sonst wird sie aufmerksam
@@ -1815,6 +1885,7 @@ final class CatController {
     /// Antwort auf „Trinken?“: Daumen hoch – sie freut sich und trinkt mit; runter – der Napf kommt weg
     func answerDrink(_ yes: Bool) {
         guard activeErrand?.errand.kind == .drink else { return }
+        drinkAnswered = true
         errandBubble?.pop()
         if yes {
             stats?.record { $0.drinks += 1 }
@@ -1853,7 +1924,7 @@ final class CatController {
             let hat = sprite.earAnchor != nil ? max(0, (view.accessory?.height ?? 0) - 2 - view.accessoryDrop) : 0
             head = CGPoint(x: brain.x.rounded() + canvasX * scale,
                            y: brain.y.rounded() + CGFloat(look.hop + sprite.height + hat + 1) * scale)
-        } else if hiddenBecause != nil, bubble === errandBubble {
+        } else if bubble === errandBubble, hiddenBecause != nil || brain.mode == .focus {
             head = bubbleAnchorWithoutCat
         }
         bubble.update(dt: dt, head: head)
@@ -1949,7 +2020,13 @@ final class CatController {
         updateBreak(now: date)
         updateStatusText()
         if pomodoro == nil, !silent, date >= nextReminder {
-            remindToTakeBreak(now: date)
+            if date.timeIntervalSince(nextReminder) > 10 * 60 {
+                // Lange überfällig: Der Mac war im Ruhezustand – das war schon eine Pause, die Zeit beginnt neu
+                snooze.rested()
+                scheduleReminder()
+            } else {
+                remindToTakeBreak(now: date)
+            }
         }
 
         updateErrands(now: date)

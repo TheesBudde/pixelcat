@@ -71,6 +71,8 @@ final class ErrandScheduler {
     private var taskShown: [UUID: Date] = [:]
     /// So lange danach holt sie eine verpasste Aufgabe noch nach (Mac im Ruhezustand oder gerade gestartet)
     static let taskCatchUp: TimeInterval = 3 * 60 * 60
+    /// Feierabend nach dem Aufwachen nur, wenn er höchstens so lange her ist
+    static let quittingCatchUp: TimeInterval = 60 * 60
 
     /// Motivation: morgens, gegen Feierabend und an langen Tagen einmal dazwischen
     private var motivationEnabled = false
@@ -186,7 +188,9 @@ final class ErrandScheduler {
             }
             motivationSlots.removeAll { $0 <= now }
         }
-        if let start = quittingCheckedUntil, quittingCrossing(after: start, upTo: now) != nil {
+        // Nur, wenn es gerade erst so weit war – nicht nach einer Nacht im Ruhezustand am nächsten Morgen
+        if let start = quittingCheckedUntil, let moment = quittingCrossing(after: start, upTo: now),
+           now.timeIntervalSince(moment) <= Self.quittingCatchUp {
             enqueue(.quittingTime)
         }
         quittingCheckedUntil = now

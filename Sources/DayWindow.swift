@@ -19,7 +19,19 @@ final class DayWindow: NSObject, NSWindowDelegate {
         self.settings = settings
     }
 
-    func show(_ kind: Kind) {
+    /// Ist das Fenster gerade offen?
+    var isOpen: Bool { window?.isVisible == true }
+    private var shown: (kind: Kind, date: Date)?
+
+    /// `date`: der Tag, um den es geht (beim Tagesende nach Mitternacht noch der gestrige)
+    func show(_ kind: Kind, date: Date = Date()) {
+        // Schon offen für dasselbe: nur nach vorn holen (sonst wäre alles Eingetragene weg)
+        if isOpen, shown?.kind == kind, let day = shown?.date, Calendar.current.isDate(day, inSameDayAs: date) {
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        shown = (kind, date)
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
                                   styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -37,10 +49,12 @@ final class DayWindow: NSObject, NSWindowDelegate {
         }
         switch kind {
         case .start:
-            window?.contentView = NSHostingView(rootView: DayStartView(store: store, settings: settings, onFinish: close))
+            window?.contentView = NSHostingView(rootView: DayStartView(store: store, settings: settings, date: date,
+                                                                       onFinish: close))
             window?.title = L10n.s("Tag starten", "Start your day")
         case .end:
-            window?.contentView = NSHostingView(rootView: DayEndView(store: store, settings: settings, onFinish: close))
+            window?.contentView = NSHostingView(rootView: DayEndView(store: store, settings: settings, date: date,
+                                                                     onFinish: close))
             window?.title = L10n.s("Tag beenden", "End your day")
         }
         window?.center()
@@ -60,11 +74,14 @@ struct DayStartView: View {
     @ObservedObject var settings: AppSettings
     var onFinish: () -> Void
 
+    /// Der Tag, für den geplant wird (beim Öffnen festgehalten – auch wenn es beim Fertig schon nach Mitternacht ist)
+    let date: Date
     @State private var page: Int
 
-    init(store: StatsStore, settings: AppSettings, page: Int = 0, onFinish: @escaping () -> Void) {
+    init(store: StatsStore, settings: AppSettings, date: Date = Date(), page: Int = 0, onFinish: @escaping () -> Void) {
         self.store = store
         self.settings = settings
+        self.date = date
         self.onFinish = onFinish
         _page = State(initialValue: page)
     }
@@ -123,7 +140,7 @@ struct DayStartView: View {
                             PixelCat(coat: settings.coat, pose: .petted, scale: 5)
                         }
                         // Was man sich beim letzten Tagesende vorgenommen hat
-                        if let improvement = store.lastImprovement() {
+                        if let improvement = store.lastImprovement(before: date) {
                             ResolutionCard(title: t("Dein Vorsatz für heute", "Your resolution for today"), text: improvement)
                         }
                     }
@@ -134,8 +151,8 @@ struct DayStartView: View {
 
     private var doneText: String {
         if let frog = todos.first {
-            return t("Fang mit deinem Frosch an: „\(frog.text)“. Ich halte dir die Daumen.",
-                     "Start with your frog: “\(frog.text)”. I'm rooting for you.")
+            return t("Fang mit deinem Frosch an: „\(frog.text)“. Du schaffst das!",
+                     "Start with your frog: “\(frog.text)”. You've got this!")
         }
         return t("Viel Erfolg heute. Ich bin da, wenn du eine Pause brauchst.",
                  "Good luck today. I'm here when you need a break.")
@@ -154,7 +171,7 @@ struct DayStartView: View {
         let goals = goals.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.map { GoalItem(text: $0) }
         let todos = todos
         let mood = mood
-        store.updateJournal { journal in
+        store.updateJournal(for: date) { journal in
             journal.started = Date()
             journal.moodStart = mood
             journal.todos = todos
@@ -176,11 +193,14 @@ struct DayEndView: View {
     @ObservedObject var settings: AppSettings
     var onFinish: () -> Void
 
+    /// Der Tag, der beendet wird (nach Mitternacht noch der gestrige)
+    let date: Date
     @State private var page: Int
 
-    init(store: StatsStore, settings: AppSettings, page: Int = 0, onFinish: @escaping () -> Void) {
+    init(store: StatsStore, settings: AppSettings, date: Date = Date(), page: Int = 0, onFinish: @escaping () -> Void) {
         self.store = store
         self.settings = settings
+        self.date = date
         self.onFinish = onFinish
         _page = State(initialValue: page)
     }
@@ -265,7 +285,7 @@ struct DayEndView: View {
             parts.append(t("\(goals.filter { $0.achieved == true }.count) von \(goals.count) Zielen erreicht.",
                            "\(goals.filter { $0.achieved == true }.count) of \(goals.count) goals reached."))
         }
-        if let start = store.journal().moodStart, let mood {
+        if let start = store.journal(for: date).moodStart, let mood {
             parts.append(t("Stimmung: \(start) am Morgen, \(mood) jetzt.", "Mood: \(start) this morning, \(mood) now."))
         }
         return parts.isEmpty ? t("Gut gemacht heute.", "Well done today.") : parts.joined(separator: " ")
@@ -278,7 +298,7 @@ struct DayEndView: View {
     private func load() {
         guard !loaded else { return }
         loaded = true
-        let journal = store.journal()
+        let journal = store.journal(for: date)
         todos = journal.todos
         goals = journal.goals
     }
@@ -287,7 +307,7 @@ struct DayEndView: View {
         guard page == Self.pages - 1 else { return go(1) }
         let (mood, todos, goals, potential) = (mood, todos, goals, potential)
         let note = improvement.trimmingCharacters(in: .whitespacesAndNewlines)
-        store.updateJournal { journal in
+        store.updateJournal(for: date) { journal in
             journal.improvement = note.isEmpty ? nil : note
             journal.moodEnd = mood
             journal.todos = todos
@@ -473,13 +493,13 @@ private struct ResolutionCard: View {
     }
 }
 
-/// Hinweis mit Pixelfrosch
+/// Hinweis zu „Eat the Frog“ (der Frosch selbst erscheint erst beim Ordnen)
 private struct FrogTip: View {
     let text: String
 
     var body: some View {
         HStack(spacing: 10) {
-            PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 3)
+            Image(systemName: "lightbulb.fill").foregroundStyle(.yellow)
             Text(text).font(.system(.callout, design: .rounded))
         }
         .padding(.horizontal, 14)
@@ -653,6 +673,7 @@ private struct GoalReview: View {
                             choice(L10n.s("Erreicht", "Reached"), icon: "checkmark", selected: goal.achieved == true) {
                                 goal.achieved = true
                                 goal.reason = nil
+                                goal.note = nil
                             }
                             choice(L10n.s("Nicht erreicht", "Not reached"), icon: "xmark", selected: goal.achieved == false) {
                                 goal.achieved = false
@@ -672,6 +693,16 @@ private struct GoalReview: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
+                            }
+                            // „Andere“: den Grund selbst hinschreiben
+                            if goal.reason == .other {
+                                TextField("", text: Binding(get: { goal.note ?? "" }, set: { goal.note = $0 }),
+                                          prompt: Text(L10n.s("Was kam dazwischen?", "What got in the way?")))
+                                    .textFieldStyle(.plain)
+                                    .font(.callout)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Color.primary.opacity(0.07)))
                             }
                         }
                     }
