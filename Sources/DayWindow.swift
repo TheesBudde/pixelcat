@@ -38,7 +38,9 @@ final class DayWindow: NSObject, NSWindowDelegate {
             window.isReleasedWhenClosed = false
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.isMovableByWindowBackground = true
+            // Nicht am Hintergrund verschiebbar: Sonst zieht man beim Einplanen das Fenster statt der To-dos
+            // (verschieben geht weiter an der oberen Kante)
+            window.isMovableByWindowBackground = false
             window.delegate = self
             self.window = window
             coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
