@@ -134,8 +134,6 @@ func countdownText(until end: Date, from now: Date) -> String {
 /// Selbst gestellter Timer: Die Katze schläft, bis er abläuft.
 struct CatTimer {
     var ends: Date
-    /// Läuft gerade eine Pause (Pausen-Erinnerung), während der Timer weiterzählt?
-    var breakEnds: Date?
     /// Abgelaufen – die Katze wartet in der Mitte, bis man sie streichelt oder anklickt
     var finished = false
 }
@@ -694,12 +692,12 @@ final class CatController {
     }
 
     func stopTimer() {
-        if timer?.breakEnds != nil { bubble?.pop() }
         if timer?.finished == true {
             brain.acknowledge() // wie Streicheln
         }
         timer = nil
-        brain.mode = .normal
+        // Eine laufende Pause geht weiter, nur eben ohne Timer
+        brain.mode = breakEnds != nil ? .focusBreak : .normal
         updateStatusText()
     }
 
@@ -707,35 +705,36 @@ final class CatController {
     private func updateTimer(now: Date) {
         guard var timer, !timer.finished else { return }
         if now >= timer.ends {
-            // Abgelaufen – auch mitten in einer Pause: Sie (bleibt) wach, kommt in die Mitte
-            // und wartet dort, bis man sie streichelt oder anklickt.
+            // Abgelaufen – auch mitten in einer Pause oder Pausenfrage: Die Pause ist damit vorbei. Sie (bleibt)
+            // wach, kommt in die Mitte und wartet dort, bis man sie streichelt oder anklickt.
+            if breakQuestionUntil != nil {
+                breakQuestionUntil = nil
+                popQuestion()
+            }
+            if breakEnds != nil {
+                breakEnds = nil
+                stopGuided()
+            }
             timer.finished = true
-            timer.breakEnds = nil
             self.timer = timer
             brain.mode = .normal
             pendingMeow = (.breakStarts, now)
             brain.callToCenter(untilAcknowledged: true)
             scheduleReminder() // gilt als Pause; die nächste Erinnerung zählt neu
+            updateStatusText(force: true)
             return
         }
-        if let breakEnds = timer.breakEnds, now >= breakEnds {
-            // Pause vorbei, der Timer läuft weiter: wieder schlafen bzw. hinaus
-            timer.breakEnds = nil
-            brain.mode = .focus
-        }
-        self.timer = timer
     }
 
-    /// Pausen-Erinnerung, während ein Timer läuft: eine Pause, der Timer zählt weiter.
-    private func takeBreakDuringTimer(now: Date) {
-        guard var timer, timer.breakEnds == nil else { return }
-        timer.breakEnds = now.addingTimeInterval(breakLength)
-        self.timer = timer
-        brain.mode = .focusBreak
-        pendingMeow = (.reminder, now)
-        brain.callToCenter()
-        showBubble(until: now.addingTimeInterval(breakLength))
+    /// Wohin sie nach Pausenfrage oder Pause zurückkehrt: Läuft ein Timer, schläft sie weiter, sonst wie gewohnt
+    private var restingMode: CatBrain.Mode { timer.map { !$0.finished } == true ? .focus : .normal }
+
+    /// Frage weg, keine Pause: Läuft ein Timer, schläft sie wieder ein (bzw. geht hinaus)
+    private func backToRest() {
+        guard brain.mode == .focusBreak, breakEnds == nil, pomodoro == nil else { return }
+        brain.mode = restingMode
     }
+
 
     // MARK: Knäuel ziehen und werfen
 
@@ -892,15 +891,15 @@ final class CatController {
         return activity.activeSeconds >= snooze.minutes(base: activityMinutes) * 60
     }
 
-    /// Pausen-Erinnerung: zur Mitte, strecken, Blase „Pause“ – während eines Timers als Pause im Timer.
+    /// Pausen-Erinnerung: Sie kommt in die Mitte und fragt mit Daumen – auch während eines Timers (dann wacht sie
+    /// dafür auf, und der Timer zählt weiter).
     private func remindToTakeBreak(now: Date) {
-        if let timer {
-            // Wartet sie schon auf Streicheln, ist ohnehin Pause
-            if !timer.finished { takeBreakDuringTimer(now: now) }
+        if timer?.finished == true {
+            // Abgelaufen, sie wartet ohnehin auf Streicheln: das ist schon Pause
             scheduleReminder()
             return
         }
-        guard breakQuestionUntil == nil, breakEnds == nil, brain.mode == .normal else { return }
+        guard breakQuestionUntil == nil, breakEnds == nil, brain.mode == restingMode else { return }
         // Niemand am Rechner: Das ist schon eine Pause. Keine Frage, nichts gezählt, danach beginnt die Zeit neu
         if Self.secondsSinceInput >= 300 {
             snooze.rested()
@@ -912,7 +911,8 @@ final class CatController {
             if !breakByActivity { nextReminder = now.addingTimeInterval(60) }
             return
         }
-        // Sie kommt in die Mitte und fragt: Pause? Daumen hoch oder runter
+        // Sie kommt in die Mitte und fragt: Pause? Daumen hoch oder runter (im Timer wacht sie dafür auf)
+        if timer != nil { brain.mode = .focusBreak }
         pendingMeow = (.reminder, now)
         brain.callToCenter(visitLength: Self.breakQuestionTimeout + 30)
         let until = now.addingTimeInterval(Self.breakQuestionTimeout)
@@ -940,6 +940,7 @@ final class CatController {
         if breakQuestionUntil != nil {
             breakQuestionUntil = nil
             brain.declineBreak()
+            backToRest()
             if breakReminders, !breakByActivity { nextReminder = now.addingTimeInterval(5 * 60) }
         }
         if dayQuestion != nil {
@@ -981,14 +982,6 @@ final class CatController {
             updatePomodoro(now: now)
             return true
         }
-        if var timer, timer.breakEnds != nil, !timer.finished {
-            // Pause im Timer vorbei: Sie schläft weiter, der Timer läuft
-            timer.breakEnds = now
-            self.timer = timer
-            bubble?.pop()
-            updateTimer(now: now)
-            return true
-        }
         if let kind = activeErrand?.errand.kind {
             if kind == .bird {
                 bird?.leave() // fliegt davon, danach geht sie wie gewohnt zurück
@@ -1025,6 +1018,7 @@ final class CatController {
             // Später: zurück zum Gewohnten; die nächste Erinnerung zählt neu (nach Aktivität früher)
             stats?.record { $0.breaksSkipped += 1 }
             brain.declineBreak()
+            backToRest()
             if breakByActivity { snooze.snoozed() }
             scheduleReminder()
         }
@@ -1046,7 +1040,7 @@ final class CatController {
 
     /// Menü „Pause machen“: jederzeit eine Pause, ohne zu fragen
     func startBreakNow() {
-        guard pomodoro == nil, timer == nil, breakEnds == nil else { return }
+        guard pomodoro == nil, timer?.finished != true, breakEnds == nil else { return }
         if breakQuestionUntil != nil {
             answerBreak(true, now: Date()) // die offene Frage gleich mit beantworten
             return
@@ -1067,6 +1061,7 @@ final class CatController {
                 snooze.rested()
                 stats?.record { $0.breaksTaken += 1 }
                 brain.declineBreak()
+                backToRest()
                 scheduleReminder()
             } else {
                 answerBreak(false, now: now) // weitergearbeitet: wie Daumen runter
@@ -1076,7 +1071,7 @@ final class CatController {
         if let ends = breakEnds, now >= ends {
             breakEnds = nil
             stopGuided()
-            brain.mode = .normal
+            brain.mode = restingMode // läuft ein Timer, schläft sie weiter
             meow(.backToWork)
             scheduleReminder()
             updateStatusText(force: true)
@@ -1429,9 +1424,10 @@ final class CatController {
     }
 
     private func updateStatusText(force: Bool = false) {
-        let text = pomodoro?.label(at: Date())
-            ?? timer.map { $0.finished ? "0:00" : countdownText(until: $0.ends, from: Date()) }
-            ?? breakEnds.map { L10n.s("Pause", "Break") + " " + countdownText(until: $0, from: Date()) }
+        // Pause und Timer nebeneinander, z. B. „Pause 4:12 · 18:30“
+        let parts = [breakEnds.map { L10n.s("Pause", "Break") + " " + countdownText(until: $0, from: Date()) },
+                     timer.map { $0.finished ? "0:00" : countdownText(until: $0.ends, from: Date()) }].compactMap { $0 }
+        let text = pomodoro?.label(at: Date()) ?? (parts.isEmpty ? nil : parts.joined(separator: " · "))
         if text != statusText || force {
             statusText = text
             onStatusChange?(text)

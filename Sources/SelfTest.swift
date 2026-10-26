@@ -313,6 +313,19 @@ final class SelfTest {
         check("Klick: Pause beendet", cat.breakEnds == nil)
         await pause(3)
 
+        section("Pause während eines Timers")
+        cat.startTimer(minutes: 40.0 / 60)
+        await pause(3)
+        cat.askForBreakNow()
+        await waitUntil("auch im Timer: Blase „Pause?“ mit Daumen", 30) { self.bubbleAboveCat($0) }
+        cat.answerBreak(true, now: Date())
+        check("Daumen hoch: Pause läuft, Timer zählt weiter", cat.breakEnds != nil && cat.timer?.finished == false)
+        await waitUntil("Timer läuft ab", 45) { _ in cat.timer?.finished == true }
+        check("der abgelaufene Timer unterbricht die Pause", cat.breakEnds == nil)
+        await pause(4)
+        cat.stopTimer()
+        await pause(3)
+
         section("Ruhemodus")
         cat.silent = true
         await waitUntil("geht weg (Körbchen oder zur Seite hinaus)", 90) { $0.isAway }

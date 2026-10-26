@@ -51,7 +51,9 @@ of your tasks and call it a day. She never gets in the way and hides during vide
   she fills the break with exercises, just like a guided break.
 - **Take a break:** Any time from the menu, without waiting for a reminder.
 - **Timer:** Set your own time (5 to 60 minutes or a custom value like `25` or `1:30`). She sleeps until it runs
-  out, then walks to the middle of the screen, meows and asks for attention until you pet or click her.
+  out, then walks to the middle of the screen, meows and asks for attention until you pet or click her. Breaks work
+  the same during a timer: she wakes up and asks, the timer keeps counting, and the menu bar shows both
+  (“Break 4:12 · 18:30”). If the timer runs out during a break, the break ends.
 - **Break reminder:** Every 45 to 55 minutes, or **by activity**: Pixelcat then only counts the time you type,
   click or move the mouse. Five minutes away count as a break and the count starts over. Pixelcat only asks macOS
   how long ago the last input was. No keys are read and no permission is needed.

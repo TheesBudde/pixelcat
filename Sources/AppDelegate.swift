@@ -318,18 +318,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             info = pomodoro.stage == .focus
                 ? t("Fokus: noch \(minutes) Min. Die Katze schläft.", "Focus: \(minutes) min left. The cat is asleep.")
                 : t("Pause: noch \(minutes) Min.", "Break: \(minutes) min left")
-        } else if let breakEnds = cat.breakEnds {
-            let minutes = minutesLeft(breakEnds)
-            info = t("Pause: noch \(minutes) Min. Die Katze bleibt bei dir.", "Break: \(minutes) min left. The cat stays with you.")
         } else if let timer = cat.timer {
             let minutes = minutesLeft(timer.ends)
             if timer.finished {
                 info = t("Zeit um. Streichle oder klick die Katze.", "Time's up. Pet or click the cat.")
+            } else if let breakEnds = cat.breakEnds {
+                let rest = minutesLeft(breakEnds)
+                info = t("Pause: noch \(rest) Min. Timer: noch \(minutes) Min.", "Break: \(rest) min left. Timer: \(minutes) min left.")
             } else {
-                info = timer.breakEnds == nil
-                    ? t("Noch \(minutes) Min. Die Katze schläft.", "\(minutes) min left. The cat is asleep.")
-                    : t("Noch \(minutes) Min. Gerade Pause.", "\(minutes) min left. On a break.")
+                info = t("Noch \(minutes) Min. Die Katze schläft.", "\(minutes) min left. The cat is asleep.")
             }
+        } else if let breakEnds = cat.breakEnds {
+            let minutes = minutesLeft(breakEnds)
+            info = t("Pause: noch \(minutes) Min. Die Katze bleibt bei dir.", "Break: \(minutes) min left. The cat stays with you.")
         }
         if let reason = cat.hiddenBecause {
             let hidden = t("Versteckt: \(reason.title)", "Hidden: \(reason.title)")
@@ -346,7 +347,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let onBreak = cat.breakEnds != nil
         breakNowItem.title = onBreak ? t("Pause beenden", "End break") : t("Pause machen", "Take a break")
         breakNowItem.image = Self.symbol(onBreak ? "play.circle" : "pause.circle")
-        breakNowItem.isEnabled = cat.pomodoro == nil && cat.timer == nil
+        breakNowItem.isEnabled = cat.pomodoro == nil && cat.timer?.finished != true
         taskItem.state = settings.taskReminders ? .on : .off
         taskOnItem.state = settings.taskReminders ? .on : .off
         taskCallsItem.state = settings.tasksDuringCalls ? .on : .off
