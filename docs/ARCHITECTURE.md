@@ -121,14 +121,26 @@ now and then and breathes while asleep.
 
 ## The tick loop
 
-`CatController` runs a timer: 30 frames per second while something moves, 8 when she rests, 2 when she is away.
-Each tick it
+`CatController` runs a timer that wakes up as rarely as possible:
+
+| Situation | Frames per second |
+|---|---|
+| She moves, plays, is petted, or the bird is out | 30 |
+| She rests (sits, stands, lies awake) | 8 |
+| She sleeps | 4 |
+| She is away (roaming or in her bed) | 2 |
+
+The pointer only counts as a reason to speed up while it actually moves near her. Each tick it
 
 1. reads the pointer position (petting is the pointer moving over visible cat pixels without a button pressed),
-2. reads the window list (`CGWindowListCopyWindowInfo`, no titles, no permission) to find perches for climbing,
-3. checks calls, Focus and activity,
+2. reads the window list (`CGWindowListCopyWindowInfo`, no titles, no permission) for full screen and perches, once
+   per tick at most and only every second or two while she rests,
+3. checks calls, Focus and activity every two seconds,
 4. collects due reminders and starts one when the cat is free,
-5. advances `CatBrain`, moves the panel and redraws.
+5. advances `CatBrain`, moves her panel and the props (only when their position changes) and redraws when her
+   picture changes.
+
+Closed windows (settings, tasks, setup) drop their SwiftUI content, so no animation keeps running in the background.
 
 Clicks only hit visible cat pixels (`hitTest`). The transparent area around her lets clicks through.
 

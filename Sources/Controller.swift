@@ -100,7 +100,9 @@ final class PropWindow {
     }
 
     func place(centerX: CGFloat, bottom: CGFloat) {
-        panel.setFrameOrigin(NSPoint(x: (centerX - panel.frame.width / 2).rounded(), y: bottom.rounded()))
+        let origin = NSPoint(x: (centerX - panel.frame.width / 2).rounded(), y: bottom.rounded())
+        // Ein Fenster zu verschieben kostet den Fensterserver Arbeit – nur wenn es sich wirklich bewegt
+        if panel.frame.origin != origin { panel.setFrameOrigin(origin) }
     }
 }
 
@@ -922,6 +924,15 @@ final class CatController {
     /// ohne die eigenen und ohne die Vorschaubilder vom Stage Manager. Die meldet macOS als
     /// winzige Fenster der jeweiligen App; zu jedem gibt es ein gleich großes „WindowManager“-Fenster.
     private func visibleWindows() -> [(id: Int, rect: CGRect)] {
+        // Innerhalb eines Takts nur einmal fragen (Vollbild und Kletterplätze teilen sich die Liste)
+        if let cache = windowListCache, cache.time == lastTick { return cache.windows }
+        let windows = readVisibleWindows()
+        windowListCache = (lastTick, windows)
+        return windows
+    }
+    private var windowListCache: (time: CFTimeInterval, windows: [(id: Int, rect: CGRect)])?
+
+    private func readVisibleWindows() -> [(id: Int, rect: CGRect)] {
         guard let primary = primaryScreen,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                     kCGNullWindowID) as? [[String: Any]]
@@ -1516,15 +1527,21 @@ final class CatController {
     // MARK: Takt
 
     /// Wie oft der Takt läuft: flüssig bei Bewegung, sparsam in Ruhe, fast gar nicht, wenn sie weg ist.
+    /// So selten wie möglich aufwachen: flüssig nur, wenn sich etwas bewegt.
     private func adjustTickRate() {
-        let mouse = NSEvent.mouseLocation
-        let mouseNearCat = panel.isVisible && panel.frame.insetBy(dx: -100, dy: -100).contains(mouse)
+        // Die Maus zählt nur, wenn sie sich gerade bei der Katze bewegt (zum Streicheln)
+        let mouseNearCat = pointerIdle < 1 && panel.isVisible
+            && panel.frame.insetBy(dx: -100, dy: -100).contains(NSEvent.mouseLocation)
         let interval: TimeInterval
-        if !isVisible || brain.isAway {
+        if bird != nil {
+            interval = 1.0 / 30 // der Vogel fliegt flüssig, auch während sie noch im Korb liegt
+        } else if !isVisible || brain.isAway {
             interval = 0.5
         } else if brain.needsSmoothMotion || ball != nil || mouseNearCat || brain.isBeingPetted
                     || bubble?.isPopping == true || (lookoutWindow != nil && (lookoutAppear < 1 || lookoutLeaving)) {
             interval = 1.0 / 30
+        } else if brain.phase == .sleeping {
+            interval = 1.0 / 4 // im Schlaf nur Atmen und Schwanzspitze
         } else {
             interval = 1.0 / 8
         }
@@ -1555,9 +1572,11 @@ final class CatController {
         if basketInDock, brain.isAway, let dock = dockScreen, screen?.displayID != dock.displayID {
             screenID = dock.displayID == primaryScreen?.displayID ? nil : dock.displayID
         }
+        // Die Fensterliste ist der teuerste Blick auf den Bildschirm: in Ruhe seltener
+        let calm = brain.isAway || !brain.needsSmoothMotion
         fullscreenRefresh -= dt
         if fullscreenRefresh <= 0 {
-            fullscreenRefresh = 0.5
+            fullscreenRefresh = brain.isAway ? 2 : calm ? 1 : 0.5
             isFullscreen = detectFullscreen()
         }
         basketRefresh -= dt
@@ -1569,7 +1588,8 @@ final class CatController {
         brain.dockY = ground
         perchRefresh -= dt
         if perchRefresh <= 0, brain.climbingEnabled || brain.isOnWindow {
-            perchRefresh = 0.2
+            // Oben auf einem Fenster oder beim Klettern genau verfolgen, unten auf dem Dock reicht seltener
+            perchRefresh = brain.isOnWindow || !calm ? 0.2 : 1
             brain.setPerches(findPerches())
         }
         sensorRefresh -= dt
@@ -1605,7 +1625,13 @@ final class CatController {
         }
         if let bird, let frame = screen?.frame {
             bird.update(dt: dt, minX: frame.minX, maxX: frame.maxX, ground: ground, top: frame.maxY, unit: scale / 3)
-            if bird.isGone { removeBird() }
+            if bird.isGone {
+                removeBird()
+            } else if let birdWindow {
+                // Auch während sie noch im Korb liegt oder hereinkommt
+                birdWindow.view.sprite = BirdArt.frame(bird)
+                birdWindow.place(centerX: bird.x, bottom: bird.y)
+            }
         }
         if let bowl, bowl.food <= 0, brain.phase != .eating, brain.phase != .drinking {
             bowl.emptyFor += dt
@@ -1640,7 +1666,7 @@ final class CatController {
         if panel.level != level { panel.level = level }
         let half = CGFloat(Layout.canvasWidth) / 2
         let origin = NSPoint(x: pixelRound(brain.x + half * scale - half * drawScale), y: pixelRound(brain.y))
-        panel.setFrameOrigin(origin)
+        if panel.frame.origin != origin { panel.setFrameOrigin(origin) }
         // Im Körbchen: dessen vorderen Rand vor die Katze legen – genau wie im Dock-Symbol
         var front: CGPoint?
         if brain.isAboveDock, brain.basketShrink >= 1, let basketX = brain.basketX, let floor = brain.basketFloorY {
@@ -1657,10 +1683,6 @@ final class CatController {
         if let ball, let ballWindow {
             ballWindow.view.sprite = Int(ball.rolled / (3 * scale)) % 2 == 0 ? Frames.yarnA : Frames.yarnB
             ballWindow.place(centerX: ball.x, bottom: ground + ball.y)
-        }
-        if let bird, let birdWindow {
-            birdWindow.view.sprite = BirdArt.frame(bird)
-            birdWindow.place(centerX: bird.x, bottom: bird.y)
         }
     }
 }

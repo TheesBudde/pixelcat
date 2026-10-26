@@ -231,7 +231,7 @@ final class AppSettings: ObservableObject {
 // MARK: - Fenster
 
 @MainActor
-final class SettingsWindow {
+final class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
     private let focus: FocusMonitor
@@ -240,6 +240,11 @@ final class SettingsWindow {
     init(settings: AppSettings, focus: FocusMonitor) {
         self.settings = settings
         self.focus = focus
+    }
+
+    /// Geschlossen: Inhalt verwerfen, damit keine Animation im Verborgenen weiterläuft
+    func windowWillClose(_ notification: Notification) {
+        window?.contentView = NSView()
     }
 
     func show() {
@@ -251,11 +256,14 @@ final class SettingsWindow {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.minSize = NSSize(width: 480, height: 400)
-            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, focus: focus))
+            window.delegate = self
             window.center()
             self.window = window
             // Hell oder dunkel je nach Fell
             coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
+        }
+        if !(window?.contentView is NSHostingView<SettingsView>) {
+            window?.contentView = NSHostingView(rootView: SettingsView(settings: settings, focus: focus))
         }
         window?.title = L10n.s("Pixelcat Einstellungen", "Pixelcat Settings")
         focus.refresh()

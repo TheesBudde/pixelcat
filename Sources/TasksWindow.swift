@@ -5,13 +5,18 @@ import SwiftUI
 /// Eigenes Fenster für die Aufgaben: eintragen, umbenennen, entfernen und für jede einstellen,
 /// wie oft sie ungefähr daran erinnert.
 @MainActor
-final class TasksWindow {
+final class TasksWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
     private var coatWatch: AnyCancellable?
 
     init(settings: AppSettings) {
         self.settings = settings
+    }
+
+    /// Geschlossen: Inhalt verwerfen, damit nichts im Verborgenen weiterläuft
+    func windowWillClose(_ notification: Notification) {
+        window?.contentView = NSView()
     }
 
     func show() {
@@ -22,10 +27,13 @@ final class TasksWindow {
             window.isReleasedWhenClosed = false
             window.titlebarAppearsTransparent = true
             window.minSize = NSSize(width: 480, height: 320)
-            window.contentView = NSHostingView(rootView: TasksView(settings: settings))
+            window.delegate = self
             window.center()
             self.window = window
             coatWatch = settings.$coat.sink { [weak window] coat in window?.appearance = coat.appearance }
+        }
+        if !(window?.contentView is NSHostingView<TasksView>) {
+            window?.contentView = NSHostingView(rootView: TasksView(settings: settings))
         }
         window?.title = L10n.s("Pixelcat Aufgaben", "Pixelcat Tasks")
         NSApp.activate(ignoringOtherApps: true)

@@ -49,6 +49,8 @@ final class OnboardingWindow: NSObject, NSWindowDelegate {
         settings.onboardingDone = true
         if !dropping { onClose?() }
         dropping = false
+        // Inhalt verwerfen: Die kleinen Animationen sollen nicht im Verborgenen weiterlaufen
+        window?.contentView = NSView()
     }
 
     /// „Fertig“: Die Katze springt heraus, das Fenster blendet aus und schließt sich.
