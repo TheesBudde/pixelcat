@@ -82,7 +82,12 @@ of your tasks and call it a day. She never gets in the way and hides during vide
 Optional (Settings › Workday). When your workday begins and you're at your Mac, the cat comes to the middle and asks
 “Start your day?” with a thumbs up and down. Thumbs down and she asks again after a few minutes (you choose how
 many). Thumbs up opens a short window to click through, one step per page: how are you feeling (1 to 10), write
-down your to-dos, put them in order (eat the frog: hardest first), and set up to three goals for the day.
+down your to-dos, **timebox** them, and set up to three goals for the day. Timeboxing shows your empty workday as a
+calendar: drag each to-do into the day (or click it to drop it into the next free hour), move it, and drag its bottom
+edge to make it longer or shorter. Snapping to quarter hours, rough is fine: your exact plan is best kept in your
+real calendar, this is just to see the shape of your day. A lunch break from 1 to 2 pm is already there and can be
+moved or removed. Mark your hardest task as the frog and put it early (eat the frog). You can only go on once every
+to-do has a time.
 
 At the end of the workday she asks “End your day?”. The review: how are you feeling now, check off what you got
 done, did you reach your goals (and if not, why: not enough time, interruptions, planned too big, other priorities,

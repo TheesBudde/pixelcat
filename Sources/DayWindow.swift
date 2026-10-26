@@ -33,7 +33,7 @@ final class DayWindow: NSObject, NSWindowDelegate {
         }
         shown = (kind, date)
         if window == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 660),
                                   styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.titlebarAppearsTransparent = true
@@ -78,26 +78,32 @@ struct DayStartView: View {
     let date: Date
     @State private var page: Int
 
-    init(store: StatsStore, settings: AppSettings, date: Date = Date(), page: Int = 0, onFinish: @escaping () -> Void) {
+    init(store: StatsStore, settings: AppSettings, date: Date = Date(), page: Int = 0, todos: [TodoItem] = [],
+         onFinish: @escaping () -> Void) {
         self.store = store
         self.settings = settings
         self.date = date
         self.onFinish = onFinish
         _page = State(initialValue: page)
+        _todos = State(initialValue: todos)
+        // Der Tag im Kalender: Arbeitszeit aus den Einstellungen, die Mittagspause voreingestellt
+        _planRange = State(initialValue: DayPlan.range(workdayStart: settings.workdayStart, workdayEnd: settings.quittingTime,
+                                                       blocks: [DayPlan.defaultLunch]))
     }
     @State private var forward = true
     @State private var mood: Int?
-    @State private var todos: [TodoItem] = []
+    @State private var todos: [TodoItem]
     @State private var newTodo = ""
     @State private var goals = ["", "", ""]
+    @State private var lunch: TimeBlock? = DayPlan.defaultLunch
+    @State private var planRange: ClosedRange<Int>
 
     private static let pages = 6
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
     var body: some View {
         DayFlow(coat: settings.coat, page: page, pages: Self.pages, forward: forward,
-                nextTitle: nextTitle, canGoNext: page != 1 || mood != nil,
-                back: { go(-1) }, next: next) {
+                nextTitle: nextTitle, canGoNext: canGoNext, back: { go(-1) }, next: next) {
             switch page {
             case 0:
                 DayPage(title: t("Guten Morgen!", "Good morning!"),
@@ -112,8 +118,8 @@ struct DayStartView: View {
                 }
             case 2:
                 DayPage(title: t("Was steht heute an?", "What's on today?"),
-                        text: t("Schreib erst alles auf, was du heute erledigen willst. Ordnen kommt gleich.",
-                                "First write down everything you want to get done today. Ordering comes next.")) {
+                        text: t("Schreib erst alles auf, was du heute erledigen willst. Einplanen kommt gleich.",
+                                "First write down everything you want to get done today. Planning comes next.")) {
                     VStack(spacing: 12) {
                         FrogTip(text: t("Eat the Frog: Das Schwerste zuerst, das Leichteste zum Schluss.",
                                         "Eat the frog: the hardest task first, the easiest last."))
@@ -121,10 +127,11 @@ struct DayStartView: View {
                     }
                 }
             case 3:
-                DayPage(title: t("Bring sie in eine Reihenfolge", "Put them in order"),
-                        text: t("Ganz oben steht dein Frosch, die schwerste Aufgabe. Danach wird es leichter.",
-                                "Your frog goes on top, the hardest task. Then it gets easier.")) {
-                    TodoOrder(todos: $todos)
+                DayPage(title: t("Wann machst du was?", "When will you do what?"),
+                        text: t("Zieh deine To-dos in den Tag und zieh sie unten länger oder kürzer. Grob reicht: Den genauen Plan hast du am besten in deinem Kalender.",
+                                "Drag your to-dos into the day and drag their bottom edge to resize. Rough is fine: your exact plan is best kept in your calendar."),
+                        width: 640) {
+                    TimeboxPlanner(todos: $todos, lunch: $lunch, range: planRange)
                 }
             case 4:
                 DayPage(title: t("Was willst du heute erreichen?", "What do you want to achieve today?"),
@@ -149,8 +156,21 @@ struct DayStartView: View {
         }
     }
 
+    /// Weiter erst, wenn die Stimmung gewählt bzw. jedes To-do im Tag liegt
+    private var canGoNext: Bool {
+        switch page {
+        case 1: return mood != nil
+        case 3: return todos.allSatisfy { $0.start != nil }
+        default: return true
+        }
+    }
+
     private var doneText: String {
-        if let frog = todos.first {
+        if let frog = todos.first(where: { $0.id == todos.frogID }) {
+            if let start = frog.start {
+                return t("Um \(TaskItem.timeText(start)) wartet dein Frosch: „\(frog.text)“. Du schaffst das!",
+                         "At \(TaskItem.timeText(start)) your frog is waiting: “\(frog.text)”. You've got this!")
+            }
             return t("Fang mit deinem Frosch an: „\(frog.text)“. Du schaffst das!",
                      "Start with your frog: “\(frog.text)”. You've got this!")
         }
@@ -167,15 +187,21 @@ struct DayStartView: View {
             todos.append(TodoItem(text: newTodo.trimmingCharacters(in: .whitespaces)))
             newTodo = ""
         }
+        // Zum Einplanen: Ist noch kein Frosch gewählt, ist es erst einmal die erste Aufgabe
+        if page == 2, todos.allSatisfy({ $0.frog == nil }), !todos.isEmpty {
+            for index in todos.indices { todos[index].frog = index == 0 }
+        }
         guard page == Self.pages - 1 else { return go(1) }
         let goals = goals.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.map { GoalItem(text: $0) }
-        let todos = todos
+        let todos = todos.byTime
         let mood = mood
+        let lunch = lunch
         store.updateJournal(for: date) { journal in
             journal.started = Date()
             journal.moodStart = mood
             journal.todos = todos
             journal.goals = goals
+            journal.lunch = lunch
         }
         onFinish()
     }
@@ -380,7 +406,7 @@ private struct DayFlow<Content: View>: View {
                 .padding(.bottom, 26)
             }
         }
-        .frame(minWidth: 640, maxWidth: .infinity, minHeight: 560, maxHeight: .infinity)
+        .frame(minWidth: 720, maxWidth: .infinity, minHeight: 660, maxHeight: .infinity)
         .ignoresSafeArea()
         .environment(\.colorScheme, coat.colorScheme)
     }
@@ -390,6 +416,7 @@ private struct DayFlow<Content: View>: View {
 private struct DayPage<Content: View>: View {
     let title: String
     let text: String
+    var width: CGFloat = 520
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -402,12 +429,12 @@ private struct DayPage<Content: View>: View {
                 .font(.system(size: 15, design: .rounded))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 460)
+                .frame(maxWidth: max(460, width - 60))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
             content
                 .padding(.top, 24)
-                .frame(maxWidth: 520)
+                .frame(maxWidth: width)
             Spacer(minLength: 16)
         }
         .padding(.horizontal, 40)
@@ -558,49 +585,6 @@ private struct TodoEntry: View {
     }
 }
 
-/// To-dos ordnen: Pfeile nach oben und unten, der erste ist der Frosch
-private struct TodoOrder: View {
-    @Binding var todos: [TodoItem]
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 6) {
-                if todos.isEmpty {
-                    Text(L10n.s("Keine To-dos. Du kannst auch einfach weiter.", "No to-dos. You can just go on."))
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(Array(todos.enumerated()), id: \.element.id) { index, todo in
-                    HStack(spacing: 10) {
-                        Text("\(index + 1).").font(.system(.body, design: .rounded).monospacedDigit()).foregroundStyle(.secondary)
-                        if index == 0 {
-                            PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 2)
-                        }
-                        Text(todo.text)
-                        Spacer()
-                        Button { move(index, by: -1) } label: { Image(systemName: "chevron.up") }
-                            .buttonStyle(.borderless)
-                            .disabled(index == 0)
-                        Button { move(index, by: 1) } label: { Image(systemName: "chevron.down") }
-                            .buttonStyle(.borderless)
-                            .disabled(index == todos.count - 1)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: 10)
-                        .fill(index == 0 ? Color.green.opacity(0.12) : Color.primary.opacity(0.05)))
-                }
-            }
-        }
-        .frame(maxHeight: 230)
-    }
-
-    private func move(_ index: Int, by delta: Int) {
-        let target = index + delta
-        guard todos.indices.contains(target) else { return }
-        withAnimation(.easeInOut(duration: 0.2)) { todos.swapAt(index, target) }
-    }
-}
-
 /// Drei Ziele
 private struct GoalEntry: View {
     @Binding var goals: [String]
@@ -634,16 +618,22 @@ private struct TodoCheck: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 6) {
+                let frog = todos.frogID
                 ForEach($todos) { $todo in
                     Button { todo.done.toggle() } label: {
                         HStack(spacing: 10) {
                             Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 18))
                                 .foregroundStyle(todo.done ? Color.green : Color.secondary)
+                            if todo.id == frog { PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 2) }
                             Text(todo.text)
                                 .strikethrough(todo.done)
                                 .foregroundStyle(todo.done ? .secondary : .primary)
                             Spacer()
+                            // Wann es geplant war
+                            if let block = todo.block {
+                                Text(DayPlan.timeText(block)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

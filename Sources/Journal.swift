@@ -1,10 +1,15 @@
 import Foundation
 
-/// Ein To-do des Tages (in der Reihenfolge, die man morgens festlegt)
+/// Ein To-do des Tages, morgens grob in den Tag gelegt (Timeboxing)
 struct TodoItem: Codable, Identifiable, Equatable {
     var id = UUID()
     var text: String
     var done = false
+    /// Geplante Zeit (Minuten nach Mitternacht) und Länge – nil = noch nicht eingeplant
+    var start: Int?
+    var minutes: Int?
+    /// Der Frosch: die schwerste Aufgabe (nil bei älteren Tagen, da war es die erste)
+    var frog: Bool?
 }
 
 /// Warum ein Ziel offen blieb
@@ -70,8 +75,27 @@ struct DayJournal: Codable, Equatable {
     var potential: Int?
     /// „Was kannst du morgen besser machen?“ – erscheint beim nächsten Tagesstart
     var improvement: String?
+    /// Die eingeplante Mittagspause (nil = keine)
+    var lunch: TimeBlock?
 
     var isEmpty: Bool { self == DayJournal() }
+}
+
+/// Ältere Tagebücher kennen noch nicht alle Felder – was fehlt, ist leer
+extension DayJournal {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        started = try values.decodeIfPresent(Date.self, forKey: .started)
+        ended = try values.decodeIfPresent(Date.self, forKey: .ended)
+        moodStart = try values.decodeIfPresent(Int.self, forKey: .moodStart)
+        moodEnd = try values.decodeIfPresent(Int.self, forKey: .moodEnd)
+        todos = try values.decodeIfPresent([TodoItem].self, forKey: .todos) ?? []
+        goals = try values.decodeIfPresent([GoalItem].self, forKey: .goals) ?? []
+        potential = try values.decodeIfPresent(Int.self, forKey: .potential)
+        improvement = try values.decodeIfPresent(String.self, forKey: .improvement)
+        lunch = try values.decodeIfPresent(TimeBlock.self, forKey: .lunch)
+    }
 }
 
 /// Wann die Katze nach dem Tag fragt: ab Beginn des Arbeitstags „Tag starten?“, ab Feierabend „Tag beenden?“ –

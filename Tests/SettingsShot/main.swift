@@ -115,10 +115,20 @@ MainActor.assumeIsolated {
     }
     settings.coat = .black
     // Tag starten und beenden: alle Seiten
+    // Timeboxing: zwei eingeplant (Frosch früh), zwei noch in der Liste
+    let planned = [TodoItem(text: "Präsentation fertig machen", start: 9 * 60, minutes: 120, frog: true),
+                   TodoItem(text: "Mails beantworten", start: 11 * 60 + 15, minutes: 45, frog: false),
+                   TodoItem(text: "Mama anrufen", frog: false), TodoItem(text: "Rechnung zahlen", frog: false)]
+    shoot(DayStartView(store: stats, settings: settings, page: 3, todos: planned, onFinish: {}), width: 720, height: 660,
+          to: base.replacingOccurrences(of: "einstellungen", with: "timeboxing"), appearance: .darkAqua)
+    settings.coat = .orange
+    shoot(DayStartView(store: stats, settings: settings, page: 3, todos: planned, onFinish: {}), width: 720, height: 660,
+          to: base.replacingOccurrences(of: "einstellungen", with: "timeboxing-hell"), appearance: .aqua)
+    settings.coat = .black
     for page in 0..<7 {
-        shoot(DayStartView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,
+        shoot(DayStartView(store: stats, settings: settings, page: page, onFinish: {}), width: 720, height: 660,
               to: base.replacingOccurrences(of: "einstellungen", with: "tagesstart-\(page + 1)"), appearance: .darkAqua)
-        shoot(DayEndView(store: stats, settings: settings, page: page, onFinish: {}), width: 640, height: 560,
+        shoot(DayEndView(store: stats, settings: settings, page: page, onFinish: {}), width: 720, height: 660,
               to: base.replacingOccurrences(of: "einstellungen", with: "tagesende-\(page + 1)"), appearance: .darkAqua)
     }
 }

@@ -48,6 +48,7 @@ flowchart LR
 | `Reminders.swift` | `ErrandScheduler`, `TaskItem`, `OutfitTimes`, `ActivityTracker`. Pure logic, no windows |
 | `Basket.swift` | `BasketArt` (the plush bed), `BasketTileView` (Dock icon), `DockLocator` (where the bed sits) |
 | `Lookout.swift` | The eye break window: frame, sky, sun, hills and a drifting cloud |
+| `DayPlan.swift` | Timeboxing: time blocks in quarter hours, the visible day, first free gap, lanes for overlaps, and the drag and resize calendar |
 | `Journal.swift`, `DayWindow.swift` | Day journal (mood, to-dos, goals, reasons), when to ask (`DayRitual`), the summary over many days (`JournalSummary`) and the start and end windows |
 | `Stats.swift`, `StatsWindow.swift` | Day by day statistics (stored locally as JSON) and the statistics window with Swift Charts |
 | `Bird.swift` | The bird she chases while you're away: steering flight, swoops, dodging, flying off |

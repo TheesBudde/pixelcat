@@ -729,6 +729,44 @@ MainActor.assumeIsolated {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    print("\nTimeboxing")
+    do {
+        check("auf die Viertelstunde", DayPlan.snap(52) == 45 && DayPlan.snap(53) == 60 && DayPlan.snap(-3) == 0)
+        let day = DayPlan.range(workdayStart: 9 * 60, workdayEnd: 17 * 60 + 30, blocks: [DayPlan.defaultLunch])
+        check("der Tag im Kalender: volle Stunden um die Arbeitszeit", day == (9 * 60)...(18 * 60), "\(day)")
+        check("Feierabend vor Beginn: 9 bis 18 Uhr", DayPlan.range(workdayStart: 18 * 60, workdayEnd: 8 * 60, blocks: [])
+              == (9 * 60)...(18 * 60))
+        check("früher Termin erweitert den Tag",
+              DayPlan.range(workdayStart: 9 * 60, workdayEnd: 17 * 60, blocks: [TimeBlock(start: 7 * 60 + 30, minutes: 30)])
+                  .lowerBound == 7 * 60)
+        check("Block bleibt im Tag", DayPlan.clamp(TimeBlock(start: 17 * 60 + 30, minutes: 60), to: day)
+              == TimeBlock(start: 17 * 60, minutes: 60)
+              && DayPlan.clamp(TimeBlock(start: 8 * 60, minutes: 5), to: day) == TimeBlock(start: 9 * 60, minutes: 15))
+        let busy = [DayPlan.defaultLunch, TimeBlock(start: 9 * 60, minutes: 60)]
+        check("antippen: erste freie Stunde", DayPlan.firstFree(minutes: 60, among: busy, in: day)
+              == TimeBlock(start: 10 * 60, minutes: 60))
+        let morning = busy + [TimeBlock(start: 10 * 60, minutes: 180)]
+        check("um die Mittagspause herum", DayPlan.firstFree(minutes: 60, among: morning, in: day)
+              == TimeBlock(start: 14 * 60, minutes: 60))
+        let tight = [TimeBlock(start: 9 * 60, minutes: 525)] // bis 17:45
+        check("kaum Platz: kürzer", DayPlan.firstFree(minutes: 60, among: tight, in: day) == TimeBlock(start: 17 * 60 + 45, minutes: 15))
+        let a = UUID(), b = UUID(), c = UUID()
+        let lanes = DayPlan.lanes([(a, TimeBlock(start: 600, minutes: 60)), (b, TimeBlock(start: 630, minutes: 60)),
+                                   (c, TimeBlock(start: 720, minutes: 30))])
+        check("überlappende Blöcke nebeneinander", lanes[a]! == (0, 2) && lanes[b]! == (1, 2) && lanes[c]! == (0, 1))
+        var todos = [TodoItem(text: "Mails", start: 600), TodoItem(text: "Präsentation", start: 540, frog: true),
+                     TodoItem(text: "Rechnung")]
+        check("nach Uhrzeit, Ungeplantes zum Schluss", todos.byTime.map(\.text) == ["Präsentation", "Mails", "Rechnung"])
+        check("der markierte Frosch", todos.frogID == todos[1].id)
+        todos[1].frog = false
+        check("abgewählter Frosch bleibt abgewählt", todos.frogID == nil)
+        check("ältere Tage: der erste ist der Frosch", [TodoItem(text: "x"), TodoItem(text: "y")].frogID != nil)
+        let old = Data(#"{"todos":[{"id":"\#(UUID().uuidString)","text":"Alt","done":true}],"moodStart":6}"#.utf8)
+        let journal = try? JSONDecoder().decode(DayJournal.self, from: old)
+        check("ältere Tagebücher ohne Zeiten bleiben lesbar", journal?.todos.first?.text == "Alt"
+              && journal?.todos.first?.start == nil && journal?.lunch == nil)
+    }
+
     print("\nGeführte Pause")
     do {
         let five = GuidedBreak(length: 5 * 60)

@@ -461,6 +461,16 @@ struct StatsView: View {
         }
     }
 
+    /// To-dos und Mittagspause nach Uhrzeit (nicht eingeplante zum Schluss)
+    private func dayTimeline(_ journal: DayJournal) -> [(id: UUID, block: TimeBlock?, todo: TodoItem?)] {
+        var entries: [(id: UUID, block: TimeBlock?, todo: TodoItem?)] = journal.todos.byTime.map { ($0.id, $0.block, $0) }
+        if let lunch = journal.lunch {
+            let index = entries.firstIndex { ($0.block?.start ?? Int.max) > lunch.start } ?? entries.count
+            entries.insert((DayPlan.lunchID, lunch, nil), at: index)
+        }
+        return entries
+    }
+
     /// Das Tagebuch des Tages: Stimmung, To-dos, Ziele, ausgeschöpftes Potenzial
     private var dayJournalCard: some View {
         let journal = store.journal(for: day)
@@ -484,12 +494,23 @@ struct StatsView: View {
                             Text(t("To-dos (\(journal.todos.filter(\.done).count) von \(journal.todos.count))",
                                    "To-dos (\(journal.todos.filter(\.done).count) of \(journal.todos.count))"))
                                 .font(.callout.weight(.semibold))
-                            ForEach(Array(journal.todos.enumerated()), id: \.element.id) { index, todo in
+                            let frog = journal.todos.frogID
+                            ForEach(dayTimeline(journal), id: \.id) { entry in
                                 HStack(spacing: 8) {
-                                    Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(todo.done ? Color.green : Color.secondary)
-                                    if index == 0 { PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 2) }
-                                    Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
+                                    // Geplante Zeit vorn, damit man die Tagesstruktur sieht
+                                    Text(entry.block.map { TaskItem.timeText($0.start) } ?? "")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 44, alignment: .trailing)
+                                    if let todo = entry.todo {
+                                        Image(systemName: todo.done ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(todo.done ? Color.green : Color.secondary)
+                                        if todo.id == frog { PixelSprite(sprite: PixelArt.frog, colors: PixelArt.frogColors, scale: 2) }
+                                        Text(todo.text).strikethrough(todo.done).foregroundStyle(todo.done ? .secondary : .primary)
+                                    } else {
+                                        Image(systemName: "fork.knife").foregroundStyle(.orange)
+                                        Text(t("Mittagspause", "Lunch break")).foregroundStyle(.secondary)
+                                    }
                                 }
                                 .font(.callout)
                             }
