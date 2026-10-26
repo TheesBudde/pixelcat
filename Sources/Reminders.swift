@@ -1,9 +1,9 @@
 import Foundation
 
-/// Kleine Erinnerungen neben der Pause: trinken, aus dem Fenster schauen, an eine Aufgabe denken, Feierabend.
-/// Dazu der Vogel, den sie jagt, während niemand am Rechner ist.
+/// Kleine Erinnerungen neben der Pause: trinken, aus dem Fenster schauen, an eine Aufgabe denken, Feierabend,
+/// ein Motivationsspruch. Dazu der Vogel, den sie jagt, während niemand am Rechner ist.
 enum ErrandKind: Hashable, CaseIterable {
-    case drink, lookout, task, quittingTime, bird
+    case drink, lookout, task, quittingTime, bird, motivation
 }
 
 struct Errand: Equatable {
@@ -13,31 +13,45 @@ struct Errand: Equatable {
     var taskID: UUID?
 }
 
-/// Eine Aufgabe, an die sie erinnert – jede mit eigenem Abstand.
+/// Eine Aufgabe, an die sie einmal am Tag zu einer festen Uhrzeit erinnert.
 struct TaskItem: Equatable, Identifiable {
     var id = UUID()
     var text: String
-    /// Ungefähr alle so viele Minuten
-    var minutes: Int
+    /// Uhrzeit (Minuten nach Mitternacht)
+    var time: Int
 
-    /// Wählbare Abstände (Minuten)
-    static let intervals = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240]
-    static let defaultMinutes = 30
+    static let defaultTime = 10 * 60
 
     /// Zum Speichern in den Einstellungen
-    var dictionary: [String: Any] { ["id": id.uuidString, "text": text, "minutes": minutes] }
+    var dictionary: [String: Any] { ["id": id.uuidString, "text": text, "time": time] }
 
-    init(id: UUID = UUID(), text: String, minutes: Int) {
+    init(id: UUID = UUID(), text: String, time: Int) {
         self.id = id
         self.text = text
-        self.minutes = minutes
+        self.time = time
     }
 
+    /// Früher gab es statt der Uhrzeit einen Abstand („minutes“) – solche Aufgaben kommen um 10 Uhr
     init?(dictionary: [String: Any]) {
         guard let text = dictionary["text"] as? String else { return nil }
         self.init(id: (dictionary["id"] as? String).flatMap(UUID.init(uuidString:)) ?? UUID(),
-                  text: text, minutes: dictionary["minutes"] as? Int ?? Self.defaultMinutes)
+                  text: text, time: dictionary["time"] as? Int ?? Self.defaultTime)
     }
+
+    /// Die Uhrzeit, wie macOS sie schreibt (z. B. „14:30“ oder „2:30 PM“)
+    var timeText: String { Self.timeText(time) }
+
+    static func timeText(_ minutes: Int) -> String {
+        let date = Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
+        return timeFormatter.string(from: date)
+    }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 }
 
 /// Plant die kleinen Erinnerungen und reiht fällige hintereinander ein – es läuft immer nur eine,
@@ -50,9 +64,25 @@ final class ErrandScheduler {
     private(set) var queue: [Errand] = []
     private var nextDue: [ErrandKind: Date] = [:]
     private var intervals: [ErrandKind: Double] = [:]
-    /// Aufgaben (nur die mit Text) und wann jede wieder dran ist
+    /// Aufgaben (nur die mit Text), jede einmal am Tag zu ihrer Uhrzeit
     private var tasks: [TaskItem] = []
-    private var taskDue: [UUID: Date] = [:]
+    private var tasksEnabled = false
+    /// Der Termin, an den sie zuletzt erinnert hat (pro Aufgabe)
+    private var taskShown: [UUID: Date] = [:]
+    /// So lange danach holt sie eine verpasste Aufgabe noch nach (Mac im Ruhezustand oder gerade gestartet)
+    static let taskCatchUp: TimeInterval = 3 * 60 * 60
+
+    /// Motivation: morgens, gegen Feierabend und an langen Tagen einmal dazwischen
+    private var motivationEnabled = false
+    private var workdayEnd = 17 * 60 + 30
+    private var motivationWeekdaysOnly = false
+    private var motivationDay: Date?
+    private var motivationSlots: [Date] = []
+    private var lastMotivation: Date?
+    /// Mindestabstand zwischen zwei Sprüchen
+    static let motivationSpacing: TimeInterval = 4 * 60 * 60
+    /// War der Mac zur Zeit aus, kommt der Spruch bis so lange danach noch
+    static let motivationWindow: TimeInterval = 90 * 60
 
     /// Feierabend: Uhrzeit (Minuten nach Mitternacht) und ob nur Montag bis Freitag
     private var quittingTime: (minutes: Int, weekdaysOnly: Bool)?
@@ -77,29 +107,50 @@ final class ErrandScheduler {
         }
     }
 
-    /// Aufgaben übernehmen: Neue oder mit geändertem Abstand werden neu geplant, die anderen behalten ihren Termin.
+    /// Aufgaben übernehmen. Beim Start (`launch`) holt sie Verpasstes nach. Wird später eine Aufgabe neu angelegt
+    /// oder auf eine Uhrzeit gestellt, die heute schon vorbei ist, kommt sie erst morgen.
     /// Ausgeschaltet bleibt die Liste erhalten (für „Jetzt zeigen“), aber nichts wird fällig.
-    func configureTasks(_ items: [TaskItem], enabled: Bool, now: Date) {
+    func configureTasks(_ items: [TaskItem], enabled: Bool, now: Date, launch: Bool = false) {
         let old = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
         tasks = items.compactMap { item in
             var item = item
             item.text = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
             return item.text.isEmpty ? nil : item
         }
-        var due: [UUID: Date] = [:]
-        if enabled {
-            for task in tasks {
-                if let existing = taskDue[task.id], old[task.id]?.minutes == task.minutes {
-                    due[task.id] = existing
-                } else {
-                    due[task.id] = now.addingTimeInterval(spread(Double(task.minutes)) * 60)
-                }
+        tasksEnabled = enabled
+        if !launch {
+            for task in tasks where old[task.id]?.time != task.time {
+                taskShown[task.id] = lastOccurrence(of: task.time, upTo: now)
             }
         }
-        taskDue = due
-        // Was es nicht mehr gibt (oder ausgeschaltet ist), fliegt aus der Schlange – „Jetzt zeigen“ bleibt
+        // Was es nicht mehr gibt, fliegt aus der Schlange – „Jetzt zeigen“ bleibt
         let ids = Set(tasks.map(\.id))
         queue.removeAll { $0.kind == .task && !ids.contains($0.taskID ?? UUID()) }
+    }
+
+    /// Motivation ein- oder ausschalten. Der zweite Spruch des Tages richtet sich nach dem Feierabend.
+    func configureMotivation(enabled: Bool, workdayEnd: Int?, weekdaysOnly: Bool) {
+        motivationEnabled = enabled
+        let end = workdayEnd ?? 17 * 60 + 30
+        if end != self.workdayEnd || weekdaysOnly != motivationWeekdaysOnly {
+            self.workdayEnd = end
+            motivationWeekdaysOnly = weekdaysOnly
+            motivationDay = nil // Zeiten für heute neu bestimmen
+        }
+        if !enabled { queue.removeAll { $0.kind == .motivation } }
+    }
+
+    /// Die Zeiten eines Tages: morgens zwischen 9 und 10 Uhr, 30 bis 75 Minuten vor Feierabend und an langen
+    /// Tagen eine in der Mitte. Zwei Sprüche liegen immer mindestens 4 Stunden auseinander.
+    func motivationTimes(for day: Date) -> [Date] {
+        if motivationWeekdaysOnly, !isWorkday(day) { return [] }
+        let start = calendar.startOfDay(for: day)
+        let morning = 9 * 60 + 60 * random()
+        let evening = Double(workdayEnd) - (30 + 45 * random())
+        var minutes = [morning]
+        if evening - morning >= 8 * 60 { minutes.append((morning + evening) / 2) }
+        if evening - morning >= 4 * 60 { minutes.append(evening) }
+        return minutes.map { calendar.date(byAdding: .minute, value: Int($0), to: start) ?? start }
     }
 
     func configureQuittingTime(hour: Int, minute: Int, weekdaysOnly: Bool, enabled: Bool) {
@@ -113,10 +164,27 @@ final class ErrandScheduler {
             enqueue(kind)
             nextDue[kind] = now.addingTimeInterval(spread(intervals[kind] ?? 30) * 60)
         }
-        for task in tasks {
-            guard let due = taskDue[task.id], now >= due else { continue }
-            enqueue(task)
-            taskDue[task.id] = now.addingTimeInterval(spread(Double(task.minutes)) * 60)
+        if tasksEnabled {
+            for task in tasks {
+                let occurrence = lastOccurrence(of: task.time, upTo: now)
+                guard now.timeIntervalSince(occurrence) <= Self.taskCatchUp,
+                      (taskShown[task.id] ?? .distantPast) < occurrence else { continue }
+                taskShown[task.id] = occurrence
+                enqueue(task)
+            }
+        }
+        if motivationEnabled {
+            let today = calendar.startOfDay(for: now)
+            if motivationDay != today {
+                motivationDay = today
+                motivationSlots = motivationTimes(for: now)
+            }
+            for slot in motivationSlots where now >= slot && now.timeIntervalSince(slot) <= Self.motivationWindow {
+                if let lastMotivation, now.timeIntervalSince(lastMotivation) < Self.motivationSpacing { continue }
+                lastMotivation = now
+                enqueue(.motivation)
+            }
+            motivationSlots.removeAll { $0 <= now }
         }
         if let start = quittingCheckedUntil, quittingCrossing(after: start, upTo: now) != nil {
             enqueue(.quittingTime)
@@ -172,6 +240,15 @@ final class ErrandScheduler {
 
     private func spread(_ minutes: Double) -> Double {
         minutes * (1 - Self.jitter + 2 * Self.jitter * random())
+    }
+
+    /// Der letzte Termin zu dieser Uhrzeit: heute, wenn schon erreicht, sonst gestern
+    private func lastOccurrence(of minutes: Int, upTo now: Date) -> Date {
+        // Über den Kalender, damit es auch am Tag der Zeitumstellung stimmt
+        let today = calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: now)
+            ?? calendar.startOfDay(for: now)
+        if today <= now { return today }
+        return calendar.date(byAdding: .day, value: -1, to: today) ?? today
     }
 
     private func isWorkday(_ date: Date) -> Bool {

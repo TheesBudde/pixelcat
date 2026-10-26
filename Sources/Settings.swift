@@ -54,8 +54,11 @@ final class AppSettings: ObservableObject {
     @Published var morningOutfit: Bool { didSet { changed() } }
     @Published var morningEnd: Int { didSet { changed() } }
     @Published var taskReminders: Bool { didSet { changed() } }
-    /// Aufgaben, jede mit eigenem Abstand
+    /// Aufgaben, jede mit ihrer Uhrzeit
     @Published var taskItems: [TaskItem] { didSet { changed() } }
+    /// Motivation: eigene Sprüche, morgens und gegen Feierabend (leer = ihre eigenen)
+    @Published var motivationEnabled: Bool { didSet { changed() } }
+    @Published var motivationSayings: [String] { didSet { changed() } }
     /// An Aufgaben auch während Videocalls bzw. bei eingeschaltetem Mikrofon erinnern (nur die Blase)
     @Published var tasksDuringCalls: Bool { didSet { changed() } }
     /// Ist so lange niemand am Rechner, fliegt ein Vogel herum und sie jagt ihn
@@ -121,7 +124,7 @@ final class AppSettings: ObservableObject {
             "drinkReminders": false, "drinkInterval": 45, "eyeBreaks": false, "eyeInterval": 20,
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "tasksDuringCalls": false, "birdWhenAway": true, "birdMinutes": 10,
+            "taskReminders": false, "tasksDuringCalls": false, "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -160,9 +163,10 @@ final class AppSettings: ObservableObject {
             taskItems = stored.compactMap(TaskItem.init(dictionary:))
         } else {
             // Früher: nur Texte mit einem gemeinsamen Abstand
-            let minutes = defaults.object(forKey: "taskInterval") as? Int ?? TaskItem.defaultMinutes
-            taskItems = (defaults.stringArray(forKey: "taskItems") ?? []).map { TaskItem(text: $0, minutes: minutes) }
+            taskItems = (defaults.stringArray(forKey: "taskItems") ?? []).map { TaskItem(text: $0, time: TaskItem.defaultTime) }
         }
+        motivationEnabled = defaults.bool(forKey: "motivation")
+        motivationSayings = defaults.stringArray(forKey: "motivationSayings") ?? []
         tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
         birdWhenAway = defaults.bool(forKey: "birdWhenAway")
         birdMinutes = defaults.integer(forKey: "birdMinutes")
@@ -206,6 +210,7 @@ final class AppSettings: ObservableObject {
             "quittingWeekdaysOnly": quittingWeekdaysOnly,
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
+            "motivation": motivationEnabled, "motivationSayings": motivationSayings,
             "tasksDuringCalls": tasksDuringCalls, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
             "sounds": sounds, "purring": purring, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
@@ -279,6 +284,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var focus: FocusMonitor
+    @State private var newSaying = ""
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -295,6 +301,7 @@ struct SettingsView: View {
                 quittingSection
                 outfitSection
                 taskSection
+                motivationSection
                 birdSection
                 soundSection
                 considerateSection
@@ -481,18 +488,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Minuten nach Mitternacht als Datum für einen Zeitwähler (nur Stunde und Minute zählen)
-    private func clock(_ minutes: Binding<Int>) -> Binding<Date> {
-        Binding(
-            get: {
-                Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60,
-                                      second: 0, of: Date()) ?? Date()
-            },
-            set: { date in
-                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-                minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-            })
-    }
+    private func clock(_ minutes: Binding<Int>) -> Binding<Date> { clockBinding(minutes) }
 
     private var taskSection: some View {
         Section {
@@ -509,9 +505,68 @@ struct SettingsView: View {
     private var taskSummary: String {
         switch settings.taskItems.count {
         case 0: return t("Noch keine Aufgaben.", "No tasks yet.")
-        case 1: return t("1 Aufgabe mit eigenem Abstand.", "1 task with its own interval.")
-        case let count: return t("\(count) Aufgaben, jede mit eigenem Abstand.", "\(count) tasks, each with its own interval.")
+        case 1: return t("1 Aufgabe zu ihrer Uhrzeit.", "1 task at its time.")
+        case let count: return t("\(count) Aufgaben, jede zu ihrer Uhrzeit.", "\(count) tasks, each at its time.")
         }
+    }
+
+    private var motivationSection: some View {
+        Section {
+            Toggle(t("Motivieren", "Motivate me"), isOn: $settings.motivationEnabled)
+            hint(t("Morgens und gegen Feierabend denkt sie an einen deiner Sprüche. Höchstens alle 4 bis 5 Stunden und nie im Videocall.",
+                   "In the morning and towards the end of your workday she thinks of one of your sayings. At most every 4 to 5 hours and never during video calls."))
+            ForEach(Array(settings.motivationSayings.enumerated()), id: \.offset) { index, _ in
+                HStack(spacing: 10) {
+                    TextField("", text: sayingBinding(index))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        if settings.motivationSayings.indices.contains(index) { settings.motivationSayings.remove(at: index) }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(t("Entfernen", "Remove"))
+                }
+            }
+            HStack(spacing: 10) {
+                TextField("", text: $newSaying, prompt: Text(t("Neuer Spruch, z. B. „Du rockst das!“", "New saying, e.g. “You rock this!”")))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(addSaying)
+                    .onChange(of: newSaying) { value in
+                        if value.count > TasksView.maxLength { newSaying = String(value.prefix(TasksView.maxLength)) }
+                    }
+                Button(t("Hinzufügen", "Add"), action: addSaying)
+                    .disabled(newSaying.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            HStack {
+                hint(settings.motivationSayings.isEmpty
+                     ? t("Ohne eigene Sprüche nimmt sie ihre eigenen.", "Without sayings of your own she uses hers.")
+                     : t("Sie nimmt jedes Mal einen anderen.", "She picks a different one each time."))
+                Spacer()
+                previewButton(.motivation)
+            }
+        } header: {
+            SectionTitle(t("Motivation", "Motivation"), icon: "sparkles", color: .yellow)
+        }
+    }
+
+    private func addSaying() {
+        let saying = newSaying.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !saying.isEmpty else { return }
+        settings.motivationSayings.append(saying)
+        newSaying = ""
+    }
+
+    /// Ein Spruch zum Bearbeiten (sicher, auch wenn er gerade entfernt wird)
+    private func sayingBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { settings.motivationSayings.indices.contains(index) ? settings.motivationSayings[index] : "" },
+            set: { value in
+                guard settings.motivationSayings.indices.contains(index) else { return }
+                settings.motivationSayings[index] = String(value.prefix(TasksView.maxLength))
+            })
     }
 
     private var birdSection: some View {
@@ -534,8 +589,8 @@ struct SettingsView: View {
     private var soundSection: some View {
         Section {
             Toggle(t("Miauen", "Meow"), isOn: $settings.sounds)
-            hint(t("Leise, echte Katzenlaute bei Pomodoro, Timer, Pausen, Trinken, Augenpause und Feierabend. Nie im Videocall oder Fokus.",
-                   "Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks and the end of the day. Never in video calls or Focus."))
+            hint(t("Leise, echte Katzenlaute bei Pomodoro, Timer, Pausen, Trinken, Augenpause, Feierabend und Motivation. Nie im Videocall oder Fokus.",
+                   "Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, the end of the day and motivation. Never in video calls or Focus."))
             Toggle(t("Auch bei Aufgaben miauen", "Also meow for tasks"), isOn: $settings.meowForTasks)
                 .disabled(!settings.sounds)
             Toggle(t("Schnurren beim Streicheln", "Purr when petted"), isOn: $settings.purring)
@@ -640,6 +695,19 @@ struct SettingsView: View {
             }
         }
     }
+}
+
+/// Minuten nach Mitternacht als Datum für einen Zeitwähler (nur Stunde und Minute zählen)
+func clockBinding(_ minutes: Binding<Int>) -> Binding<Date> {
+    Binding(
+        get: {
+            Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60,
+                                  second: 0, of: Date()) ?? Date()
+        },
+        set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        })
 }
 
 /// Name der Katze: schlichter Text mit Stift, ohne Rahmen. Beim Bearbeiten wird die Fläche etwas kräftiger.

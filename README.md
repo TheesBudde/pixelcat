@@ -56,9 +56,13 @@ of your tasks and call it a day. She never gets in the way and hides during vide
   on the sill and gazes out for half a minute. Look into the distance with her.
 - **End of the workday:** At your chosen time (weekdays only if you like) she puts on a top hat and bow tie, walks
   to the middle and thinks “Off work”.
-- **Tasks:** Add short notes like “Call mom” in the tasks window and set for **each one** how often she thinks of
-  it, from every 5 minutes to every 4 hours. Optionally also during video calls: she stays hidden and only the
-  thought bubble appears at the Dock. Never while you share your screen.
+- **Tasks:** Add short notes like “Call mom” in the tasks window, each with **a time of day**. She thinks of each
+  task once a day at its time. If your Mac was asleep or off, she catches up within three hours. Optionally also
+  during video calls: she stays hidden and only the thought bubble appears at the Dock. Never while you share your
+  screen.
+- **Motivation:** Add your own sayings in the settings (or let her use hers). She cheers you on in the morning
+  between 9 and 10 and shortly before the end of your workday, on long days once in between. Never more often than
+  every four hours and never during video calls.
 - **One at a time:** Reminders wait for each other and for breaks, Pomodoro and timers. Every reminder can be
   previewed in the settings with **Show now**. A click pops the thought bubble.
 
@@ -117,7 +121,8 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |
 | Break reminder | Regular breaks (on/off) |
 | Drink reminder · Eye break | Small reminders (on/off) |
-| Task reminder ▸ | On · Also during video calls · Your tasks · Add and edit tasks … |
+| Task reminder ▸ | On · Also during video calls · Your tasks with their times · Add and edit tasks … |
+| Motivation | Sayings in the morning and towards the end of the day (on/off) |
 | Roaming | She heads out and only comes in for breaks and reminders |
 | Cat Bed | Replaces Roaming when the cat bed is in the Dock: she sleeps in the bed |
 | Feed · Play with yarn · Startle · Put to sleep | Actions |
@@ -135,7 +140,8 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **Drinking and eyes:** On/off, rough interval, Show now
 - **End of the workday:** On/off, time, Monday to Friday only
 - **Outfits:** Nightcap at bedtime, morning outfit until a set time
-- **Tasks:** Opens the tasks window
+- **Tasks:** Opens the tasks window (tasks with their times)
+- **Motivation:** On/off, your sayings, Show now
 - **While you're away:** Chase a bird after a set time without input, Show now
 - **Sounds and being considerate:** Meow, meow for tasks, purring, hide during calls, respect Focus
 - **Language:** Same as macOS, Deutsch, English

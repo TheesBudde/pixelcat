@@ -2,8 +2,8 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Eigenes Fenster für die Aufgaben: eintragen, umbenennen, entfernen und für jede einstellen,
-/// wie oft sie ungefähr daran erinnert.
+/// Eigenes Fenster für die Aufgaben: eintragen, umbenennen, entfernen und für jede die Uhrzeit einstellen,
+/// zu der sie einmal am Tag daran erinnert.
 @MainActor
 final class TasksWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
@@ -44,7 +44,8 @@ final class TasksWindow: NSObject, NSWindowDelegate {
 struct TasksView: View {
     @ObservedObject var settings: AppSettings
     @State private var newText = ""
-    @State private var newMinutes = TaskItem.defaultMinutes
+    /// Neue Aufgaben starten bei der nächsten vollen Stunde
+    @State private var newTime = (Calendar.current.component(.hour, from: Date()) + 1) % 24 * 60
 
     /// Länger passt nicht gut in die Gedankenblase (drei Zeilen)
     static let maxLength = 45
@@ -74,12 +75,12 @@ struct TasksView: View {
                         .onChange(of: newText) { value in
                             if value.count > Self.maxLength { newText = String(value.prefix(Self.maxLength)) }
                         }
-                    intervalSlider($newMinutes)
+                    timePicker($newTime)
                     Button(t("Hinzufügen", "Add"), action: add)
                         .disabled(newText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                hint(t("Der Abstand gilt pro Aufgabe und schwankt etwas. Aus Katzenkorb oder Streifzug kommt sie dafür herein.",
-                       "The interval is per task and varies a little. She comes in from the cat bed or roaming for it."))
+                hint(t("Zur Uhrzeit denkt sie einmal am Tag daran. War der Mac da aus, holt sie es bis zu 3 Stunden später nach. Aus Katzenkorb oder Streifzug kommt sie dafür herein.",
+                       "She thinks of it once a day at that time. If your Mac was off, she catches up within 3 hours. She comes in from the cat bed or roaming for it."))
             } header: {
                 SectionTitle(t("Neue Aufgabe", "New task"), icon: "plus", color: .blue)
             }
@@ -95,7 +96,7 @@ struct TasksView: View {
                             .onChange(of: task.text) { value in
                                 if value.count > Self.maxLength { task.text = String(value.prefix(Self.maxLength)) }
                             }
-                        intervalSlider($task.minutes)
+                        timePicker($task.time)
                         Button {
                             settings.onPreviewTask?(task.id)
                         } label: {
@@ -123,41 +124,30 @@ struct TasksView: View {
         .environment(\.colorScheme, settings.coat.colorScheme)
         .frame(minWidth: 480, minHeight: 320)
         .id(settings.language)
+        // Nach Uhrzeit geordnet (beim Öffnen – nicht mitten im Ändern einer Uhrzeit)
+        .onAppear { sortByTime() }
     }
 
     private func add() {
         let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        settings.taskItems.insert(TaskItem(text: text, minutes: newMinutes), at: 0)
+        settings.taskItems.append(TaskItem(text: text, time: newTime))
+        sortByTime()
         newText = ""
+    }
+
+    private func sortByTime() {
+        let sorted = settings.taskItems.sorted { $0.time < $1.time }
+        if sorted != settings.taskItems { settings.taskItems = sorted }
     }
 
     private func hint(_ text: String) -> some View {
         Text(text).font(.caption).foregroundStyle(.secondary)
     }
 
-    /// Schieberegler über die wählbaren Abstände, daneben z. B. „alle 2 Std.“
-    private func intervalSlider(_ minutes: Binding<Int>) -> some View {
-        let steps = TaskItem.intervals
-        let index = Binding<Double>(
-            get: { Double(steps.firstIndex { $0 >= minutes.wrappedValue } ?? steps.count - 1) },
-            set: { minutes.wrappedValue = steps[min(steps.count - 1, max(0, Int($0.rounded())))] })
-        return HStack(spacing: 8) {
-            Slider(value: index, in: 0...Double(steps.count - 1), step: 1)
-                .frame(width: 100)
-            Text(Self.intervalText(minutes.wrappedValue))
-                .monospacedDigit()
-                .lineLimit(1)
-                .fixedSize()
-                .frame(minWidth: 92, alignment: .leading)
-        }
-    }
-
-    static func intervalText(_ minutes: Int) -> String {
-        if minutes < 60 { return L10n.s("alle \(minutes) Min.", "every \(minutes) min") }
-        let hours = Double(minutes) / 60
-        let number = hours == hours.rounded() ? "\(Int(hours))" : String(format: "%.1f", hours)
-        let german = number.replacingOccurrences(of: ".", with: ",")
-        return L10n.s("alle \(german) Std.", "every \(number) h")
+    private func timePicker(_ minutes: Binding<Int>) -> some View {
+        DatePicker("", selection: clockBinding(minutes), displayedComponents: .hourAndMinute)
+            .labelsHidden()
+            .fixedSize()
     }
 }

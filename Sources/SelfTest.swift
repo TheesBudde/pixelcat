@@ -49,7 +49,7 @@ final class SelfTest {
         cat.tasksEnabled = false
         cat.hideDuringCalls = true
         cat.show()
-        let task = TaskItem(text: "Selbsttest: im Call", minutes: 30)
+        let task = TaskItem(text: "Selbsttest: im Call", time: TaskItem.defaultTime)
         cat.selfTestTasks([task])
         cat.roaming = false
         await waitUntil("Katze ist zu sehen", 60) { !$0.isAway && $0.catFrame != nil }
@@ -119,6 +119,7 @@ final class SelfTest {
         await drinking(roaming: false)
         await lookout()
         await task()
+        await motivation()
         await bubbleClick()
         await quittingTime()
 
@@ -193,13 +194,24 @@ final class SelfTest {
 
     private func task() async {
         section("Aufgabe")
-        cat.selfTestTasks([TaskItem(text: "Selbsttest: Mama anrufen", minutes: 30)])
+        cat.selfTestTasks([TaskItem(text: "Selbsttest: Mama anrufen", time: TaskItem.defaultTime)])
         let meowsBefore = cat.snapshot().meows
         cat.showErrandNow(.task)
         await waitUntil("Blase mit der Aufgabe über der Katze", 10) { self.bubbleAboveCat($0) }
         checkMeow(settings.meowForTasks ? "miaut bei der Aufgabe (eingestellt)" : "miaut nicht bei der Aufgabe (eingestellt)",
                   before: meowsBefore, expected: settings.meowForTasks)
         await waitUntil("Blase verschwindet von selbst", 45) { $0.bubble == nil }
+        await waitUntil("erledigt", 5) { $0.errand == nil }
+        await pause(3)
+    }
+
+    private func motivation() async {
+        section("Motivation")
+        let meowsBefore = cat.snapshot().meows
+        cat.showErrandNow(.motivation)
+        await waitUntil("Blase mit einem Spruch über der Katze", 10) { self.bubbleAboveCat($0) }
+        checkMeow("miaut zur Motivation", before: meowsBefore, expected: true)
+        await waitUntil("Blase verschwindet von selbst", 50) { $0.bubble == nil }
         await waitUntil("erledigt", 5) { $0.errand == nil }
         await pause(3)
     }

@@ -295,7 +295,7 @@ final class CatController {
     var outfitTimes = OutfitTimes() {
         didSet { updateOutfit() }
     }
-    /// Aufgaben-Erinnerung: an/aus und die Aufgaben, jede mit eigenem Abstand
+    /// Aufgaben-Erinnerung: an/aus und die Aufgaben, jede zu ihrer Uhrzeit
     var tasksEnabled = false {
         didSet { if tasksEnabled != oldValue { configureTasks() } }
     }
@@ -304,6 +304,12 @@ final class CatController {
     }
     /// An Aufgaben auch während Videocalls erinnern – die Katze bleibt dann versteckt, nur die Blase erscheint
     var tasksDuringCalls = false
+    /// Motivation: an/aus und die eigenen Sprüche (leer = ihre eigenen)
+    var motivationEnabled = false
+    var motivationSayings: [String] = []
+    private var lastSaying: String?
+    /// Die Einstellungen sind einmal übernommen (danach ist es kein Start mehr)
+    private var settingsApplied = false
     /// Augenpause: alle so viele Minuten (nil = aus)
     var eyeBreakMinutes: Int? {
         didSet {
@@ -350,6 +356,10 @@ final class CatController {
         if quitting?.0 != quittingTime?.minutes || quitting?.1 != quittingTime?.weekdaysOnly {
             quittingTime = quitting.map { (minutes: $0.0, weekdaysOnly: $0.1) }
         }
+        motivationEnabled = settings.motivationEnabled
+        motivationSayings = settings.motivationSayings
+        errands.configureMotivation(enabled: motivationEnabled, workdayEnd: quittingTime?.minutes,
+                                    weekdaysOnly: quittingTime?.weekdaysOnly ?? false)
         let bedtime = settings.bedtimeEnabled ? settings.bedtime : nil
         let morningEnd = settings.morningOutfit ? settings.morningEnd : nil
         if bedtime != outfitTimes.bedtime || morningEnd != outfitTimes.morningEnd {
@@ -358,6 +368,7 @@ final class CatController {
         }
         if settings.awayMode != userRoaming { roaming = settings.awayMode }
         updateStatusText(force: true)
+        settingsApplied = true
     }
 
     var isPlaying: Bool { ball != nil }
@@ -1282,8 +1293,32 @@ final class CatController {
         nextErrandAllowed = .distantPast
     }
 
+    /// Beim Start holt sie verpasste Aufgaben nach, bei späteren Änderungen nicht
     private func configureTasks() {
-        errands.configureTasks(taskList, enabled: tasksEnabled, now: Date())
+        errands.configureTasks(taskList, enabled: tasksEnabled, now: Date(), launch: !settingsApplied)
+    }
+
+    /// Ein Spruch: einer der eigenen oder, ohne eigene, einer von ihr – nicht zweimal hintereinander derselbe
+    private func nextSaying(now: Date) -> String {
+        var sayings = motivationSayings.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if sayings.isEmpty { sayings = Self.ownSayings(morning: Calendar.current.component(.hour, from: now) < 12) }
+        let choices = sayings.count > 1 ? sayings.filter { $0 != lastSaying } : sayings
+        let saying = choices.randomElement() ?? ""
+        lastSaying = saying
+        return saying
+    }
+
+    /// Ihre eigenen Sprüche, morgens zum Loslegen, später zum Durchhalten
+    static func ownSayings(morning: Bool) -> [String] {
+        morning
+            ? [L10n.s("Heute wird ein guter Tag!", "Today is going to be great!"),
+               L10n.s("Du schaffst das!", "You've got this!"),
+               L10n.s("Ein Schritt nach dem anderen.", "One step at a time."),
+               L10n.s("Auf geht's!", "Let's go!")]
+            : [L10n.s("Fast geschafft, weiter so!", "Almost there, keep going!"),
+               L10n.s("Stolz auf dich!", "Proud of you!"),
+               L10n.s("Das war richtig gut heute.", "You did great today."),
+               L10n.s("Du schaffst das!", "You've got this!")]
     }
 
     /// Fällige Erinnerungen einsammeln; läuft keine, die nächste starten – sobald die Katze frei ist.
@@ -1335,6 +1370,12 @@ final class CatController {
             if soundsAllowed { pendingMeow = (.breakStarts, now) }
             brain.callToCenter(visitLength: 75)
             return
+        case .motivation:
+            // Eine Gedankenblase mit dem Spruch – im Streifzug oder Körbchen kommt sie dafür herein
+            showErrandBubble(nextSaying(now: now), for: 40)
+            meow(.reminder)
+            if brain.isOutAndAbout { brain.startErrandVisit(for: 5 * 60) } else { brain.noticeSomething() }
+            return
         case .bird:
             releaseBird()
             // Aus dem Streifzug oder Körbchen kommt sie herein und schaut sich erst etwas verlegen um
@@ -1371,7 +1412,7 @@ final class CatController {
             return bowl?.water != true || now.timeIntervalSince(since) > 4 * 60
         case .lookout:
             return lookoutWindow == nil || now.timeIntervalSince(since) > 4 * 60
-        case .quittingTime, .task:
+        case .quittingTime, .task, .motivation:
             return errandBubble == nil
         case .bird:
             // Jemand ist zurück: Der Vogel fliegt davon, erledigt ist es, wenn er weg ist

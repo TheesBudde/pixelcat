@@ -5,8 +5,9 @@ import SwiftUI
 MainActor.assumeIsolated {
     _ = NSApplication.shared
     let settings = AppSettings()
-    settings.taskItems = [TaskItem(text: "Mama anrufen", minutes: 120), TaskItem(text: "Wasser trinken", minutes: 5),
-                          TaskItem(text: "Steuererklärung abgeben", minutes: 90)]
+    settings.taskItems = [TaskItem(text: "Wasser trinken", time: 9 * 60 + 30), TaskItem(text: "Mama anrufen", time: 12 * 60),
+                          TaskItem(text: "Steuererklärung abgeben", time: 16 * 60 + 45)]
+    settings.motivationSayings = ["Du schaffst das!", "Heute rockst du das Meeting."]
     settings.breakByActivity = CommandLine.arguments.contains("--activity")
     if let i = CommandLine.arguments.firstIndex(of: "--lang"), i + 1 < CommandLine.arguments.count {
         settings.language = CommandLine.arguments[i + 1] == "en" ? .english : .german

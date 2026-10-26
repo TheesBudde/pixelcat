@@ -297,37 +297,70 @@ MainActor.assumeIsolated {
               late.popNext()?.kind == .quittingTime)
     }
 
+    // Feste Tage in deutscher Zeit (24. Oktober 2026 ist ein Samstag)
+    var berlin = Calendar(identifier: .gregorian)
+    berlin.timeZone = TimeZone(identifier: "Europe/Berlin")!
+    func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        berlin.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+
     print("\nAufgaben")
     do {
-        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let start = at(20, 8)
         let s = ErrandScheduler()
-        s.random = { 0.5 } // ohne Zufallsschwankung
-        let often = TaskItem(text: "Wasser", minutes: 5)
-        let rarely = TaskItem(text: "Steuer", minutes: 120)
-        s.configureTasks([often, rarely, TaskItem(text: "   ", minutes: 10)], enabled: true, now: start)
-        var counts: [String: Int] = [:]
-        var t = 0.0
-        while t <= 4 * 3600 {
-            s.collectDue(now: start.addingTimeInterval(t))
-            while let errand = s.popNext() { counts[errand.text ?? "?", default: 0] += 1 }
-            t += 30
+        s.calendar = berlin
+        let call = TaskItem(text: "Mama anrufen", time: 14 * 60)
+        let tax = TaskItem(text: "Steuer", time: 9 * 60 + 30)
+        s.configureTasks([call, tax, TaskItem(text: "   ", time: 10 * 60)], enabled: true, now: start, launch: true)
+        var shown: [String: [Date]] = [:]
+        var t = start
+        while t <= at(21, 23) {
+            s.collectDue(now: t)
+            while let errand = s.popNext() { shown[errand.text ?? "?", default: []].append(t) }
+            t += 60
         }
-        check("jede Aufgabe hat ihren eigenen Abstand", (counts["Wasser"] ?? 0) >= 45 && counts["Steuer"] == 2,
-              "in 4 Stunden: \(counts)")
-        check("leere Einträge zählen nicht", counts["?"] == nil && counts.count == 2, "\(counts)")
+        check("jede Aufgabe einmal am Tag zu ihrer Uhrzeit",
+              shown["Mama anrufen"] == [at(20, 14), at(21, 14)] && shown["Steuer"] == [at(20, 9, 30), at(21, 9, 30)],
+              "\(shown)")
+        check("leere Einträge zählen nicht", shown["?"] == nil && shown.count == 2, "\(shown.keys)")
 
-        // Abstand ändern: nur diese Aufgabe wird neu geplant
-        let s2 = ErrandScheduler()
-        s2.random = { 0.5 }
-        s2.configureTasks([often, rarely], enabled: true, now: start)
-        var changed = rarely
-        changed.minutes = 10
-        s2.configureTasks([often, changed], enabled: true, now: start.addingTimeInterval(60))
-        s2.collectDue(now: start.addingTimeInterval(60 + 11 * 60))
-        var seen: [String] = []
-        while let errand = s2.popNext() { seen.append(errand.text ?? "") }
-        check("geänderter Abstand gilt sofort", seen.contains("Steuer") && seen.contains("Wasser"), "\(seen)")
+        // Mac im Ruhezustand: bis zu 3 Stunden später holt sie es nach, danach erst morgen wieder
+        let sleepy = ErrandScheduler()
+        sleepy.calendar = berlin
+        sleepy.configureTasks([call], enabled: true, now: start, launch: true)
+        sleepy.collectDue(now: at(20, 13))
+        sleepy.collectDue(now: at(20, 16, 30))
+        check("nach dem Aufwachen holt sie die Aufgabe nach", sleepy.popNext()?.text == "Mama anrufen")
+        let late = ErrandScheduler()
+        late.calendar = berlin
+        late.configureTasks([call], enabled: true, now: start, launch: true)
+        late.collectDue(now: start)
+        late.collectDue(now: at(20, 17, 30))
+        check("mehr als 3 Stunden zu spät: erst morgen wieder", late.popNext() == nil)
 
+        // Start um 15 Uhr: Die Aufgabe von 14 Uhr kommt gleich
+        let launch = ErrandScheduler()
+        launch.calendar = berlin
+        launch.configureTasks([call], enabled: true, now: at(20, 15), launch: true)
+        launch.collectDue(now: at(20, 15))
+        check("beim Start holt sie Verpasstes nach", launch.popNext()?.text == "Mama anrufen")
+
+        // Neu angelegt für eine Uhrzeit, die heute schon vorbei ist: erst morgen
+        let fresh = ErrandScheduler()
+        fresh.calendar = berlin
+        fresh.configureTasks([], enabled: true, now: at(20, 15), launch: true)
+        fresh.configureTasks([call], enabled: true, now: at(20, 15, 1))
+        fresh.collectDue(now: at(20, 15, 2))
+        let notToday = fresh.popNext() == nil
+        fresh.collectDue(now: at(21, 14))
+        check("neue Aufgabe für eine vergangene Uhrzeit kommt erst morgen", notToday && fresh.popNext()?.text == "Mama anrufen")
+        var moved = call
+        moved.time = 16 * 60
+        fresh.configureTasks([moved], enabled: true, now: at(21, 15))
+        fresh.collectDue(now: at(21, 16))
+        check("auf später verstellt: kommt heute noch einmal", fresh.popNext()?.text == "Mama anrufen")
+
+        let often = TaskItem(text: "Wasser", time: 11 * 60)
         // Ausgeschaltet: nichts wird fällig, „Jetzt zeigen“ geht trotzdem
         let off = ErrandScheduler()
         off.configureTasks([often], enabled: false, now: start)
@@ -352,15 +385,58 @@ MainActor.assumeIsolated {
         check("gelöschte Aufgabe kommt nicht mehr", rename.popNext() == nil)
 
         // Speichern und Laden
-        let restored = TaskItem(dictionary: rarely.dictionary)
-        check("Aufgabe übersteht Speichern und Laden", restored == rarely)
+        let restored = TaskItem(dictionary: tax.dictionary)
+        check("Aufgabe übersteht Speichern und Laden", restored == tax)
+        let old = TaskItem(dictionary: ["text": "Alt", "minutes": 30])
+        check("frühere Aufgaben mit Abstand kommen um 10 Uhr", old?.time == TaskItem.defaultTime && old?.text == "Alt")
 
         let lines = PixelFont.lines("Steuererklärung bis Freitag abgeben!", maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
         check("langer Text wird an Wortgrenzen umbrochen", lines == ["STEUERERKLÄRUNG", "BIS FREITAG", "ABGEBEN!"], "\(lines)")
         let long = PixelFont.lines(String(repeating: "Wort ", count: 30), maxWidth: BubbleFrames.maxTextWidth, maxLines: 3)
         check("zu langer Text endet nach drei Zeilen mit …", long.count == 3 && long[2].hasSuffix("…"), "\(long)")
-        check("Abstände lesbar", TasksView.intervalText(5) == L10n.s("alle 5 Min.", "every 5 min")
-              && TasksView.intervalText(90) == L10n.s("alle 1,5 Std.", "every 1.5 h"), TasksView.intervalText(90))
+    }
+
+    print("\nMotivation")
+    do {
+        func sayings(workdayEnd: Int?, weekdaysOnly: Bool = false, from: Date, to: Date) -> [Date] {
+            let s = ErrandScheduler()
+            s.calendar = berlin
+            s.random = { 0.5 }
+            s.configureMotivation(enabled: true, workdayEnd: workdayEnd, weekdaysOnly: weekdaysOnly)
+            var times: [Date] = []
+            var t = from
+            while t <= to {
+                s.collectDue(now: t)
+                while let errand = s.popNext() { if errand.kind == .motivation { times.append(t) } }
+                t += 60
+            }
+            return times
+        }
+        let normal = sayings(workdayEnd: 17 * 60 + 30, from: at(20, 7), to: at(21, 23))
+        let hours = normal.map { berlin.component(.hour, from: $0) }
+        check("morgens und gegen Feierabend, zwei am Tag", hours == [9, 16, 9, 16], "\(hours)")
+        let spaced = zip(normal, normal.dropFirst()).allSatisfy { $1.timeIntervalSince($0) >= ErrandScheduler.motivationSpacing }
+        check("mindestens 4 Stunden dazwischen", spaced)
+        let long = sayings(workdayEnd: 20 * 60, from: at(20, 7), to: at(20, 23))
+        check("an einem langen Tag einer mehr in der Mitte", long.count == 3,
+              "\(long.map { berlin.component(.hour, from: $0) })")
+        let weekend = sayings(workdayEnd: 17 * 60 + 30, weekdaysOnly: true, from: at(24, 7), to: at(25, 23))
+        check("nur werktags: am Wochenende keine", weekend.isEmpty, "\(weekend)")
+        // Mac im Ruhezustand: kurz danach kommt er noch, viel später nicht mehr
+        let s = ErrandScheduler()
+        s.calendar = berlin
+        s.random = { 0.5 }
+        s.configureMotivation(enabled: true, workdayEnd: 17 * 60 + 30, weekdaysOnly: false)
+        s.collectDue(now: at(20, 7))
+        s.collectDue(now: at(20, 12))
+        check("viel später: der Morgenspruch fällt aus", s.popNext() == nil)
+        // Im Videocall wartet er (nur Aufgaben dürfen)
+        s.collectDue(now: at(20, 16, 40))
+        check("im Videocall wartet er", s.popNext(where: { $0 == .task }) == nil && s.queuedKinds == [.motivation])
+        s.configureMotivation(enabled: false, workdayEnd: 17 * 60 + 30, weekdaysOnly: false)
+        check("ausgeschaltet: weg aus der Schlange", s.queuedKinds.isEmpty)
+        let own = CatController.ownSayings(morning: true)
+        check("ohne eigene Sprüche hat sie eigene", own.count >= 3 && own.allSatisfy { $0.count <= TasksView.maxLength })
     }
 
     print("\nWarteschlange")
@@ -385,7 +461,7 @@ MainActor.assumeIsolated {
         s.requestNow(.drink)
         check("„Jetzt zeigen“ kommt sofort", s.popNext()?.kind == .drink)
         // Im Videocall nur Aufgaben: Die anderen warten in der Schlange
-        s.configureTasks([TaskItem(text: "Mama anrufen", minutes: 30)], enabled: true, now: start)
+        s.configureTasks([TaskItem(text: "Mama anrufen", time: 10 * 60)], enabled: true, now: start)
         s.requestNow(.task)
         s.requestNow(.lookout)
         let inCall = s.popNext(where: { $0 == .task })

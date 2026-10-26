@@ -149,13 +149,18 @@ Clicks only hit visible cat pixels (`hitTest`). The transparent area around her 
 ```mermaid
 flowchart LR
     Timers[intervals with jitter ±20%] --> Queue
-    Tasks[tasks, each with its own interval] --> Queue
+    Tasks[tasks, once a day at their time<br/>catch up within 3 h] --> Queue
     Clock[end of workday crossed] --> Queue
+    Cheer[motivation: morning, before the end of the day<br/>at least 4 h apart] --> Queue
     Queue[ErrandScheduler queue<br/>one of each kind] --> Gate{cat free?<br/>no break, Pomodoro,<br/>timer, call}
     Gate -- yes --> Run[walk in · water bowl / window / bubble · meow]
     Gate -- in a call --> TaskOnly[only tasks, if allowed:<br/>bubble at the Dock, cat hidden]
     Run --> Back[back to bed or roaming]
 ```
+
+Motivation has its own times: each day the scheduler picks one between 9 and 10 in the morning and one 30 to 75
+minutes before the end of the workday, plus one in the middle when the day is longer than eight hours. Two sayings are
+always at least four hours apart. Like every reminder except tasks, it waits while a call is going on.
 
 The bird is an errand too. When no input has arrived for the set time, the controller starts it: the cat comes in
 (or climbs out of her bed), peeks left and right, then chases. `CatBrain` runs under the bird, swats when it flies low

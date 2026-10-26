@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var reminderItem: NSMenuItem!
     private var drinkItem: NSMenuItem!
     private var eyeItem: NSMenuItem!
+    private var motivationItem: NSMenuItem!
     private var taskItem: NSMenuItem!
     private var taskOnItem: NSMenuItem!
     private var taskCallsItem: NSMenuItem!
@@ -150,8 +151,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         taskCallsItem = item(t("Auch während Videocalls", "Also during video calls"), #selector(toggleTasksDuringCalls))
         taskMenu.addItem(taskCallsItem)
         taskMenu.addItem(.separator())
-        for task in settings.taskItems.prefix(8) {
-            let entry = NSMenuItem(title: "\(task.text) – \(TasksView.intervalText(task.minutes))", action: nil, keyEquivalent: "")
+        for task in settings.taskItems.sorted(by: { $0.time < $1.time }).prefix(8) {
+            let entry = NSMenuItem(title: "\(task.timeText)  \(task.text)", action: nil, keyEquivalent: "")
             entry.isEnabled = false
             taskMenu.addItem(entry)
         }
@@ -166,6 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         taskItem.submenu = taskMenu
         taskItem.image = Self.symbol("checklist")
         menu.addItem(taskItem)
+        motivationItem = item(t("Motivation", "Motivation"), #selector(toggleMotivation), icon: "sparkles")
+        menu.addItem(motivationItem)
         // Mit Katzenkorb im Dock schläft sie dort, sonst geht sie auf Streifzug
         if settings.basketInDock {
             roamItem = item(t("Katzenkorb", "Cat Bed"), #selector(toggleRoaming), icon: "basket")
@@ -288,6 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reminderItem.isEnabled = cat.pomodoro == nil
         drinkItem.state = settings.drinkReminders ? .on : .off
         eyeItem.state = settings.eyeBreaks ? .on : .off
+        motivationItem.state = settings.motivationEnabled ? .on : .off
         taskItem.state = settings.taskReminders ? .on : .off
         taskOnItem.state = settings.taskReminders ? .on : .off
         taskCallsItem.state = settings.tasksDuringCalls ? .on : .off
@@ -369,6 +373,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleDrinking() {
         settings.drinkReminders.toggle()
+    }
+
+    @objc private func toggleMotivation() {
+        settings.motivationEnabled.toggle()
     }
 
     @objc private func toggleEyeBreaks() {

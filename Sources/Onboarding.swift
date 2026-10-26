@@ -224,7 +224,7 @@ struct OnboardingView: View {
             OnboardingPage(title: t("Woran soll ich dich erinnern?", "What should I remind you of?"),
                            text: t("Tipp an, was dir guttut. Mehr gibt es in den Einstellungen.",
                                    "Pick what's good for you. There's more in the settings.")) {
-                HStack(spacing: 14) {
+                HStack(spacing: 10) {
                     ReminderTile(title: t("Pausen", "Breaks"), icon: "cup.and.saucer.fill", color: .brown,
                                  isOn: $settings.breakReminders)
                     ReminderTile(title: t("Trinken", "Drinking"), icon: "drop.fill", color: .blue,
@@ -233,6 +233,8 @@ struct OnboardingView: View {
                                  isOn: $settings.eyeBreaks)
                     ReminderTile(title: t("Feierabend", "Day's end"), icon: "briefcase.fill", color: .indigo,
                                  isOn: $settings.quittingTimeEnabled)
+                    ReminderTile(title: t("Motivation", "Motivation"), icon: "sparkles", color: .orange,
+                                 isOn: $settings.motivationEnabled)
                 }
             }
         case .tourReminders:
@@ -247,8 +249,8 @@ struct OnboardingView: View {
             }
         case .tourTasks:
             OnboardingPage(title: t("Ich merke mir Dinge", "I remember things"),
-                           text: t("Trag Aufgaben ein und ich denke ab und zu für dich daran. Jede in ihrem eigenen Takt.",
-                                   "Add tasks and I'll think of them for you now and then. Each at its own pace.")) {
+                           text: t("Trag Aufgaben mit Uhrzeit ein und ich denke für dich daran. Und morgens und abends gibt es einen Spruch zur Motivation.",
+                                   "Add tasks with a time and I'll think of them for you. In the morning and evening I also cheer you on.")) {
                 ThinkingCat(coat: settings.coat, thought: t("Mama anrufen", "Call mom"))
             }
         case .tourAway:
@@ -580,7 +582,7 @@ private struct ReminderTile: View {
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isOn ? Color.accentColor : Color.secondary.opacity(0.5))
             }
-            .frame(width: 112, height: 140)
+            .frame(width: 96, height: 140)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.background.opacity(isOn ? 0.95 : 0.55)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
