@@ -76,8 +76,8 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 summary
-                card(title: t("Aktiv gearbeitet", "Active work"), icon: "keyboard", color: .blue) { activeChart }
-                card(title: t("Pausen", "Breaks"), icon: "cup.and.saucer.fill", color: .brown) { breakChart }
+                card(title: t("Aktiv gearbeitet", "Active work"), icon: "keyboard", color: .blue, info: activeInfo) { activeChart }
+                card(title: t("Pausen", "Breaks"), icon: "cup.and.saucer.fill", color: .brown, info: breakInfo) { breakChart }
                 card(title: t("Apps im Blick", "Apps to watch"), icon: "square.grid.2x2.fill", color: .teal) { appsList }
                 pastWeeks
             }
@@ -200,6 +200,8 @@ struct StatsView: View {
             HStack(spacing: 14) {
                 LegendChip(color: blue, text: quiet)
                 LegendChip(color: green, text: music)
+                    .help(t("Es lief Ton, meist Musik, manchmal auch ein Video oder Podcast. Videocalls zählen nicht.",
+                            "Sound was playing, usually music, sometimes a video or podcast. Video calls don't count."))
                 Spacer()
                 if let id = hoveredActiveDay, let day = values.first(where: { $0.id == id }) {
                     Text(t("\(id): \(Self.hoursText(day.stats.activeSeconds)), davon \(Self.hoursText(day.stats.musicSeconds)) mit Musik",
@@ -388,12 +390,39 @@ struct StatsView: View {
         .contentShape(Rectangle())
     }
 
+    // MARK: Was gezählt wird
+
+    /// Erklärung zu „Aktiv gearbeitet“ und vor allem zu „mit Musik“
+    private var activeInfo: [(String, String)] {
+        [(t("Aktiv gearbeitet", "Active work"),
+          t("Zählt, solange du tippst, klickst oder die Maus bewegst. Bis zu einer Minute Lesen ohne Eingabe zählt mit.",
+            "Counts while you type, click or move the mouse. Up to a minute of reading without input counts too.")),
+         (t("Mit Musik", "With music"),
+          t("Während du aktiv warst, lief auf deinem Mac Ton über Lautsprecher oder Kopfhörer. Das ist meist Musik, kann aber auch ein Video, ein Podcast oder ein anderer Ton sein. Videocalls und das Schnurren der Katze zählen nicht mit. Pixelcat fragt dafür nur, ob gerade Ton läuft, nicht was.",
+            "While you were active, sound was playing on your Mac through speakers or headphones. Usually that's music, but it can also be a video, a podcast or another sound. Video calls and the cat's purring don't count. Pixelcat only asks whether sound is playing, not what.")),
+         ("", t("Alles bleibt auf deinem Mac.", "Everything stays on your Mac."))]
+    }
+
+    private var breakInfo: [(String, String)] {
+        [(t("Gemacht", "Taken"),
+          t("Daumen hoch, „Pause machen“ im Menü und Pausen, in denen du weg vom Rechner warst.",
+            "Thumbs up, “Take a break” in the menu and breaks while you were away from your Mac.")),
+         (t("Weggedrückt", "Put off"), t("Daumen runter bei der Pausenfrage.", "Thumbs down on the break question.")),
+         (t("Trinken", "Drinks"),
+          t("Daumen hoch zählt als getrunken, Daumen runter als ausgelassen.",
+            "Thumbs up counts as a drink, thumbs down as skipped."))]
+    }
+
     // MARK: Bausteine
 
-    private func card<Content: View>(title: String, icon: String, color: Color,
+    private func card<Content: View>(title: String, icon: String, color: Color, info: [(String, String)]? = nil,
                                      @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(title, icon: icon, color: color)
+            HStack {
+                SectionTitle(title, icon: icon, color: color)
+                Spacer()
+                if let info { InfoButton(entries: info, help: t("Was wird gezählt?", "What is counted?")) }
+            }
             content()
         }
         .padding(16)
@@ -466,6 +495,38 @@ private struct StatTile: View {
         .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.background.opacity(0.75)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.secondary.opacity(0.15)))
+    }
+}
+
+/// Kleines ⓘ: ein Klick zeigt, was gezählt wird
+private struct InfoButton: View {
+    let entries: [(String, String)]
+    let help: String
+    @State private var shown = false
+
+    var body: some View {
+        Button { shown.toggle() } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.borderless)
+        .help(help)
+        .popover(isPresented: $shown, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                    VStack(alignment: .leading, spacing: 3) {
+                        if !entry.0.isEmpty { Text(entry.0).font(.callout.weight(.semibold)) }
+                        Text(entry.1)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(width: 320, alignment: .leading)
+        }
     }
 }
 
