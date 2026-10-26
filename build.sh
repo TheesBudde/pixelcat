@@ -11,13 +11,13 @@ echo "→ Kompiliere …"
 if [ "${UNIVERSAL:-0}" = "1" ]; then
   # Für Apple Silicon und Intel – damit die App auf jedem Mac läuft
   for arch in arm64 x86_64; do
-    swiftc -O -swift-version 5 -target "$arch-apple-macos13.0" \
+    swiftc -O -swift-version 5 -target "$arch-apple-macos13.0" -module-cache-path build/ModuleCache \
       Sources/*.swift -o "build/Pixelcat-$arch"
   done
   lipo -create build/Pixelcat-arm64 build/Pixelcat-x86_64 -output "$APP/Contents/MacOS/Pixelcat"
   rm build/Pixelcat-arm64 build/Pixelcat-x86_64
 else
-  swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" \
+  swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos13.0" -module-cache-path build/ModuleCache \
     Sources/*.swift -o "$APP/Contents/MacOS/Pixelcat"
 fi
 
