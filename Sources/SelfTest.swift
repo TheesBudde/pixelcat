@@ -72,7 +72,7 @@ final class SelfTest {
         await pause(3)
 
         section("Call mit „Auch während Videocalls“ an")
-        cat.callPolicy.set(.show, for: .task)
+        cat.callPolicy.set(.show, for: .task, in: .call)
         cat.simulatedCall = .camera
         log("   (Kamera an – nachgespielt)")
         await waitUntil("Katze versteckt sich", 60) { $0.isAway }
@@ -98,7 +98,7 @@ final class SelfTest {
 
         section("Call mit „Auch während Videocalls“ aus")
         cat.simulatedCall = .microphone
-        cat.callPolicy.set(.later, for: .task)
+        cat.callPolicy.set(.later, for: .task, in: .call)
         log("   (Mikrofon an – nachgespielt)")
         await pause(16)
         check("keine Aufgaben-Blase im Call", cat.snapshot().bubble == nil)
@@ -114,7 +114,7 @@ final class SelfTest {
 
         // Einstellungen › Videocalls: Was im Call trotzdem kommt, erscheint als stille Blase am Dock
         section("Trinken im Call erlaubt")
-        cat.callPolicy = CallPolicy(handling: [.drink: .show, .lookout: .show])
+        cat.callPolicy = CallPolicy(call: [.drink: .show, .lookout: .show])
         cat.simulatedCall = .camera
         log("   (Kamera an – nachgespielt)")
         await waitUntil("Katze versteckt sich", 60) { $0.isAway }
@@ -139,7 +139,7 @@ final class SelfTest {
         check("im Call kein Miauen", cat.snapshot().meows == meowsBefore)
 
         section("Augenpause „Danach“, Motivation „Nie“")
-        cat.callPolicy = CallPolicy(handling: [.lookout: .later, .motivation: .skip])
+        cat.callPolicy = CallPolicy(call: [.lookout: .later, .motivation: .skip])
         cat.showErrandNow(.motivation)
         cat.showErrandNow(.lookout)
         await pause(6)
@@ -148,8 +148,9 @@ final class SelfTest {
         check("Motivation fällt weg", !snap.queued.contains(.motivation), "\(snap.queued)")
         check("Augenpause wartet auf danach", snap.queued.contains(.lookout), "\(snap.queued)")
 
-        section("„Auch beim Teilen des Bildschirms“ an")
-        cat.callPolicy = CallPolicy(handling: [.task: .show, .lookout: .later, .motivation: .skip], duringScreenSharing: true)
+        section("Beim Teilen: Aufgaben zeigen")
+        cat.callPolicy = CallPolicy(call: [.lookout: .later, .motivation: .skip],
+                                    sharing: [.task: .show, .lookout: .later, .motivation: .skip])
         cat.simulatedCall = .screenSharing
         log("   (Bildschirmfreigabe – nachgespielt)")
         await pause(4)

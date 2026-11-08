@@ -824,37 +824,44 @@ MainActor.assumeIsolated {
 
     print("\nVideocalls")
     do {
-        // Pro Erinnerung: im Call zeigen (still), danach nachholen oder ganz weglassen
+        // Pro Situation (Videocall, Bildschirm teilen) und pro Erinnerung: zeigen (still), danach oder nie
         let selectable: [ErrandKind] = [.task, .drink, .lookout, .quittingTime, .motivation]
         var policy = CallPolicy()
-        check("Grundeinstellung: erkennen an, alles danach, nicht beim Teilen",
-              policy.detect && !policy.duringScreenSharing && selectable.allSatisfy { policy.handling(for: $0) == .later })
+        check("Grundeinstellung: erkennen an, im Call und beim Teilen alles danach",
+              policy.detect && selectable.allSatisfy {
+                  policy.handling(for: $0, in: .call) == .later && policy.handling(for: $0, in: .screenSharing) == .later })
         check("ohne Call kommt alles ganz normal",
               ErrandKind.allCases.allSatisfy { policy.decision(for: $0, in: .none) == .normal })
-        check("im Call wartet alles bis danach (wie bisher)",
-              selectable.allSatisfy { policy.decision(for: $0, in: .call) == .later })
-        check("der Vogel kommt im Call nie und wird nicht nachgeholt", policy.decision(for: .bird, in: .call) == .skip)
+        check("im Call und beim Teilen wartet alles bis danach (wie bisher)",
+              selectable.allSatisfy { policy.decision(for: $0, in: .call) == .later
+                  && policy.decision(for: $0, in: .screenSharing) == .later })
+        check("der Vogel kommt im Call nie und wird nicht nachgeholt",
+              policy.decision(for: .bird, in: .call) == .skip && policy.decision(for: .bird, in: .screenSharing) == .skip)
 
-        policy.set(.show, for: .task)
-        policy.set(.show, for: .drink)
-        policy.set(.skip, for: .motivation)
+        policy.set(.show, for: .task, in: .call)
+        policy.set(.show, for: .drink, in: .call)
+        policy.set(.skip, for: .motivation, in: .call)
         check("„Zeigen“: kommt im Call still",
               policy.decision(for: .task, in: .call) == .quiet && policy.decision(for: .drink, in: .call) == .quiet)
         check("„Danach“: wartet bis nach dem Call", policy.decision(for: .lookout, in: .call) == .later)
         check("„Nie“: fällt weg", policy.decision(for: .motivation, in: .call) == .skip)
-        check("jede Erinnerung für sich: Augenpause danach, Motivation nie, gleichzeitig",
-              policy.decision(for: .lookout, in: .call) == .later && policy.decision(for: .motivation, in: .call) == .skip)
-        check("beim Teilen des Bildschirms wartet auch „Zeigen“ bis danach",
-              policy.decision(for: .task, in: .screenSharing) == .later)
-        check("beim Teilen bleibt „Nie“ weg", policy.decision(for: .motivation, in: .screenSharing) == .skip)
-        policy.duringScreenSharing = true
-        check("„Auch beim Teilen zeigen“: „Zeigen“ kommt still, „Danach“ wartet",
-              policy.decision(for: .task, in: .screenSharing) == .quiet
-              && policy.decision(for: .lookout, in: .screenSharing) == .later)
+        check("Einstellungen im Call ändern nichts am Teilen",
+              selectable.allSatisfy { policy.decision(for: $0, in: .screenSharing) == .later })
 
-        for kind in selectable { policy.set(.show, for: kind) }
-        policy.set(.show, for: .bird)
-        check("auch wenn alles gezeigt wird, kein Vogel im Call", policy.decision(for: .bird, in: .call) == .skip)
+        policy.set(.show, for: .task, in: .screenSharing)
+        policy.set(.skip, for: .drink, in: .screenSharing)
+        policy.set(.show, for: .motivation, in: .screenSharing)
+        check("beim Teilen eigene Auswahl: Aufgabe zeigen, Trinken nie, Motivation zeigen",
+              policy.decision(for: .task, in: .screenSharing) == .quiet
+              && policy.decision(for: .drink, in: .screenSharing) == .skip
+              && policy.decision(for: .motivation, in: .screenSharing) == .quiet)
+        check("… und im Call gilt weiter die Call-Auswahl",
+              policy.decision(for: .drink, in: .call) == .quiet && policy.decision(for: .motivation, in: .call) == .skip)
+
+        for kind in selectable { policy.set(.show, for: kind, in: .call); policy.set(.show, for: kind, in: .screenSharing) }
+        policy.set(.show, for: .bird, in: .call)
+        check("auch wenn alles gezeigt wird, kein Vogel", policy.decision(for: .bird, in: .call) == .skip
+              && policy.decision(for: .bird, in: .screenSharing) == .skip)
         policy.detect = false
         check("„Bei Videocalls verstecken“ aus: Im Call ist alles normal",
               ErrandKind.allCases.allSatisfy { policy.decision(for: $0, in: .call) == .normal
@@ -871,14 +878,15 @@ MainActor.assumeIsolated {
 
         // Einstellungen: speichern, wieder laden, und ältere Einstellungen übernehmen
         let defaults = UserDefaults.standard
-        let keys = ["callHandling", "callReminders", "catchUpAfterCalls", "tasksDuringCalls", "remindWhileSharing", "hideDuringCalls"]
+        let keys = ["callHandling", "sharingHandling", "callReminders", "catchUpAfterCalls", "tasksDuringCalls",
+                    "remindWhileSharing", "hideDuringCalls"]
         let saved = keys.map { defaults.object(forKey: $0) }
         func clear() { keys.forEach { defaults.removeObject(forKey: $0) } }
         clear()
         defaults.set(true, forKey: "tasksDuringCalls")
         let old = AppSettings()
-        check("alte Einstellung „Aufgaben auch in Videocalls“ wird übernommen",
-              old.callHandling[.task] == .show && old.callHandling[.drink] == .later)
+        check("alte Einstellung „Aufgaben auch in Videocalls“: im Call zeigen, beim Teilen danach",
+              old.callHandling[.task] == .show && old.callHandling[.drink] == .later && old.sharingHandling[.task] == .later)
         clear()
         defaults.set(["drink"], forKey: "callReminders")
         defaults.set(false, forKey: "catchUpAfterCalls")
@@ -886,25 +894,45 @@ MainActor.assumeIsolated {
         check("Zwischenstand (Auswahl plus „Danach nachholen“ aus) wird übernommen",
               between.callHandling[.drink] == .show && between.callHandling[.lookout] == .skip
               && between.callHandling[.task] == .skip, "\(between.callHandling)")
+        check("… beim Teilen wartet „Zeigen“, der Rest bleibt",
+              between.sharingHandling[.drink] == .later && between.sharingHandling[.lookout] == .skip,
+              "\(between.sharingHandling)")
+        clear()
+        defaults.set(["task": "show", "drink": "later", "lookout": "skip", "quittingTime": "later", "motivation": "show"],
+                     forKey: "callHandling")
+        defaults.set(true, forKey: "remindWhileSharing")
+        let sharingOn = AppSettings()
+        check("„Zeigen auch beim Teilen“ an: Teilen übernimmt die Call-Auswahl",
+              sharingOn.sharingHandling == sharingOn.callHandling, "\(sharingOn.sharingHandling)")
+        defaults.set(false, forKey: "remindWhileSharing")
+        let sharingOff = AppSettings()
+        check("„Zeigen auch beim Teilen“ aus: Beim Teilen wird „Zeigen“ zu „Danach“",
+              sharingOff.sharingHandling[.task] == .later && sharingOff.sharingHandling[.motivation] == .later
+              && sharingOff.sharingHandling[.lookout] == .skip, "\(sharingOff.sharingHandling)")
         clear()
         let fresh = AppSettings()
-        check("frisch: alles danach, nicht beim Teilen",
-              CallPolicy.selectable.allSatisfy { fresh.callHandling[$0] == .later } && !fresh.remindWhileSharing)
+        check("frisch: im Call und beim Teilen alles danach",
+              CallPolicy.selectable.allSatisfy { fresh.callHandling[$0] == .later && fresh.sharingHandling[$0] == .later })
         fresh.callHandling[.drink] = .show
         fresh.callHandling[.motivation] = .skip
-        fresh.remindWhileSharing = true
+        fresh.sharingHandling[.task] = .show
+        fresh.sharingHandling[.drink] = .skip
         let reloaded = AppSettings()
-        check("Auswahl wird gespeichert und wieder geladen",
+        check("beide Auswahlen werden gespeichert und wieder geladen",
               reloaded.callHandling[.drink] == .show && reloaded.callHandling[.motivation] == .skip
-              && reloaded.callHandling[.lookout] == .later && reloaded.remindWhileSharing, "\(reloaded.callHandling)")
+              && reloaded.callHandling[.lookout] == .later
+              && reloaded.sharingHandling[.task] == .show && reloaded.sharingHandling[.drink] == .skip
+              && reloaded.sharingHandling[.motivation] == .later, "\(reloaded.callHandling) \(reloaded.sharingHandling)")
         reloaded.tasksDuringCalls = true
-        check("Schalter im Aufgaben-Menü: Aufgaben zeigen", reloaded.callHandling[.task] == .show && reloaded.tasksDuringCalls)
+        check("Schalter im Aufgaben-Menü: Aufgaben im Call zeigen", reloaded.callHandling[.task] == .show && reloaded.tasksDuringCalls)
         reloaded.tasksDuringCalls = false
         check("… und wieder aus: Aufgaben danach", reloaded.callHandling[.task] == .later && !reloaded.tasksDuringCalls)
+        check("der Schalter im Aufgaben-Menü ändert nichts am Teilen", reloaded.sharingHandling[.task] == .show)
         reloaded.hideDuringCalls = false
         let p = reloaded.callPolicy
         check("aus den Einstellungen wird die passende CallPolicy",
-              !p.detect && p.handling(for: .drink) == .show && p.handling(for: .motivation) == .skip && p.duringScreenSharing)
+              !p.detect && p.handling(for: .drink, in: .call) == .show && p.handling(for: .drink, in: .screenSharing) == .skip
+              && p.handling(for: .task, in: .screenSharing) == .show)
         for (key, value) in zip(keys, saved) {
             if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
         }

@@ -67,8 +67,8 @@ final class AppSettings: ObservableObject {
     @Published var motivationSayings: [String] { didSet { changed() } }
     /// Videocalls: pro Erinnerung im Call zeigen (stille Blase am Dock), danach nachholen oder weglassen
     @Published var callHandling: [ErrandKind: CallHandling] { didSet { changed() } }
-    /// „Zeigen“ auch, während der Bildschirm geteilt wird
-    @Published var remindWhileSharing: Bool { didSet { changed() } }
+    /// Dasselbe, während der Bildschirm geteilt wird
+    @Published var sharingHandling: [ErrandKind: CallHandling] { didSet { changed() } }
     /// An Aufgaben auch während Videocalls erinnern (Aufgabenfenster und -menü)
     var tasksDuringCalls: Bool {
         get { callHandling[.task] == .show }
@@ -76,7 +76,7 @@ final class AppSettings: ObservableObject {
     }
     /// Alles zu Videocalls auf einmal
     var callPolicy: CallPolicy {
-        CallPolicy(detect: hideDuringCalls, handling: callHandling, duringScreenSharing: remindWhileSharing)
+        CallPolicy(detect: hideDuringCalls, call: callHandling, sharing: sharingHandling)
     }
     /// Ist so lange niemand am Rechner, fliegt ein Vogel herum und sie jagt ihn
     @Published var birdWhenAway: Bool { didSet { changed() } }
@@ -152,7 +152,7 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "workdayStart": 9 * 60, "dayRitual": false, "dayRitualRepeat": 15,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "tasksDuringCalls": false, "remindWhileSharing": false,
+            "taskReminders": false, "tasksDuringCalls": false,
             "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "guidedPomodoros": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
@@ -199,8 +199,9 @@ final class AppSettings: ObservableObject {
         }
         motivationEnabled = defaults.bool(forKey: "motivation")
         motivationSayings = defaults.stringArray(forKey: "motivationSayings") ?? []
-        callHandling = Self.loadCallHandling(defaults)
-        remindWhileSharing = defaults.bool(forKey: "remindWhileSharing")
+        let calls = Self.loadCallHandling(defaults)
+        callHandling = calls.call
+        sharingHandling = calls.sharing
         birdWhenAway = defaults.bool(forKey: "birdWhenAway")
         birdMinutes = defaults.integer(forKey: "birdMinutes")
         sounds = defaults.bool(forKey: "sounds")
@@ -250,30 +251,42 @@ final class AppSettings: ObservableObject {
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "motivation": motivationEnabled, "motivationSayings": motivationSayings,
             "tasksDuringCalls": tasksDuringCalls,
-            "callHandling": Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map {
-                ($0.rawValue, (callHandling[$0] ?? .later).rawValue)
-            }),
-            "remindWhileSharing": remindWhileSharing, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
+            "callHandling": Self.store(callHandling), "sharingHandling": Self.store(sharingHandling), "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
             "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks,
             "guidedPomodoros": guidedPomodoros, "trackedApps": trackedApps, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
     }
 
-    /// Videocalls laden. Ältere Versionen kannten nur eine Auswahl fürs Zeigen und einen Schalter fürs Nachholen,
-    /// ganz alte nur „Aufgaben auch in Videocalls“.
-    private static func loadCallHandling(_ defaults: UserDefaults) -> [ErrandKind: CallHandling] {
-        if let stored = defaults.dictionary(forKey: "callHandling") as? [String: String] {
-            var result: [ErrandKind: CallHandling] = [:]
-            for (key, value) in stored {
-                if let kind = ErrandKind(rawValue: key), let handling = CallHandling(rawValue: value) { result[kind] = handling }
-            }
-            return result
+    /// Videocalls laden. Ältere Versionen kannten nur eine Auswahl für den Call plus „Zeigen auch beim Teilen“,
+    /// davor eine Auswahl fürs Zeigen und einen Schalter fürs Nachholen, ganz alte nur „Aufgaben auch in Videocalls“.
+    private static func loadCallHandling(_ defaults: UserDefaults)
+        -> (call: [ErrandKind: CallHandling], sharing: [ErrandKind: CallHandling]) {
+        let call = read(defaults.dictionary(forKey: "callHandling")) ?? {
+            let shown = defaults.stringArray(forKey: "callReminders").map { Set($0.compactMap(ErrandKind.init(rawValue:))) }
+                ?? (defaults.bool(forKey: "tasksDuringCalls") ? [.task] : [])
+            let otherwise: CallHandling = defaults.object(forKey: "catchUpAfterCalls") as? Bool == false ? .skip : .later
+            return Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map { ($0, shown.contains($0) ? .show : otherwise) })
+        }()
+        let sharing = read(defaults.dictionary(forKey: "sharingHandling")) ?? {
+            // Früher galt beim Teilen dieselbe Auswahl, „Zeigen“ aber nur mit „Zeigen auch beim Teilen“
+            if defaults.bool(forKey: "remindWhileSharing") { return call }
+            return call.mapValues { $0 == .show ? .later : $0 }
+        }()
+        return (call, sharing)
+    }
+
+    private static func read(_ stored: [String: Any]?) -> [ErrandKind: CallHandling]? {
+        guard let stored = stored as? [String: String] else { return nil }
+        var result: [ErrandKind: CallHandling] = [:]
+        for (key, value) in stored {
+            if let kind = ErrandKind(rawValue: key), let handling = CallHandling(rawValue: value) { result[kind] = handling }
         }
-        let shown = defaults.stringArray(forKey: "callReminders").map { Set($0.compactMap(ErrandKind.init(rawValue:))) }
-            ?? (defaults.bool(forKey: "tasksDuringCalls") ? [.task] : [])
-        let otherwise: CallHandling = defaults.object(forKey: "catchUpAfterCalls") as? Bool == false ? .skip : .later
-        return Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map { ($0, shown.contains($0) ? .show : otherwise) })
+        return result
+    }
+
+    private static func store(_ handling: [ErrandKind: CallHandling]) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map { ($0.rawValue, (handling[$0] ?? .later).rawValue) })
     }
 
     private static func writeBackup(_ values: [String: Any]) {
@@ -347,6 +360,15 @@ struct SettingsView: View {
     /// Mit dem Mac starten: Das merkt sich macOS, hier nur gespiegelt
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNeedsApproval = LoginItem.needsApproval
+    /// Videocalls: Gerade sichtbar sind die Einstellungen für den Call oder fürs Teilen des Bildschirms
+    @State private var callSettingsFor: CallSituation = .call
+
+    /// `showingCalls`: welche Seite unter Videocalls zuerst zu sehen ist (für Bilder zur Sichtprüfung)
+    init(settings: AppSettings, focus: FocusMonitor, showingCalls: CallSituation = .call) {
+        self.settings = settings
+        self.focus = focus
+        _callSettingsFor = State(initialValue: showingCalls)
+    }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -750,6 +772,12 @@ struct SettingsView: View {
             hint(t("Bei Kamera, Mikrofon oder geteiltem Bildschirm geht sie aus dem Bild und ist still. Pausenfragen kommen nach dem Call.",
                    "With your camera, mic or screen sharing on, she steps out of view and stays quiet. Break questions come after the call."))
             Group {
+                Picker("", selection: $callSettingsFor) {
+                    Label(t("Im Videocall", "In a video call"), systemImage: "video.fill").tag(CallSituation.call)
+                    Label(t("Beim Teilen", "While sharing"), systemImage: "rectangle.on.rectangle").tag(CallSituation.screenSharing)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
                 ForEach(CallPolicy.selectable, id: \.self) { kind in
                     HStack {
                         Label {
@@ -758,9 +786,7 @@ struct SettingsView: View {
                             Image(systemName: callIcon(kind).name).foregroundStyle(callIcon(kind).color)
                         }
                         Spacer()
-                        Picker("", selection: Binding(
-                            get: { settings.callHandling[kind] ?? .later },
-                            set: { settings.callHandling[kind] = $0 })) {
+                        Picker("", selection: callHandlingBinding(kind, in: callSettingsFor)) {
                             Text(t("Zeigen", "Show")).tag(CallHandling.show)
                             Text(t("Danach", "Later")).tag(CallHandling.later)
                             Text(t("Nie", "Never")).tag(CallHandling.skip)
@@ -770,17 +796,25 @@ struct SettingsView: View {
                         .fixedSize()
                     }
                 }
-                hint(t("Zeigen: als stille Blase am Dock, ohne Katze. Danach: kommt nach dem Call. Nie: fällt weg.",
-                       "Show: as a silent bubble by the Dock, without the cat. Later: comes after the call. Never: skipped."))
-                Toggle(t("„Zeigen“ auch beim Teilen des Bildschirms", "“Show” also while sharing your screen"),
-                       isOn: $settings.remindWhileSharing)
-                hint(t("Sonst wartet es bis danach, denn die anderen sähen die Blase.",
-                       "Otherwise it waits until afterwards, since the others would see the bubble."))
+                hint(callSettingsFor == .screenSharing
+                     ? t("Zeigen: als stille Blase am Dock, die die anderen auch sehen. Danach: kommt, wenn du nicht mehr teilst. Nie: fällt weg.",
+                         "Show: as a silent bubble by the Dock that the others see too. Later: comes once you stop sharing. Never: skipped.")
+                     : t("Zeigen: als stille Blase am Dock, ohne Katze. Danach: kommt nach dem Call. Nie: fällt weg.",
+                         "Show: as a silent bubble by the Dock, without the cat. Later: comes after the call. Never: skipped."))
             }
             .disabled(!settings.hideDuringCalls)
         } header: {
             SectionTitle(t("Videocalls", "Video calls"), icon: "video.fill", color: .mint)
         }
+    }
+
+    /// Zeigen, danach oder nie – für den Videocall oder fürs Teilen des Bildschirms
+    private func callHandlingBinding(_ kind: ErrandKind, in situation: CallSituation) -> Binding<CallHandling> {
+        Binding(
+            get: { (situation == .screenSharing ? settings.sharingHandling[kind] : settings.callHandling[kind]) ?? .later },
+            set: { value in
+                if situation == .screenSharing { settings.sharingHandling[kind] = value } else { settings.callHandling[kind] = value }
+            })
     }
 
     private func callTitle(_ kind: ErrandKind) -> String {

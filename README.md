@@ -137,10 +137,10 @@ averages over the days you started or ended. An ⓘ next to each chart explains 
 ### Considerate
 
 - **Video calls and screen sharing:** While the camera or microphone is on or the screen is shared, she hides,
-  stays quiet and comes back afterwards. In the settings under **Video calls** you choose for each reminder (tasks,
-  drinking, eye breaks, end of workday, motivation): **Show** it during the call as a small, silent thought bubble
-  at the Dock without the cat, show it **Later** once the call is over, or **Never**. While you share your screen,
-  *Show* waits until afterwards too, unless you allow it. Break questions always come after the call.
+  stays quiet and comes back afterwards. In the settings under **Video calls** you switch between *In a video call*
+  and *While sharing* and choose for each reminder (tasks, drinking, eye breaks, end of workday, motivation):
+  **Show** it right away as a small, silent thought bubble at the Dock without the cat, show it **Later** once the
+  call or the sharing is over, or **Never**. Break questions always come after the call.
 - **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
 - **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, motivation and the end of
   the day.
@@ -217,7 +217,8 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **Apps to watch:** Apps like Anki whose active time shows up in your statistics
 - **While you're away:** Chase a bird after a set time without input, Show now
 - **Sounds:** Meow, meow for tasks, purring
-- **Video calls:** Hide during calls; for each reminder Show, Later or Never; Show also while sharing the screen
+- **Video calls:** Hide during calls; for video calls and for screen sharing separately, each reminder Show,
+  Later or Never
 - **Being considerate:** Silent mode, respect Focus
 - **Startup:** Open at login (the setup asks once, and you can change it here any time)
 - **Language:** Same as macOS, Deutsch, English
