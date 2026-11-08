@@ -1,3 +1,6 @@
 build/
 .DS_Store
 marketing/
+# Zertifikate und Schlüssel nie ins Repository
+*.p12
+*.pem
