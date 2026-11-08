@@ -79,7 +79,9 @@ struct OnboardingView: View {
     enum Step: Int, CaseIterable {
         case welcome, language, name, coat, home, bedAccess, reminders, motivation
         /// Kleine Führung: was sie kann
-        case tourReminders, tourTasks, tourAway, petting, menu, done
+        case tourReminders, tourTasks, tourAway, petting, menu
+        /// Ob sie mit dem Mac startet
+        case launchAtLogin, done
 
         /// Die Frage nach der Freigabe gehört zum Zuhause und bekommt keinen eigenen Punkt
         static var dots: [Step] { allCases.filter { $0 != .bedAccess } }
@@ -96,6 +98,9 @@ struct OnboardingView: View {
     @State private var forward = true
     /// Das Zuhause gilt erst am Ende, wenn die Katze aufs Dock kommt
     @State private var home: Home
+    /// Mit dem Mac starten: Beim ersten Mal ist Ja vorgewählt, später gilt, was macOS eingetragen hat.
+    /// Wie das Zuhause wird es erst mit „Fertig“ übernommen.
+    @State private var launchAtLogin: Bool
 
     static let maxNameLength = 16
 
@@ -105,6 +110,7 @@ struct OnboardingView: View {
         self.onFinish = onFinish
         _step = State(initialValue: start)
         _home = State(initialValue: Home(settings))
+        _launchAtLogin = State(initialValue: !settings.onboardingDone || LoginItem.isEnabled)
     }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
@@ -302,6 +308,26 @@ struct OnboardingView: View {
                                    "Up in the menu bar you'll find food, yarn, Pomodoro and the settings.")) {
                 MenuBarSketch()
             }
+        case .launchAtLogin:
+            OnboardingPage(title: t("Soll ich mit deinem Mac aufwachen?", "Shall I wake up with your Mac?"),
+                           text: t("Dann bin ich jedes Mal da, wenn du ihn einschaltest. Du kannst es später in den Einstellungen ändern.",
+                                   "Then I'm there every time you turn it on. You can change it later in the settings.")) {
+                HStack(spacing: 18) {
+                    ChoiceCard(selected: launchAtLogin, title: t("Ja, immer", "Yes, always")) {
+                        VStack(spacing: 4) {
+                            FloatingHeart()
+                            PixelCat(coat: settings.coat, pose: .sit, scale: 4)
+                        }
+                    } action: {
+                        launchAtLogin = true
+                    }
+                    ChoiceCard(selected: !launchAtLogin, title: t("Nein, danke", "No, thanks")) {
+                        PixelCat(coat: settings.coat, pose: .sleep, scale: 4)
+                    } action: {
+                        launchAtLogin = false
+                    }
+                }
+            }
         case .done:
             OnboardingPage(title: t("Schön, dass ich da bin!", "Happy to be here!"),
                            text: t("\(settings.displayName) kommt gleich auf dein Dock.",
@@ -370,6 +396,8 @@ struct OnboardingView: View {
         if step == .done {
             guard wokeAt == nil else { return }
             settings.onboardingDone = true
+            // Nur ändern, wenn sich etwas ändert: macOS meldet jedes neue Anmeldeobjekt mit einer Mitteilung
+            if launchAtLogin != LoginItem.isEnabled { LoginItem.set(launchAtLogin) }
             // Aufwachen, aufstehen, dann aus dem Fenster aufs Dock springen. Das Zuhause gilt erst, wenn sie unten ist
             wokeAt = Date()
             let home = home

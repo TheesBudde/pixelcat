@@ -311,6 +311,9 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var focus: FocusMonitor
     @State private var newSaying = ""
+    /// Mit dem Mac starten: Das merkt sich macOS, hier nur gespiegelt
+    @State private var launchAtLogin = LoginItem.isEnabled
+    @State private var loginNeedsApproval = LoginItem.needsApproval
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -332,6 +335,7 @@ struct SettingsView: View {
                 birdSection
                 soundSection
                 considerateSection
+                startSection
                 languageSection
                 aboutSection
             }
@@ -745,6 +749,41 @@ struct SettingsView: View {
     }
 
     // MARK: Allgemein
+
+    private var startSection: some View {
+        Section {
+            Toggle(t("Mit dem Mac starten", "Open at login"), isOn: Binding(
+                get: { launchAtLogin },
+                set: { on in
+                    LoginItem.set(on)
+                    refreshLoginItem()
+                }))
+                .disabled(!LoginItem.isAvailable)
+            HStack {
+                hint(loginNeedsApproval
+                     ? t("macOS wartet noch auf deine Erlaubnis unter Systemeinstellungen › Allgemein › Anmeldeobjekte.",
+                         "macOS is still waiting for your OK in System Settings › General › Login Items.")
+                     : t("Dann ist sie jedes Mal da, wenn du deinen Mac einschaltest.",
+                         "Then she's there every time you turn on your Mac."))
+                Spacer()
+                if loginNeedsApproval {
+                    Button(t("Öffnen …", "Open …")) { LoginItem.openSystemSettings() }
+                }
+            }
+        } header: {
+            SectionTitle(t("Start", "Startup"), icon: "power", color: .green)
+        }
+        // Kann sich in den Systemeinstellungen geändert haben
+        .onAppear(perform: refreshLoginItem)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshLoginItem()
+        }
+    }
+
+    private func refreshLoginItem() {
+        launchAtLogin = LoginItem.isEnabled || LoginItem.needsApproval
+        loginNeedsApproval = LoginItem.needsApproval
+    }
 
     private var languageSection: some View {
         Section {

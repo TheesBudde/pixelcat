@@ -217,7 +217,7 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **Sounds and being considerate:** Meow, meow for tasks, purring, silent mode, hide during calls, respect Focus
 - **Language:** Same as macOS, Deutsch, English
 
-To keep her around, add Pixelcat under *System Settings › General › Login Items*.
+- **Startup:** Open at login (the setup asks once, and you can change it here any time)
 <br clear="right">
 
 ## How it works
