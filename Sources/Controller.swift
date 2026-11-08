@@ -361,8 +361,11 @@ final class CatController {
     var taskList: [TaskItem] = [] {
         didSet { if taskList != oldValue { configureTasks() } }
     }
-    /// An Aufgaben auch während Videocalls erinnern – die Katze bleibt dann versteckt, nur die Blase erscheint
-    var tasksDuringCalls = false
+    /// Einstellungen › Videocalls: was im Call trotzdem kommt (nur als Blase, die Katze bleibt versteckt),
+    /// was wartet und was wegfällt
+    var callPolicy = CallPolicy()
+    /// Die laufende Erinnerung kam im Call: nur die Blase am Dock, ohne Napf, Fenster oder Katze
+    private var quietErrand = false
     /// Motivation: an/aus und die eigenen Sprüche (leer = ihre eigenen)
     var motivationEnabled = false
     var motivationSayings: [String] = []
@@ -407,7 +410,7 @@ final class CatController {
         drinkMinutes = settings.drinkReminders ? settings.drinkInterval : nil
         eyeBreakMinutes = settings.eyeBreaks ? settings.eyeInterval : nil
         taskList = settings.taskItems
-        tasksDuringCalls = settings.tasksDuringCalls
+        callPolicy = settings.callPolicy
         meowForTasks = settings.meowForTasks
         birdAfterMinutes = settings.birdWhenAway ? settings.birdMinutes : nil
         tasksEnabled = settings.taskReminders
@@ -1216,10 +1219,11 @@ final class CatController {
         dismissQuestions(now: Date())
         // Napf, Augenpausen-Fenster oder Vogel sollen im Call nicht stehen bleiben – beim geteilten Bildschirm
         // sähen es alle. Die Erinnerung kommt danach noch einmal (Aufgaben dürfen bleiben, der Vogel nicht).
+        // Ist sie im Call erlaubt, kommt sie gleich als stille Blase wieder, sonst danach (oder gar nicht).
         if let kind = activeErrand?.errand.kind, kind != .task {
             let answered = kind == .drink && drinkAnswered // schon beantwortet: nicht noch einmal fragen
             cancelErrand()
-            if kind != .bird, !answered { errands.requestNow(kind) }
+            if !answered, callPolicy.decision(for: kind, in: callSituation) != .skip { errands.requestNow(kind) }
         }
     }
 
@@ -1653,6 +1657,12 @@ final class CatController {
         simulatedCall.map { $0 == .screenSharing } ?? CallDetector.screenIsShared()
     }
 
+    /// Kein Call, Videocall oder geteilter Bildschirm (nur, solange sie sich deswegen versteckt)
+    private var callSituation: CallSituation {
+        guard hiddenBecause != nil else { return .none }
+        return screenIsShared ? .screenSharing : .call
+    }
+
     /// Selbsttest: wie ein Klick auf die Blase
     func selfTestPopBubble() {
         bubble?.pop()
@@ -1713,10 +1723,15 @@ final class CatController {
             if errandFinished(active.errand, since: active.since, now: now) { finishErrand(now: now) }
             return
         }
+        // Im Videocall: nur, was unter Einstellungen › Videocalls erlaubt ist. Der Rest wartet oder fällt weg.
+        let situation = callSituation
+        let policy = callPolicy
+        if situation != .none { errands.discard(where: { policy.decision(for: $0, in: situation) == .skip }) }
         guard now >= nextErrandAllowed else { return }
-        // Im Videocall nur Aufgaben (falls so eingestellt) – und nie, während der Bildschirm geteilt wird
-        let callAllows: (ErrandKind) -> Bool = hiddenBecause == nil ? { _ in true }
-            : { [tasksDuringCalls, screenIsShared] kind in kind == .task && tasksDuringCalls && !screenIsShared }
+        let callAllows: (ErrandKind) -> Bool = { kind in
+            let decision = policy.decision(for: kind, in: situation)
+            return decision == .normal || decision == .quiet
+        }
         let allowed: (ErrandKind) -> Bool
         if canRunErrand {
             allowed = callAllows
@@ -1756,6 +1771,12 @@ final class CatController {
 
     private func startErrand(_ errand: Errand, now: Date) {
         activeErrand = (errand, now)
+        quietErrand = false
+        // Im Videocall erlaubt: nur die Blase am Dock (Aufgaben machen das unten ohnehin so)
+        if hiddenBecause != nil, errand.kind != .task, errand.kind != .bird {
+            startQuietErrand(errand, now: now)
+            return
+        }
         switch errand.kind {
         case .drink:
             // Napf hinstellen und fragen: Trinkst du mit? Daumen hoch zählt in der Statistik
@@ -1810,7 +1831,31 @@ final class CatController {
         }
     }
 
+    /// Im Videocall: Die Katze bleibt versteckt und still, es gibt keinen Napf und kein Fenster. Nur die Blase steht
+    /// am Dock (über dem Katzenkorb bzw. unten rechts).
+    private func startQuietErrand(_ errand: Errand, now: Date) {
+        quietErrand = true
+        if basketInDock { locateBasket() }
+        switch errand.kind {
+        case .drink:
+            drinkAnswered = false
+            showErrandBubble(L10n.s("Trinken?", "Drink?"), for: 2 * 60) { [weak self] yes in self?.answerDrink(yes) }
+        case .lookout:
+            showErrandBubble(L10n.s("Augenpause", "Eye break"), for: 40)
+        case .quittingTime:
+            showErrandBubble(L10n.s("Feierabend", "Off work"), for: 60)
+            updateOutfit()
+        case .motivation:
+            showErrandBubble(nextSaying(now: now), for: 40)
+        case .task:
+            showErrandBubble(errand.text ?? "", for: 35)
+        case .bird:
+            break
+        }
+    }
+
     private func errandFinished(_ errand: Errand, since: Date, now: Date) -> Bool {
+        if quietErrand { return errandBubble == nil }
         switch errand.kind {
         case .drink:
             // Fertig getrunken: Die Blase platzt; erledigt, sobald der Napf weggeräumt ist
@@ -1838,6 +1883,7 @@ final class CatController {
         errandBubble?.pop()
         brain.endErrandVisit()
         activeErrand = nil
+        quietErrand = false
         nextErrandAllowed = now.addingTimeInterval(15)
     }
 
@@ -1940,6 +1986,11 @@ final class CatController {
         guard activeErrand?.errand.kind == .drink else { return }
         drinkAnswered = true
         errandBubble?.pop()
+        if quietErrand {
+            // Im Call: nur zählen, die Katze bleibt versteckt
+            stats?.record { if yes { $0.drinks += 1 } else { $0.drinksSkipped += 1 } }
+            return
+        }
         if yes {
             stats?.record { $0.drinks += 1 }
             brain.rejoice()
@@ -2065,8 +2116,11 @@ final class CatController {
             checkForBird(now: date)
             countActiveTime(now: date)
             checkDayRitual(now: date)
-            // Aufgaben-Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg
-            if hiddenBecause != nil, activeErrand?.errand.kind == .task, screenIsShared { errandBubble?.pop() }
+            // Blase im Videocall: Beginnt jemand, den Bildschirm zu teilen, sofort weg (außer es ist so erlaubt)
+            if let kind = activeErrand?.errand.kind, callSituation == .screenSharing,
+               callPolicy.decision(for: kind, in: .screenSharing) != .quiet {
+                errandBubble?.pop()
+            }
         }
         updatePomodoro(now: date)
         updateTimer(now: date)

@@ -48,6 +48,8 @@ final class SelfTest {
         cat.eyeBreakMinutes = nil
         cat.tasksEnabled = false
         cat.hideDuringCalls = true
+        // Unabhängig von den eigenen Einstellungen: Alles wartet bis nach dem Call (wie ohne Änderungen)
+        cat.callPolicy = CallPolicy()
         cat.show()
         let task = TaskItem(text: "Selbsttest: im Call", time: TaskItem.defaultTime)
         cat.selfTestTasks([task])
@@ -70,7 +72,7 @@ final class SelfTest {
         await pause(3)
 
         section("Call mit „Auch während Videocalls“ an")
-        cat.tasksDuringCalls = true
+        cat.callPolicy.set(.show, for: .task)
         cat.simulatedCall = .camera
         log("   (Kamera an – nachgespielt)")
         await waitUntil("Katze versteckt sich", 60) { $0.isAway }
@@ -96,7 +98,7 @@ final class SelfTest {
 
         section("Call mit „Auch während Videocalls“ aus")
         cat.simulatedCall = .microphone
-        cat.tasksDuringCalls = false
+        cat.callPolicy.set(.later, for: .task)
         log("   (Mikrofon an – nachgespielt)")
         await pause(16)
         check("keine Aufgaben-Blase im Call", cat.snapshot().bubble == nil)
@@ -108,6 +110,60 @@ final class SelfTest {
         await waitUntil("jetzt kommt das Trinken (oder die Aufgabe) dran", 40) { $0.errand != nil }
         await waitUntil("Trinken ist dran", 120) { $0.errand == .drink }
         await waitUntil("erledigt", 120) { $0.errand == nil && $0.bowl == nil }
+        await pause(3)
+
+        // Einstellungen › Videocalls: Was im Call trotzdem kommt, erscheint als stille Blase am Dock
+        section("Trinken im Call erlaubt")
+        cat.callPolicy = CallPolicy(handling: [.drink: .show, .lookout: .show])
+        cat.simulatedCall = .camera
+        log("   (Kamera an – nachgespielt)")
+        await waitUntil("Katze versteckt sich", 60) { $0.isAway }
+        let meowsBefore = cat.snapshot().meows
+        cat.showErrandNow(.drink)
+        await waitUntil("„Trinken?“ erscheint als Blase", 15) { $0.errand == .drink && $0.bubble?.frame != nil }
+        var snap = cat.snapshot()
+        check("kein Napf, die Katze bleibt versteckt", snap.bowl == nil && snap.isAway)
+        if let frame = snap.bubble?.frame, let screen = NSScreen.screens.first {
+            check("Blase steht unten am Dock", frame.minY < screen.visibleFrame.minY + 120, "Unterkante bei \(Int(frame.minY))")
+        }
+        cat.answerDrink(true)
+        await waitUntil("nach Daumen hoch erledigt", 15) { $0.errand == nil && $0.bubble == nil }
+        check("Trinken wird nicht nachgeholt", !cat.snapshot().queued.contains(.drink), "\(cat.snapshot().queued)")
+
+        section("Augenpause im Call erlaubt")
+        cat.showErrandNow(.lookout)
+        await waitUntil("Augenpause erscheint als Blase", 15) { $0.errand == .lookout && $0.bubble?.frame != nil }
+        snap = cat.snapshot()
+        check("kein Fenster, die Katze bleibt versteckt", snap.lookout == nil && snap.isAway)
+        await waitUntil("Blase verschwindet von selbst", 60) { $0.errand == nil && $0.bubble == nil }
+        check("im Call kein Miauen", cat.snapshot().meows == meowsBefore)
+
+        section("Augenpause „Danach“, Motivation „Nie“")
+        cat.callPolicy = CallPolicy(handling: [.lookout: .later, .motivation: .skip])
+        cat.showErrandNow(.motivation)
+        cat.showErrandNow(.lookout)
+        await pause(6)
+        snap = cat.snapshot()
+        check("keine Blase im Call", snap.bubble == nil && snap.errand == nil)
+        check("Motivation fällt weg", !snap.queued.contains(.motivation), "\(snap.queued)")
+        check("Augenpause wartet auf danach", snap.queued.contains(.lookout), "\(snap.queued)")
+
+        section("„Auch beim Teilen des Bildschirms“ an")
+        cat.callPolicy = CallPolicy(handling: [.task: .show, .lookout: .later, .motivation: .skip], duringScreenSharing: true)
+        cat.simulatedCall = .screenSharing
+        log("   (Bildschirmfreigabe – nachgespielt)")
+        await pause(4)
+        cat.showErrandNow(.task)
+        await waitUntil("Aufgaben-Blase erscheint auch beim Teilen", 15) { $0.errand == .task && $0.bubble?.frame != nil }
+        await waitUntil("Blase verschwindet von selbst", 45) { $0.bubble == nil }
+
+        section("Call vorbei: Augenpause kommt nach, Motivation nicht")
+        cat.simulatedCall = nil
+        log("   (Call beendet – nachgespielt)")
+        await waitUntil("Katze kommt zurück", 60) { !$0.isAway && $0.catFrame != nil }
+        await waitUntil("die Augenpause wird nachgeholt (mit Fenster)", 60) { $0.errand == .lookout && $0.lookout != nil }
+        check("keine Motivation nach dem Call", !cat.snapshot().queued.contains(.motivation))
+        await waitUntil("Augenpause erledigt", 300) { $0.errand == nil && $0.lookout == nil }
 
         cat.selfTestTasks(nil)
         cat.apply(settings)

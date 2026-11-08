@@ -59,10 +59,13 @@ struct TasksView: View {
                 Toggle(t("Auch in Videocalls erinnern", "Also remind me in video calls"),
                        isOn: $settings.tasksDuringCalls)
                 hint(settings.hideDuringCalls
-                     ? t("Bei Kamera oder Mikrofon bleibt sie versteckt und nur die Blase erscheint am Dock. Bei geteiltem Bildschirm nie.",
-                         "With the camera or mic on she stays hidden and only the bubble appears at the Dock. Never while sharing the screen.")
-                     : t("Sie versteckt sich in Videocalls nicht (Einstellungen › Rücksicht). Dann erinnert sie sowieso.",
-                         "She doesn't hide in video calls (Settings › Being considerate). So she reminds you anyway."))
+                     ? (settings.remindWhileSharing
+                        ? t("Im Call bleibt sie versteckt und nur die Blase erscheint am Dock, auch bei geteiltem Bildschirm. Mehr unter Einstellungen › Videocalls.",
+                            "In calls she stays hidden and only the bubble appears at the Dock, even while sharing the screen. More in Settings › Video calls.")
+                        : t("Im Call bleibt sie versteckt und nur die Blase erscheint am Dock. Bei geteiltem Bildschirm nie. Mehr unter Einstellungen › Videocalls.",
+                            "In calls she stays hidden and only the bubble appears at the Dock. Never while sharing the screen. More in Settings › Video calls."))
+                     : t("Sie versteckt sich in Videocalls nicht (Einstellungen › Videocalls). Dann erinnert sie sowieso.",
+                         "She doesn't hide in video calls (Settings › Video calls). So she reminds you anyway."))
             } header: {
                 SectionTitle(t("Erinnern", "Reminders"), icon: "bell.fill", color: .orange)
             }

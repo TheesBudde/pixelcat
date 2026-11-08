@@ -65,8 +65,19 @@ final class AppSettings: ObservableObject {
     /// Motivation: eigene Sprüche, morgens und gegen Feierabend (leer = ihre eigenen)
     @Published var motivationEnabled: Bool { didSet { changed() } }
     @Published var motivationSayings: [String] { didSet { changed() } }
-    /// An Aufgaben auch während Videocalls bzw. bei eingeschaltetem Mikrofon erinnern (nur die Blase)
-    @Published var tasksDuringCalls: Bool { didSet { changed() } }
+    /// Videocalls: pro Erinnerung im Call zeigen (stille Blase am Dock), danach nachholen oder weglassen
+    @Published var callHandling: [ErrandKind: CallHandling] { didSet { changed() } }
+    /// „Zeigen“ auch, während der Bildschirm geteilt wird
+    @Published var remindWhileSharing: Bool { didSet { changed() } }
+    /// An Aufgaben auch während Videocalls erinnern (Aufgabenfenster und -menü)
+    var tasksDuringCalls: Bool {
+        get { callHandling[.task] == .show }
+        set { callHandling[.task] = newValue ? .show : .later }
+    }
+    /// Alles zu Videocalls auf einmal
+    var callPolicy: CallPolicy {
+        CallPolicy(detect: hideDuringCalls, handling: callHandling, duringScreenSharing: remindWhileSharing)
+    }
     /// Ist so lange niemand am Rechner, fliegt ein Vogel herum und sie jagt ihn
     @Published var birdWhenAway: Bool { didSet { changed() } }
     @Published var birdMinutes: Int { didSet { changed() } }
@@ -141,7 +152,8 @@ final class AppSettings: ObservableObject {
             "quittingTimeEnabled": false, "quittingTime": 17 * 60 + 30, "quittingWeekdaysOnly": true,
             "workdayStart": 9 * 60, "dayRitual": false, "dayRitualRepeat": 15,
             "bedtimeEnabled": false, "bedtime": 22 * 60 + 30, "morningOutfit": false, "morningEnd": 9 * 60,
-            "taskReminders": false, "tasksDuringCalls": false, "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
+            "taskReminders": false, "tasksDuringCalls": false, "remindWhileSharing": false,
+            "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "guidedPomodoros": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
         ])
@@ -187,7 +199,8 @@ final class AppSettings: ObservableObject {
         }
         motivationEnabled = defaults.bool(forKey: "motivation")
         motivationSayings = defaults.stringArray(forKey: "motivationSayings") ?? []
-        tasksDuringCalls = defaults.bool(forKey: "tasksDuringCalls")
+        callHandling = Self.loadCallHandling(defaults)
+        remindWhileSharing = defaults.bool(forKey: "remindWhileSharing")
         birdWhenAway = defaults.bool(forKey: "birdWhenAway")
         birdMinutes = defaults.integer(forKey: "birdMinutes")
         sounds = defaults.bool(forKey: "sounds")
@@ -236,11 +249,31 @@ final class AppSettings: ObservableObject {
             "bedtimeEnabled": bedtimeEnabled, "bedtime": bedtime, "morningOutfit": morningOutfit, "morningEnd": morningEnd,
             "taskReminders": taskReminders, "taskList": taskItems.map(\.dictionary),
             "motivation": motivationEnabled, "motivationSayings": motivationSayings,
-            "tasksDuringCalls": tasksDuringCalls, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
+            "tasksDuringCalls": tasksDuringCalls,
+            "callHandling": Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map {
+                ($0.rawValue, (callHandling[$0] ?? .later).rawValue)
+            }),
+            "remindWhileSharing": remindWhileSharing, "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
             "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks,
             "guidedPomodoros": guidedPomodoros, "trackedApps": trackedApps, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
             "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
         ]
+    }
+
+    /// Videocalls laden. Ältere Versionen kannten nur eine Auswahl fürs Zeigen und einen Schalter fürs Nachholen,
+    /// ganz alte nur „Aufgaben auch in Videocalls“.
+    private static func loadCallHandling(_ defaults: UserDefaults) -> [ErrandKind: CallHandling] {
+        if let stored = defaults.dictionary(forKey: "callHandling") as? [String: String] {
+            var result: [ErrandKind: CallHandling] = [:]
+            for (key, value) in stored {
+                if let kind = ErrandKind(rawValue: key), let handling = CallHandling(rawValue: value) { result[kind] = handling }
+            }
+            return result
+        }
+        let shown = defaults.stringArray(forKey: "callReminders").map { Set($0.compactMap(ErrandKind.init(rawValue:))) }
+            ?? (defaults.bool(forKey: "tasksDuringCalls") ? [.task] : [])
+        let otherwise: CallHandling = defaults.object(forKey: "catchUpAfterCalls") as? Bool == false ? .skip : .later
+        return Dictionary(uniqueKeysWithValues: CallPolicy.selectable.map { ($0, shown.contains($0) ? .show : otherwise) })
     }
 
     private static func writeBackup(_ values: [String: Any]) {
@@ -334,6 +367,7 @@ struct SettingsView: View {
                 appsSection
                 birdSection
                 soundSection
+                callSection
                 considerateSection
                 startSection
                 languageSection
@@ -574,8 +608,8 @@ struct SettingsView: View {
     private var motivationSection: some View {
         Section {
             Toggle(t("Motivieren", "Motivate me"), isOn: $settings.motivationEnabled)
-            hint(t("Morgens und gegen Feierabend denkt sie an einen deiner Sprüche. Höchstens alle 4 bis 5 Stunden und nie im Videocall.",
-                   "In the morning and towards the end of your workday she thinks of one of your sayings. At most every 4 to 5 hours and never during video calls."))
+            hint(t("Morgens und gegen Feierabend denkt sie an einen deiner Sprüche. Höchstens alle 4 bis 5 Stunden. Im Videocall nur, wenn du es unter Videocalls erlaubst.",
+                   "In the morning and towards the end of your workday she thinks of one of your sayings. At most every 4 to 5 hours. During video calls only if you allow it under Video calls."))
             ForEach(Array(settings.motivationSayings.enumerated()), id: \.offset) { index, _ in
                 HStack(spacing: 10) {
                     TextField("", text: sayingBinding(index))
@@ -710,15 +744,73 @@ struct SettingsView: View {
         }
     }
 
+    private var callSection: some View {
+        Section {
+            Toggle(t("Bei Videocalls verstecken", "Hide during video calls"), isOn: $settings.hideDuringCalls)
+            hint(t("Bei Kamera, Mikrofon oder geteiltem Bildschirm geht sie aus dem Bild und ist still. Pausenfragen kommen nach dem Call.",
+                   "With your camera, mic or screen sharing on, she steps out of view and stays quiet. Break questions come after the call."))
+            Group {
+                ForEach(CallPolicy.selectable, id: \.self) { kind in
+                    HStack {
+                        Label {
+                            Text(callTitle(kind))
+                        } icon: {
+                            Image(systemName: callIcon(kind).name).foregroundStyle(callIcon(kind).color)
+                        }
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { settings.callHandling[kind] ?? .later },
+                            set: { settings.callHandling[kind] = $0 })) {
+                            Text(t("Zeigen", "Show")).tag(CallHandling.show)
+                            Text(t("Danach", "Later")).tag(CallHandling.later)
+                            Text(t("Nie", "Never")).tag(CallHandling.skip)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
+                hint(t("Zeigen: als stille Blase am Dock, ohne Katze. Danach: kommt nach dem Call. Nie: fällt weg.",
+                       "Show: as a silent bubble by the Dock, without the cat. Later: comes after the call. Never: skipped."))
+                Toggle(t("„Zeigen“ auch beim Teilen des Bildschirms", "“Show” also while sharing your screen"),
+                       isOn: $settings.remindWhileSharing)
+                hint(t("Sonst wartet es bis danach, denn die anderen sähen die Blase.",
+                       "Otherwise it waits until afterwards, since the others would see the bubble."))
+            }
+            .disabled(!settings.hideDuringCalls)
+        } header: {
+            SectionTitle(t("Videocalls", "Video calls"), icon: "video.fill", color: .mint)
+        }
+    }
+
+    private func callTitle(_ kind: ErrandKind) -> String {
+        switch kind {
+        case .task: return t("Aufgaben", "Tasks")
+        case .drink: return t("Trinken", "Drinking")
+        case .lookout: return t("Augenpause", "Eye breaks")
+        case .quittingTime: return t("Feierabend", "Day's end")
+        case .motivation: return t("Motivation", "Motivation")
+        case .bird: return t("Vogel", "Bird")
+        }
+    }
+
+    /// Dieselben Symbole wie in der Einrichtung
+    private func callIcon(_ kind: ErrandKind) -> (name: String, color: Color) {
+        switch kind {
+        case .task: return ("checklist", .green)
+        case .drink: return ("drop.fill", .blue)
+        case .lookout: return ("eye.fill", .teal)
+        case .quittingTime: return ("briefcase.fill", .indigo)
+        case .motivation: return ("sparkles", .orange)
+        case .bird: return ("bird.fill", .cyan)
+        }
+    }
+
     private var considerateSection: some View {
         Section {
             Toggle(t("Ruhemodus", "Silent mode"), isOn: $settings.silentMode)
             hint(t("Sie geht in den Korb oder aus dem Bild. Keine Erinnerungen, keine Töne, bis du ihn ausschaltest. Auch im Menü mit ⌘K.",
                    "She goes to her bed or out of sight. No reminders, no sounds until you turn it off. Also in the menu with ⌘K."))
-            Toggle(t("Bei Videocalls und Bildschirmfreigabe verstecken", "Hide during video calls and screen sharing"),
-                   isOn: $settings.hideDuringCalls)
-            hint(t("Bei Kamera, Mikrofon oder geteiltem Bildschirm versteckt sie sich. Erinnerungen warten so lange. Aufgaben auf Wunsch nicht, siehe Aufgabenfenster.",
-                   "While the camera, mic or screen sharing is on, she hides. Reminders wait until then. Tasks can still show, see the tasks window."))
             Toggle(t("Fokus berücksichtigen", "Respect Focus"), isOn: $settings.respectFocus)
             HStack {
                 hint(focusStatusText)

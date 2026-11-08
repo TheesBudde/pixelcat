@@ -2,7 +2,7 @@ import Foundation
 
 /// Kleine Erinnerungen neben der Pause: trinken, aus dem Fenster schauen, an eine Aufgabe denken, Feierabend,
 /// ein Motivationsspruch. Dazu der Vogel, den sie jagt, während niemand am Rechner ist.
-enum ErrandKind: Hashable, CaseIterable {
+enum ErrandKind: String, Hashable, CaseIterable {
     case drink, lookout, task, quittingTime, bird, motivation
 }
 
@@ -229,6 +229,11 @@ final class ErrandScheduler {
     /// Ruhemodus: Was ansteht, fällt aus
     func clearQueue() {
         queue.removeAll()
+    }
+
+    /// Im Videocall mit „Danach nachholen“ aus: Was nicht kommen darf, fällt weg
+    func discard(where drop: (ErrandKind) -> Bool) {
+        queue.removeAll { drop($0.kind) }
     }
 
     /// Welche Erinnerungen gerade warten (für den Selbsttest)

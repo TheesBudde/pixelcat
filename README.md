@@ -75,11 +75,10 @@ gets in the way, hides during video calls, and everything stays on your Mac.
   to the middle and thinks “Off work”.
 - **Tasks:** Add short notes like “Call mom” in the tasks window, each with **a time of day**. She thinks of each
   task once a day at its time. If your Mac was asleep or off, she catches up within three hours. Optionally also
-  during video calls: she stays hidden and only the thought bubble appears at the Dock. Never while you share your
-  screen.
+  during video calls (see below).
 - **Motivation:** Add your own sayings in the settings (or let her use hers). She cheers you on in the morning
   between 9 and 10 and shortly before the end of your workday, on long days once in between. Never more often than
-  every four hours and never during video calls.
+  every four hours. During video calls only if you allow it.
 - **One at a time:** Reminders wait for each other and for breaks, Pomodoro and timers. Every reminder can be
   previewed in the settings with **Show now**. A click pops the thought bubble.
 
@@ -137,8 +136,11 @@ averages over the days you started or ended. An ⓘ next to each chart explains 
 
 ### Considerate
 
-- **Video calls and screen sharing:** While the camera or microphone is on or the screen is shared, she hides
-  and comes back afterwards. Reminders wait until then.
+- **Video calls and screen sharing:** While the camera or microphone is on or the screen is shared, she hides,
+  stays quiet and comes back afterwards. In the settings under **Video calls** you choose for each reminder (tasks,
+  drinking, eye breaks, end of workday, motivation): **Show** it during the call as a small, silent thought bubble
+  at the Dock without the cat, show it **Later** once the call is over, or **Never**. While you share your screen,
+  *Show* waits until afterwards too, unless you allow it. Break questions always come after the call.
 - **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
 - **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, motivation and the end of
   the day.
@@ -214,10 +216,11 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **Motivation:** On/off, your sayings, Show now
 - **Apps to watch:** Apps like Anki whose active time shows up in your statistics
 - **While you're away:** Chase a bird after a set time without input, Show now
-- **Sounds and being considerate:** Meow, meow for tasks, purring, silent mode, hide during calls, respect Focus
-- **Language:** Same as macOS, Deutsch, English
-
+- **Sounds:** Meow, meow for tasks, purring
+- **Video calls:** Hide during calls; for each reminder Show, Later or Never; Show also while sharing the screen
+- **Being considerate:** Silent mode, respect Focus
 - **Startup:** Open at login (the setup asks once, and you can change it here any time)
+- **Language:** Same as macOS, Deutsch, English
 <br clear="right">
 
 ## How it works
