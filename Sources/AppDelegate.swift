@@ -14,6 +14,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let stats = StatsStore()
     private lazy var statsWindow = StatsWindow(store: stats, settings: settings)
     private lazy var dayWindow = DayWindow(store: stats, settings: settings)
+    /// Lo-Fi-Musik: eigene Beats, Spotify oder Apple Music
+    private let music = MusicController()
+    private lazy var beatBuilder = BeatBuilderWindow(settings: settings) { [weak self] open in
+        self?.music.setBuilderOpen(open)
+    }
+    private var musicItem: NSMenuItem!
+    /// Bei jedem Neubau des Menüs eine eigene Zeile (eine Ansicht kann nur in einem Menü stecken)
+    private var musicRow = MusicMenuRowView()
+    private var musicToggleItem: NSMenuItem!
     private var dayItem: NSMenuItem!
     /// `pkill` (z. B. beim Installieren) beendet die App mit SIGTERM – vorher die Statistik sichern
     private var terminationSignal: DispatchSourceSignal?
@@ -51,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         signal(SIGTERM, SIG_IGN)
         let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         termination.setEventHandler { [weak self] in
+            self?.music.stopAll()
             self?.stats.save(force: true)
             exit(0)
         }
@@ -58,9 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         terminationSignal = termination
         if settings.awayMode || settings.silentMode { cat.startRoamingOutside() }
         cat.apply(settings)
+        music.apply(settings)
+        cat.onPomodoroStage = { [weak self] stage in self?.music.pomodoroChanged(stage) }
+        cat.onCallChange = { [weak self] inCall in self?.music.callChanged(inCall) }
+        music.onProblem = { [weak self] message, app in self?.showMusicProblem(message, app: app) }
+        settings.onOpenBeatBuilder = { [weak self] in self?.beatBuilder.show() }
         settings.onChange = { [weak self] in
             guard let self else { return }
             cat.apply(settings)
+            music.apply(settings)
             buildMenu() // Sprache könnte sich geändert haben
             buildMainMenu()
             statusItem.button?.toolTip = settings.displayName
@@ -143,6 +159,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
 
         // Ruhemodus: Sie geht weg, keine Erinnerungen, keine Töne
+        // Ganz oben: Lo-Fi-Musik. Klick an/aus, über den Pfeil Beats, Spotify, Apple Music
+        musicItem?.view = nil
+        musicRow = MusicMenuRowView()
+        musicRow.onClick = { [weak self] in self?.toggleMusic() }
+        musicItem = NSMenuItem()
+        musicItem.view = musicRow
+        musicItem.submenu = buildMusicMenu()
+        menu.addItem(musicItem)
+        menu.addItem(.separator())
         toggleItem = item(t("Ruhemodus", "Silent mode"), #selector(toggleSilent), key: "k", icon: "bell.slash")
         menu.addItem(toggleItem)
         // Tag starten bzw. beenden – einmal am Tag
@@ -234,6 +259,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quit)
 
         statusItem.menu = menu
+        musicRow.title = musicTitle
+        musicRow.fit(to: menu)
     }
 
     /// Menüleiste, wenn die App mit Körbchen im Dock aktiv ist: nur Einstellungen und Beenden.
@@ -339,6 +366,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         infoItem.title = info ?? ""
         infoItem.isHidden = info == nil
 
+        musicRow.isOn = music.isOn
+        musicRow.title = musicTitle
+        musicRow.fit(to: menu)
+        musicToggleItem.title = music.isOn ? t("Musik stoppen", "Stop music") : t("Musik abspielen", "Play music")
+        musicToggleItem.image = Self.symbol(music.isOn ? "stop.fill" : "play.fill")
         reminderItem.state = settings.breakReminders ? .on : .off
         reminderItem.isEnabled = cat.pomodoro == nil
         drinkItem.state = settings.drinkReminders ? .on : .off
@@ -382,7 +414,105 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Statistik beim Beenden sicher speichern
     func applicationWillTerminate(_ notification: Notification) {
+        music.stopAll()
         stats.save(force: true)
+    }
+
+    // MARK: Musik
+
+    @objc private func toggleMusic() {
+        music.toggle()
+    }
+
+    /// Untermenü am Pfeil: an/aus, eigene Beats, Spotify, Apple Music, Baukasten, Einstellungen
+    private func buildMusicMenu() -> NSMenu {
+        func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        musicToggleItem = item(t("Musik abspielen", "Play music"), #selector(toggleMusic), icon: "play.fill")
+        submenu.addItem(musicToggleItem)
+        submenu.addItem(.separator())
+
+        submenu.addItem(header(t("Eigene Beats", "My beats")))
+        for (index, beat) in settings.lofiBeats.enumerated() {
+            let entry = item(beat.name.isEmpty ? t("Ohne Namen", "Untitled") : beat.name, #selector(chooseBeat(_:)))
+            entry.tag = index
+            entry.state = settings.musicSource == .beat && settings.selectedBeat.id == beat.id ? .on : .off
+            entry.indentationLevel = 1
+            submenu.addItem(entry)
+        }
+        submenu.addItem(item(t("Beat-Baukasten …", "Beat Builder …"), #selector(openBeatBuilder), icon: "slider.horizontal.3"))
+        submenu.addItem(.separator())
+
+        submenu.addItem(header(t("Streaming", "Streaming")))
+        let spotify = item(settings.spotifyURI.isEmpty ? t("Spotify einrichten …", "Set up Spotify …") : "Spotify",
+                           #selector(chooseSpotify))
+        spotify.state = settings.musicSource == .spotify ? .on : .off
+        spotify.indentationLevel = 1
+        submenu.addItem(spotify)
+        let appleTitle = settings.appleMusicPlaylist.isEmpty ? t("Apple Music einrichten …", "Set up Apple Music …")
+                                                             : "Apple Music · " + settings.appleMusicPlaylist
+        let apple = item(appleTitle, #selector(chooseAppleMusic))
+        apple.state = settings.musicSource == .appleMusic ? .on : .off
+        apple.indentationLevel = 1
+        submenu.addItem(apple)
+        submenu.addItem(.separator())
+        submenu.addItem(item(t("Musik-Einstellungen …", "Music settings …"), #selector(openMusicSettings), icon: "gearshape"))
+        return submenu
+    }
+
+    private func header(_ title: String) -> NSMenuItem {
+        let header = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        header.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        return header
+    }
+
+    @objc private func chooseBeat(_ sender: NSMenuItem) {
+        guard settings.lofiBeats.indices.contains(sender.tag) else { return }
+        settings.musicBeatID = settings.lofiBeats[sender.tag].id
+        settings.musicSource = .beat
+    }
+
+    @objc private func chooseSpotify() {
+        settings.musicSource = .spotify
+        if settings.spotifyURI.isEmpty { settingsWindow.show(.music) }
+    }
+
+    @objc private func chooseAppleMusic() {
+        settings.musicSource = .appleMusic
+        if settings.appleMusicPlaylist.isEmpty { settingsWindow.show(.music) }
+    }
+
+    @objc private func openMusicSettings() {
+        settingsWindow.show(.music)
+    }
+
+    @objc private func openBeatBuilder() {
+        beatBuilder.show()
+    }
+
+    /// Im Menü: „Lo-Fi-Musik · Morgenkaffee“, „· Spotify“ oder „· Apple Music“
+    private var musicTitle: String {
+        let base = L10n.s("Lo-Fi-Musik", "Lo-fi music")
+        switch settings.musicSource {
+        case .beat: return base + " · " + settings.selectedBeat.name
+        case .spotify: return base + " · Spotify"
+        case .appleMusic: return base + " · Apple Music"
+        }
+    }
+
+    private func showMusicProblem(_ message: String, app: ExternalMusic.App?) {
+        let alert = NSAlert()
+        alert.messageText = L10n.s("Musik kann nicht starten", "Music can't start")
+        alert.informativeText = message
+        alert.addButton(withTitle: L10n.s("Einstellungen öffnen", "Open Settings"))
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn { settingsWindow.show(.music) }
     }
 
     @objc private func togglePomodoro() {

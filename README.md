@@ -126,6 +126,18 @@ averages over the days you started or ended. An ⓘ next to each chart explains 
   <img src="docs/img/statistics-day.png" width="48%" alt="Statistics: a day">
 </p>
 
+### Lo-fi music
+
+- **One click:** *Lo-fi music* in the menu starts it, another click stops it.
+- **Your own beats:** Pixelcat makes lo-fi beats itself, no internet needed. In the **Beat Builder** you tap in kick,
+  snare and hi-hat on a 16-step grid, pick four chords and set tempo, swing, warmth and record crackle. Four beats
+  to start with are included.
+- **Spotify or Apple Music:** Paste the link of a Spotify playlist or pick a playlist from your Music library.
+  Pixelcat starts and pauses it in the Spotify or Music app (macOS asks once whether that's OK). No login and no
+  API keys: it plays with your own account.
+- **With Pomodoro:** If you like, the music plays during focus and pauses for the break. During video calls it
+  pauses too.
+
 ### Outfits
 
 - **Evening:** Top hat and bow tie after work, until bedtime.
@@ -187,6 +199,7 @@ Pixelcat has **no Dock icon** (unless you turn on the cat bed). It lives in the 
 | Silent mode (⌘K) | She goes to her bed or out of sight: no reminders, no sounds until you turn it off |
 | Pomodoro | Focus and breaks in turns (checkmark = running) |
 | Timer ▸ 5 … 60 min / Custom time … | Set a timer (click again to stop) |
+| Lo-fi music · … | Start or stop the music (checkmark = playing) |
 | Break reminder | Regular breaks (on/off) |
 | Take a break / End break | A break right now, without asking (guided if turned on) |
 | Drink reminder · Eye break | Small reminders (on/off) |
@@ -207,6 +220,8 @@ black cat, light with a hint of orange for the orange tabby, light gray for the 
 - **Look:** Name, coat, size
 - **Behavior:** Climbing, chasing the pointer, other displays, cat bed in the Dock, Roaming or Cat Bed
 - **Pomodoro:** Focus and break length, guided Pomodoro breaks
+- **Music:** My beats (choose a beat, Beat Builder, volume), Spotify (permission, playlist link) or Apple Music
+  (permission, playlist), play during Pomodoro focus, pause during video calls
 - **Breaks:** Break reminder at set intervals or by activity, break length, guided breaks, Ask now
 - **Drinking and eyes:** On/off, rough interval, Show now
 - **Workday:** Start and end, Monday to Friday only, start and end your day (and how soon she asks again),
@@ -241,6 +256,22 @@ open build/Pixelcat.app
 
 `build.sh` calls `swiftc` directly and packages the `.app` for your Mac (`UNIVERSAL=1` builds for Apple Silicon
 and Intel). Requires macOS 13 or later and the Xcode command line tools.
+
+### Signing (keeps permissions across updates)
+
+macOS remembers permissions (Accessibility for the cat bed in the Dock, controlling Spotify and Music) by the app's
+signature. Without a fixed certificate every build looks like a new app and the permissions are gone. Create a free,
+self-signed certificate once:
+
+```bash
+./make-signing-cert.sh
+```
+
+It puts a certificate “Pixelcat Signing” into your login keychain and, if you enter a password, saves a backup to
+`~/Documents/Pixelcat-Signatur-Sicherung.p12` (double-click it to restore on another Mac; never commit it). From then
+on `build.sh` signs with it, and permissions survive updates. After the first build with the new certificate macOS
+asks once more. Without the certificate `build.sh` falls back to ad-hoc signing, and the permissions have to be
+given again after each update. This is not an Apple Developer ID: macOS still warns on first launch.
 
 ### Demo and previews
 
@@ -281,7 +312,9 @@ sleeping cat, after 6 seconds the last frame of the climbing animation is drawn 
 ./release.sh v7.0
 ```
 
-This builds for Apple Silicon and Intel and creates `build/Pixelcat-v7.0.zip`. Upload it on GitHub under
+This builds for Apple Silicon and Intel and creates `build/Pixelcat-v7.0.zip`. It refuses to release an ad-hoc
+signed build (`ALLOW_ADHOC=1` overrides), so every release carries the same certificate and nobody loses their
+permissions. Upload it on GitHub under
 *Releases › Draft a new release*, then update Homebrew:
 
 ```bash
@@ -295,4 +328,4 @@ commits and pushes.
 ## Credits
 
 Cat sounds: “Cat Purr & Meow” by Kerzoven ([opengameart.org](https://opengameart.org/content/cat-purr-meow), CC0),
-trimmed and leveled. Everything else, including all pixel art, is drawn in code.
+trimmed and leveled. Everything else, including all pixel art and the lo-fi beats, is made in code.

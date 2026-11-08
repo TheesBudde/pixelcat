@@ -938,6 +938,249 @@ MainActor.assumeIsolated {
         }
     }
 
+    print("\nLo-Fi-Musik: Beats")
+    do {
+        let presets = LofiBeat.presets
+        check("mindestens drei fertige Beats", presets.count >= 3)
+        check("jeder fertige Beat ist vollständig",
+              presets.allSatisfy { beat in
+                  LofiBeat.Instrument.allCases.allSatisfy { beat.steps(for: $0).count == LofiBeat.stepsPerBar }
+                      && beat.chords.count == LofiBeat.barsPerLoop
+                      && LofiBeat.tempoRange.contains(beat.bpm) && !beat.name.isEmpty })
+        check("alle Akkorde der Auswahl haben drei oder vier Töne",
+              LofiChord.palette.allSatisfy { (3...4).contains($0.notes.count) })
+        check("jeder Akkord eines fertigen Beats ist bekannt",
+              presets.allSatisfy { $0.chords.allSatisfy { chord in LofiChord.palette.contains(chord) } })
+
+        var beat = LofiBeat.empty(name: "Test")
+        beat.bpm = 80
+        beat.swing = 0
+        beat.set(.kick, step: 0, on: true)
+        beat.set(.kick, step: 8, on: true)
+        beat.set(.hat, step: 1, on: true)
+        let bar = 60.0 / 80 * 4
+        let kicks = beat.events(bar: 0).filter { $0.instrument == .kick }.map(\.time)
+        check("Kick auf Schritt 1 und 9: am Taktanfang und in der Mitte",
+              kicks.count == 2 && abs(kicks[0]) < 1e-9 && abs(kicks[1] - bar / 2) < 1e-9, "\(kicks)")
+        let straight = beat.events(bar: 0).first { $0.instrument == .hat }!.time
+        beat.swing = 0.5
+        let swung = beat.events(bar: 0).first { $0.instrument == .hat }!.time
+        check("Swing schiebt die Zwischenschläge nach hinten", swung > straight + 0.01, "\(straight) → \(swung)")
+        check("Swing lässt die Hauptschläge, wo sie sind",
+              abs(beat.events(bar: 0).filter { $0.instrument == .kick }[1].time - bar / 2) < 1e-9)
+        let chordEvents = beat.events(bar: 2).filter { $0.instrument == .chord }
+        check("jeder Takt hat seinen Akkord", chordEvents.count == 1 && chordEvents[0].chord == beat.chords[2])
+
+        let sampleRate = 22_050.0
+        let audio = LofiRenderer.render(presets[0], sampleRate: sampleRate)
+        let loop = presets[0].loopSeconds
+        check("der Loop ist genau vier Takte lang", abs(Double(audio.count) / sampleRate - loop) < 0.01,
+              "\(Double(audio.count) / sampleRate) s statt \(loop) s")
+        let peak = audio.map(abs).max() ?? 0
+        check("der Loop ist hörbar und übersteuert nicht", peak > 0.05 && peak <= 1.0, "Spitze \(peak)")
+        check("keine kaputten Werte im Klang", !audio.contains { $0.isNaN || $0.isInfinite })
+        var silent = LofiBeat.empty(name: "Still")
+        silent.crackle = 0
+        silent.chordVolume = 0
+        check("ohne Schläge, Akkorde und Knistern ist es still",
+              (LofiRenderer.render(silent, sampleRate: sampleRate).map(abs).max() ?? 1) < 0.001)
+
+        let data = try? JSONEncoder().encode(presets[1])
+        let decoded = data.flatMap { try? JSONDecoder().decode(LofiBeat.self, from: $0) }
+        check("ein Beat lässt sich speichern und wieder laden", decoded == presets[1])
+    }
+
+    print("\nLo-Fi-Musik: Spotify und Apple Music")
+    do {
+        let id = "37i9dQZF1DWWQRwui0ExPn"
+        check("geteilter Spotify-Link wird erkannt",
+              SpotifyLink.uri(from: "https://open.spotify.com/playlist/\(id)?si=abc123") == "spotify:playlist:\(id)")
+        check("Link mit Sprachpfad wird erkannt",
+              SpotifyLink.uri(from: "https://open.spotify.com/intl-de/playlist/\(id)") == "spotify:playlist:\(id)")
+        check("Spotify-URI bleibt, wie sie ist", SpotifyLink.uri(from: "spotify:playlist:\(id)") == "spotify:playlist:\(id)")
+        check("Leerzeichen um den Link stören nicht",
+              SpotifyLink.uri(from: "  https://open.spotify.com/playlist/\(id) \n") == "spotify:playlist:\(id)")
+        check("Alben gehen auch", SpotifyLink.uri(from: "https://open.spotify.com/album/1A2GTWGtFfWp7KSQTwWOyo") == "spotify:album:1A2GTWGtFfWp7KSQTwWOyo")
+        check("anderes wird abgelehnt",
+              SpotifyLink.uri(from: "https://example.com/playlist/\(id)") == nil && SpotifyLink.uri(from: "Lo-Fi") == nil
+              && SpotifyLink.uri(from: "https://open.spotify.com/playlist/") == nil)
+        check("AppleScript: Anführungszeichen im Playlist-Namen werden maskiert",
+              ExternalMusic.playScript(.appleMusic(playlist: "Lo-Fi \"Mix\" \\ 2"), shuffle: false)
+                .contains("playlist \"Lo-Fi \\\"Mix\\\" \\\\ 2\""))
+        let spotify = MusicPlayback.spotify(uri: "spotify:playlist:\(id)")
+        let shuffled = ExternalMusic.playScript(spotify, shuffle: true)
+        check("Spotify spielt die Playlist", shuffled.contains("play track \"spotify:playlist:\(id)\""))
+        check("Spotify mit Zufall: Zufall an, dann einen Titel weiter (sonst käme immer der erste zuerst)",
+              shuffled.contains("set shuffling to true") && shuffled.contains("next track")
+              && shuffled.range(of: "set shuffling")!.lowerBound < shuffled.range(of: "play track")!.lowerBound
+              && shuffled.range(of: "play track")!.lowerBound < shuffled.range(of: "next track")!.lowerBound, shuffled)
+        func position(_ text: String) -> String.Index { shuffled.range(of: text)!.lowerBound }
+        check("Spotify mit Zufall: stumm weiterschalten, damit man den ersten Titel nicht hört",
+              shuffled.contains("set savedVolume to sound volume") && shuffled.contains("set sound volume to 0")
+              && position("set sound volume to 0") < position("play track")
+              && position("next track") < position("set sound volume to savedVolume"), shuffled)
+        check("… und die Lautstärke kommt auch zurück, wenn etwas schiefgeht",
+              shuffled.contains("try") && position("end try") < position("set sound volume to savedVolume"), shuffled)
+        let ordered = ExternalMusic.playScript(spotify, shuffle: false)
+        check("Spotify ohne Zufall: der Reihe nach, von vorn", ordered.contains("set shuffling to false")
+              && !ordered.contains("next track"), ordered)
+        check("Spotify nach einer Pause: immer die eigene Playlist (nicht, was dort gerade läuft)",
+              ExternalMusic.startScript(spotify, afterPause: true, shuffle: true) == shuffled
+              && ExternalMusic.startScript(spotify, afterPause: false, shuffle: false) == ordered)
+        let safari = "com.apple.Safari", spotifyID = ExternalMusic.App.spotify.bundleID
+        check("Spotify drängt sich nach vorn: die vorige App kommt zurück",
+              ExternalMusic.shouldRestoreFocus(before: safari, now: spotifyID, app: .spotify))
+        check("Spotify war schon vorn: bleibt vorn", !ExternalMusic.shouldRestoreFocus(before: spotifyID, now: spotifyID, app: .spotify))
+        check("Spotify blieb im Hintergrund: nichts zu tun", !ExternalMusic.shouldRestoreFocus(before: safari, now: safari, app: .spotify))
+        check("ohne vorige App: nichts zu tun", !ExternalMusic.shouldRestoreFocus(before: nil, now: spotifyID, app: .spotify))
+        // Läuft noch, was Pixelcat gestartet hat? (sonst geht der Haken im Menü weg)
+        check("Spotify spielt: bleibt an", ExternalMusic.isStillOurs(spotify, status: "playing\n"))
+        check("in Spotify pausiert oder gestoppt: Haken weg",
+              !ExternalMusic.isStillOurs(spotify, status: "paused") && !ExternalMusic.isStillOurs(spotify, status: "stopped"))
+        let lofi = MusicPlayback.appleMusic(playlist: "Lo-Fi")
+        check("Apple Music spielt die eigene Playlist: bleibt an", ExternalMusic.isStillOurs(lofi, status: "playing|Lo-Fi"))
+        check("Apple Music spielt eine andere Playlist: Haken weg", !ExternalMusic.isStillOurs(lofi, status: "playing|Rock"))
+        check("Apple Music pausiert: Haken weg", !ExternalMusic.isStillOurs(lofi, status: "paused|Lo-Fi"))
+        check("unbekannte Antwort: lieber anlassen", ExternalMusic.isStillOurs(lofi, status: ""))
+        check("Status-Abfrage fragt nach dem Zustand (und bei Musik nach der Playlist)",
+              ExternalMusic.statusScript(.spotify).contains("player state")
+              && ExternalMusic.statusScript(.music).contains("name of current playlist"))
+        let music = MusicPlayback.appleMusic(playlist: "Lo-Fi")
+        check("Apple Music mit Zufall", ExternalMusic.playScript(music, shuffle: true).contains("set shuffle enabled to true")
+              && ExternalMusic.playScript(music, shuffle: false).contains("set shuffle enabled to false"))
+        let resume = ExternalMusic.startScript(music, afterPause: true, shuffle: true)
+        check("Apple Music nach einer Pause: weiter nur, wenn noch die eigene Playlist läuft",
+              resume.contains("name of current playlist is \"Lo-Fi\"") && resume.contains("play playlist \"Lo-Fi\""), resume)
+        check("Apple Music beim ersten Start: gleich die Playlist",
+              ExternalMusic.startScript(music, afterPause: false, shuffle: true) == ExternalMusic.playScript(music, shuffle: true))
+    }
+
+    print("\nLo-Fi-Musik: wann sie läuft")
+    do {
+        var m = MusicCoordinator()
+        check("am Anfang ist es still", !m.shouldPlay)
+        m.toggle()
+        check("Klick im Menü: Musik an", m.shouldPlay && m.manualOn)
+        m.toggle()
+        check("noch ein Klick: Musik aus", !m.shouldPlay)
+
+        m.playDuringFocus = true
+        m.pomodoroStage = .focus
+        check("Pomodoro-Fokus: Musik an", m.shouldPlay)
+        m.pomodoroStage = .rest
+        check("Pomodoro-Pause: Musik aus", !m.shouldPlay)
+        m.pomodoroStage = .focus
+        check("nächster Fokus: wieder an", m.shouldPlay)
+        m.toggle()
+        check("im Fokus ausgeschaltet: bleibt aus", !m.shouldPlay)
+        m.pomodoroStage = .rest
+        m.pomodoroStage = .focus
+        check("… bis zum nächsten Fokus", m.shouldPlay)
+        m.pomodoroStage = .rest
+        m.toggle()
+        check("in der Pause eingeschaltet: läuft", m.shouldPlay)
+        m.pomodoroStage = nil
+        check("Pomodoro vorbei: wie vorher (aus)", !m.shouldPlay)
+
+        m.toggle()
+        m.pomodoroStage = .focus
+        m.pomodoroStage = .rest
+        check("vorher eingeschaltet: in der Pause trotzdem still", !m.shouldPlay)
+        m.pomodoroStage = nil
+        check("Pomodoro vorbei: wie vorher (an)", m.shouldPlay)
+
+        m.playDuringFocus = false
+        m.manualOn = false
+        m.pomodoroStage = .focus
+        check("ohne Pomodoro-Musik ändert der Fokus nichts", !m.shouldPlay)
+        m.toggle()
+        m.pomodoroStage = .rest
+        check("… und die Pause auch nicht", m.shouldPlay)
+        m.pomodoroStage = nil
+
+        m.inCall = true
+        check("im Videocall pausiert die Musik", !m.shouldPlay && m.manualOn)
+        m.inCall = false
+        check("nach dem Call geht sie weiter", m.shouldPlay)
+        m.pauseInCalls = false
+        m.inCall = true
+        check("„In Videocalls pausieren“ aus: läuft weiter", m.shouldPlay)
+        m.toggle()
+        check("im Call ausschalten geht immer", !m.shouldPlay)
+    }
+
+    print("\nLo-Fi-Musik: Einstellungen")
+    do {
+        let defaults = UserDefaults.standard
+        let keys = ["lofiBeats", "musicSource", "musicBeatID", "spotifyURI", "appleMusicPlaylist", "musicDuringFocus",
+                    "musicPauseInCalls", "musicVolume", "musicShuffle"]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        keys.forEach { defaults.removeObject(forKey: $0) }
+        let fresh = AppSettings()
+        check("frisch: eigene Beats mit den fertigen Beats, erster ausgewählt",
+              fresh.musicSource == .beat && fresh.lofiBeats == LofiBeat.presets && fresh.selectedBeat == LofiBeat.presets[0])
+        check("frisch: keine Musik zum Pomodoro, in Calls pausieren, zufällige Reihenfolge",
+              !fresh.musicDuringFocus && fresh.musicPauseInCalls && fresh.musicShuffle)
+        fresh.musicShuffle = false
+        check("Zufall aus wird gespeichert", !AppSettings().musicShuffle)
+        var mine = LofiBeat.presets[2]
+        mine.id = UUID()
+        mine.name = "Mein Beat"
+        mine.set(.snare, step: 3, on: true)
+        fresh.lofiBeats.append(mine)
+        fresh.musicBeatID = mine.id
+        fresh.musicSource = .spotify
+        fresh.spotifyURI = "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
+        fresh.appleMusicPlaylist = "Lo-Fi"
+        fresh.musicDuringFocus = true
+        let reloaded = AppSettings()
+        check("eigene Beats und Quelle werden gespeichert",
+              reloaded.lofiBeats.last == mine && reloaded.selectedBeat == mine && reloaded.musicSource == .spotify
+              && reloaded.spotifyURI == fresh.spotifyURI && reloaded.appleMusicPlaylist == "Lo-Fi" && reloaded.musicDuringFocus)
+        check("die Quelle zum Abspielen passt", reloaded.musicPlayback == .spotify(uri: "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"))
+        reloaded.musicSource = .appleMusic
+        reloaded.appleMusicPlaylist = ""
+        check("ohne Playlist ist nichts abzuspielen", reloaded.musicPlayback == nil)
+        reloaded.lofiBeats.removeAll { $0.id == mine.id }
+        reloaded.musicSource = .beat
+        check("gelöschter Beat: der erste übernimmt", reloaded.selectedBeat == LofiBeat.presets[0])
+
+        // Baukasten: Speichern unter, Zurücksetzen, fertige Beats wiederherstellen
+        let original = LofiBeat.presets[1]
+        var changed = original
+        changed.bpm = 95
+        changed.set(.kick, step: 5, on: true)
+        let copy = changed.copy(named: "  Regen remix ")
+        check("Speichern unter: neuer Beat mit neuem Namen und gleichem Inhalt",
+              copy.id != changed.id && copy.name == "Regen remix" && copy.bpm == 95 && copy.kick == changed.kick)
+        check("Speichern unter ohne Namen: bekommt trotzdem einen", !changed.copy(named: "   ").name.isEmpty)
+        check("fertiger Beat erkennt sein Original", LofiBeat.original(of: changed) == original)
+        check("geänderter fertiger Beat lässt sich zurücksetzen", changed.canReset && !original.canReset)
+        check("eigener Beat hat kein Original", LofiBeat.original(of: copy) == nil && !copy.canReset)
+        reloaded.lofiBeats = [copy]
+        check("fehlende fertige Beats werden erkannt", reloaded.missingPresets.count == LofiBeat.presets.count)
+        reloaded.restoreMissingPresets()
+        check("fertige Beats wiederherstellen: alle wieder da, eigene bleiben",
+              reloaded.missingPresets.isEmpty && reloaded.lofiBeats.first == copy
+              && reloaded.lofiBeats.count == LofiBeat.presets.count + 1)
+        for (key, value) in zip(keys, saved) {
+            if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+    }
+
+    print("\nAugenpause")
+    do {
+        check("das Fenster ist dezenter (kleiner als früher, 30 × 28)",
+              LookoutArt.width * LookoutArt.height <= 30 * 28 * 3 / 4, "\(LookoutArt.width) × \(LookoutArt.height)")
+        check("die Katze sitzt ganz im Fenster, darüber noch Himmel",
+              LookoutArt.height >= LookoutArt.sillTop + Frames.sitBackA.height + 4
+              && LookoutArt.width >= Frames.sitBackA.width + 8, "\(LookoutArt.width) × \(LookoutArt.height)")
+        check("das Fensterbrett ist gleich hoch geblieben (dort sitzt die Katze)", LookoutArt.sillTop == 5)
+        check("alle Bilder der Wolke sind gleich groß",
+              LookoutArt.frames.allSatisfy { $0.width == LookoutArt.width && $0.height == LookoutArt.height })
+        check("die Katze passt auf das Fensterbrett", Frames.sitBackA.width <= LookoutArt.width)
+    }
+
     print("\nName und Einrichtung")
     do {
         let settings = AppSettings()

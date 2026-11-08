@@ -183,7 +183,14 @@ final class CatController {
     private var lastDrag: (point: NSPoint, time: CFTimeInterval)?
     private var dragVelocity = CGVector.zero
 
-    private(set) var pomodoro: Pomodoro?
+    private(set) var pomodoro: Pomodoro? {
+        didSet { if pomodoro?.stage != oldValue?.stage { onPomodoroStage?(pomodoro?.stage) } }
+    }
+    /// Pomodoro beginnt, wechselt zwischen Fokus und Pause oder endet (für die Musik)
+    var onPomodoroStage: ((Pomodoro.Stage?) -> Void)?
+    /// Videocall oder Bildschirmfreigabe beginnt oder endet (für die Musik; auch ohne „Bei Videocalls verstecken“)
+    var onCallChange: ((Bool) -> Void)?
+    private var callDetected = false
     private(set) var timer: CatTimer?
     private var nextReminder = Date.distantFuture
     /// Pausenfrage („Pause?“ mit Daumen) offen bis hierhin
@@ -1195,7 +1202,12 @@ final class CatController {
 
     /// Videocall oder Bildschirmfreigabe → auf Streifzug (und erst 5 s nach dem Ende zurück).
     private func updateCallHiding(now: Date) {
-        let reason = simulatedCall ?? (hideDuringCalls ? CallDetector.currentReason() : nil)
+        let detected = simulatedCall ?? CallDetector.currentReason()
+        if (detected != nil) != callDetected {
+            callDetected = detected != nil
+            onCallChange?(callDetected)
+        }
+        let reason = simulatedCall ?? (hideDuringCalls ? detected : nil)
         if let reason {
             callEndedAt = nil
             setHidden(because: reason)
@@ -1962,11 +1974,11 @@ final class CatController {
             lookoutAppear -= dt / 0.6
             if lookoutAppear <= 0 { return removeLookout() }
         } else {
-            lookoutAppear = min(1, lookoutAppear + dt / 0.45)
+            lookoutAppear = min(1, lookoutAppear + dt / 0.6)
         }
         let t = lookoutAppear
-        // Etwas über die volle Größe hinaus und zurück („ploppt auf“)
-        let pop = lookoutLeaving ? 0.85 + 0.15 * t : 1 + 0.12 * sin(t * .pi) - 0.4 * (1 - t) * (1 - t)
+        // Sanft aufploppen: kaum über die volle Größe hinaus
+        let pop = lookoutLeaving ? 0.9 + 0.1 * t : 1 + 0.04 * sin(t * .pi) - 0.25 * (1 - t) * (1 - t)
         let size = scale * CGFloat(pop)
         if abs(window.scale - size) > 0.01 { window.scale = size }
         window.panel.alphaValue = CGFloat(min(1, t * 1.6))

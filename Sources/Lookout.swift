@@ -19,15 +19,16 @@ enum LookoutArt {
         "l": 0x8C5E34, // Fensterbrett, Schatten
     ])
 
-    static let width = 30
-    static let height = 28
+    /// Klein und dezent: kaum breiter als die Katze, die davor auf dem Fensterbrett sitzt
+    static let width = 26
+    static let height = 24
     /// Zeile (von oben), in der das Fensterbrett beginnt
     private static let sillRow = height - 5
     /// So hoch steht die Oberkante des Fensterbretts (in Pixeln über dem Boden) – darauf sitzt die Katze
     static let sillTop = height - sillRow
 
     /// Bilder mit der Wolke an verschiedenen Stellen – im Wechsel zieht sie vorbei
-    static let frames: [Sprite] = (0..<13).map { make(cloudAt: -4 + $0 * 2) }
+    static let frames: [Sprite] = (0..<12).map { make(cloudAt: -5 + $0 * 2) }
 
     private static func make(cloudAt cloudX: Int) -> Sprite {
         let w = width, h = height
@@ -36,13 +37,13 @@ enum LookoutArt {
         let glass = (x: 4...(w - 5), y: 3...(sillRow - 2))
         let middle = (glass.y.lowerBound + glass.y.upperBound) / 2
         for y in glass.y { for x in glass.x { g[y][x] = y > middle + 2 ? "s" : "S" } }
-        // Sonne oben rechts
+        // Kleine Sonne oben rechts
         let sun = w - 9
-        for (x, y) in [(sun, 4), (sun + 1, 4), (sun - 1, 5), (sun, 5), (sun + 1, 5), (sun + 2, 5), (sun, 6), (sun + 1, 6)] {
+        for (x, y) in [(sun, 4), (sun + 1, 4), (sun, 5), (sun + 1, 5)] {
             g[y][x] = "Y"
         }
         // Wolke (zieht nach rechts), nur innerhalb des Glases
-        let cloud = [".CCC..", "CCCCCC", ".cccc."]
+        let cloud = [".CC.", "CCCC", ".cc."]
         for (row, line) in cloud.enumerated() {
             for (col, c) in line.enumerated() where c != "." {
                 let x = glass.x.lowerBound + cloudX + col, y = 5 + row
@@ -51,7 +52,7 @@ enum LookoutArt {
         }
         // Hügel am Horizont
         for x in glass.x {
-            let top = glass.y.upperBound - 3 - Int((2.2 * sin(Double(x) * 0.45)).rounded())
+            let top = glass.y.upperBound - 2 - Int((1.5 * sin(Double(x) * 0.55)).rounded())
             for y in top...glass.y.upperBound { g[y][x] = y == top ? "G" : "g" }
         }
         // Rahmen: außen Umriss, dann dunkel, innen hell; Sprossen in der Mitte

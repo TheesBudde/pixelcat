@@ -96,10 +96,51 @@ final class AppSettings: ObservableObject {
     /// Apps, deren aktive Zeit in der Statistik erscheint (Bundle-IDs)
     @Published var trackedApps: [String] { didSet { changed() } }
     @Published var respectFocus: Bool { didSet { changed() } }
+    // Musik
+    /// Eigene Lo-Fi-Beats aus dem Beat-Baukasten (am Anfang die fertigen)
+    @Published var lofiBeats: [LofiBeat] { didSet { changed() } }
+    @Published var musicSource: MusicSourceKind { didSet { changed() } }
+    /// Welcher eigene Beat läuft (nil = der erste)
+    @Published var musicBeatID: UUID? { didSet { changed() } }
+    /// Spotify: z. B. „spotify:playlist:…“ (aus dem geteilten Link)
+    @Published var spotifyURI: String { didSet { changed() } }
+    /// Apple Music: Name einer Playlist aus der Mediathek
+    @Published var appleMusicPlaylist: String { didSet { changed() } }
+    /// Im Pomodoro-Fokus abspielen, in der Pause nicht
+    @Published var musicDuringFocus: Bool { didSet { changed() } }
+    @Published var musicPauseInCalls: Bool { didSet { changed() } }
+    /// Lautstärke der eigenen Beats (0…1)
+    @Published var musicVolume: Double { didSet { changed() } }
+    /// Spotify und Apple Music in zufälliger Reihenfolge
+    @Published var musicShuffle: Bool { didSet { changed() } }
     // Allgemein
     @Published var language: Language { didSet { L10n.language = language; changed() } }
     /// Die Einrichtung beim ersten Start ist durchgeklickt (oder geschlossen)
     @Published var onboardingDone: Bool { didSet { changed() } }
+
+    /// Der eigene Beat, der gerade ausgewählt ist
+    var selectedBeat: LofiBeat {
+        lofiBeats.first { $0.id == musicBeatID } ?? lofiBeats.first ?? LofiBeat.presets[0]
+    }
+
+    /// Fertige Beats, die gelöscht wurden
+    var missingPresets: [LofiBeat] {
+        LofiBeat.presets.filter { preset in !lofiBeats.contains { $0.id == preset.id } }
+    }
+
+    /// Gelöschte fertige Beats wieder dazuholen (eigene bleiben, wie sie sind)
+    func restoreMissingPresets() {
+        lofiBeats += missingPresets
+    }
+
+    /// Was abgespielt wird (nil = noch nicht eingerichtet)
+    var musicPlayback: MusicPlayback? {
+        switch musicSource {
+        case .beat: return .beat(selectedBeat)
+        case .spotify: return spotifyURI.isEmpty ? nil : .spotify(uri: spotifyURI)
+        case .appleMusic: return appleMusicPlaylist.isEmpty ? nil : .appleMusic(playlist: appleMusicPlaylist)
+        }
+    }
 
     /// Der Name zum Anzeigen
     var displayName: String {
@@ -123,6 +164,10 @@ final class AppSettings: ObservableObject {
     var onOpenTasks: (() -> Void)?
     /// Die Einrichtung noch einmal zeigen
     var onOpenSetup: (() -> Void)?
+    /// Den Beat-Baukasten öffnen
+    var onOpenBeatBuilder: (() -> Void)?
+    /// Beim nächsten Öffnen der Einstellungen dorthin scrollen (wird nicht gespeichert)
+    @Published var scrollTarget: SettingsSection?
     /// Die Pausenfrage gleich zeigen
     var onPreviewBreak: (() -> Void)?
     /// Was die Katze gerade trägt (Hut, Fliege), damit sie in der Einrichtung genauso aussieht
@@ -156,6 +201,8 @@ final class AppSettings: ObservableObject {
             "motivation": false, "birdWhenAway": true, "birdMinutes": 10,
             "sounds": true, "purring": true, "silentMode": false, "guidedBreaks": true, "guidedPomodoros": true, "meowForTasks": false, "hideDuringCalls": true, "respectFocus": true,
             "language": Language.system.rawValue,
+            "musicSource": MusicSourceKind.beat.rawValue, "spotifyURI": "", "appleMusicPlaylist": "",
+            "musicDuringFocus": false, "musicPauseInCalls": true, "musicVolume": 0.6, "musicShuffle": true,
         ])
         catName = defaults.string(forKey: "catName") ?? ""
         coat = Coat(rawValue: defaults.string(forKey: "coat") ?? "") ?? .black
@@ -213,6 +260,16 @@ final class AppSettings: ObservableObject {
         guidedPomodoros = defaults.bool(forKey: "guidedPomodoros")
         trackedApps = defaults.stringArray(forKey: "trackedApps") ?? []
         respectFocus = defaults.bool(forKey: "respectFocus")
+        lofiBeats = defaults.data(forKey: "lofiBeats").flatMap { try? JSONDecoder().decode([LofiBeat].self, from: $0) }
+            ?? LofiBeat.presets
+        musicSource = MusicSourceKind(rawValue: defaults.string(forKey: "musicSource") ?? "") ?? .beat
+        musicBeatID = defaults.string(forKey: "musicBeatID").flatMap(UUID.init(uuidString:))
+        spotifyURI = defaults.string(forKey: "spotifyURI") ?? ""
+        appleMusicPlaylist = defaults.string(forKey: "appleMusicPlaylist") ?? ""
+        musicDuringFocus = defaults.bool(forKey: "musicDuringFocus")
+        musicPauseInCalls = defaults.bool(forKey: "musicPauseInCalls")
+        musicVolume = defaults.double(forKey: "musicVolume")
+        musicShuffle = defaults.bool(forKey: "musicShuffle")
         language = Language(rawValue: defaults.string(forKey: "language") ?? "") ?? .system
         // Wer Pixelcat schon benutzt hat (gespeichertes Fell), bekommt die Einrichtung nicht ungefragt
         let stored = defaults.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]
@@ -254,7 +311,11 @@ final class AppSettings: ObservableObject {
             "callHandling": Self.store(callHandling), "sharingHandling": Self.store(sharingHandling), "birdWhenAway": birdWhenAway, "birdMinutes": birdMinutes,
             "sounds": sounds, "purring": purring, "silentMode": silentMode, "guidedBreaks": guidedBreaks,
             "guidedPomodoros": guidedPomodoros, "trackedApps": trackedApps, "meowForTasks": meowForTasks, "hideDuringCalls": hideDuringCalls,
-            "respectFocus": respectFocus, "language": language.rawValue, "onboardingDone": onboardingDone,
+            "respectFocus": respectFocus, "language": language.rawValue,
+            "lofiBeats": (try? JSONEncoder().encode(lofiBeats)) ?? Data(), "musicSource": musicSource.rawValue,
+            "musicBeatID": musicBeatID?.uuidString ?? "", "spotifyURI": spotifyURI,
+            "appleMusicPlaylist": appleMusicPlaylist, "musicDuringFocus": musicDuringFocus,
+            "musicPauseInCalls": musicPauseInCalls, "musicVolume": musicVolume, "musicShuffle": musicShuffle, "onboardingDone": onboardingDone,
         ]
     }
 
@@ -347,6 +408,12 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
+
+    /// Öffnen und gleich zu einem Bereich scrollen (z. B. Musik)
+    func show(_ section: SettingsSection) {
+        settings.scrollTarget = section
+        show()
+    }
 }
 
 // MARK: - Inhalt
@@ -362,6 +429,10 @@ struct SettingsView: View {
     @State private var loginNeedsApproval = LoginItem.needsApproval
     /// Videocalls: Gerade sichtbar sind die Einstellungen für den Call oder fürs Teilen des Bildschirms
     @State private var callSettingsFor: CallSituation = .call
+    @StateObject private var spotifyAccess = MusicAppAccess(app: .spotify)
+    @StateObject private var musicAccess = MusicAppAccess(app: .music)
+    /// Was im Feld für den Spotify-Link steht (gespeichert wird nur ein gültiger Link)
+    @State private var spotifyLink = ""
 
     /// `showingCalls`: welche Seite unter Videocalls zuerst zu sehen ist (für Bilder zur Sichtprüfung)
     init(settings: AppSettings, focus: FocusMonitor, showingCalls: CallSituation = .call) {
@@ -375,10 +446,12 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsHeader(settings: settings)
+            ScrollViewReader { proxy in
             Form {
                 lookSection
                 behaviorSection
                 pomodoroSection
+                musicSection.id(SettingsSection.music)
                 reminderSection
                 drinkSection
                 eyeSection
@@ -397,6 +470,9 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
+            .onAppear { scrollToRequested(proxy) }
+            .onChange(of: settings.scrollTarget) { _ in scrollToRequested(proxy) }
+            }
         }
         .background(PixelBackdrop(coat: settings.coat))
         .environment(\.colorScheme, settings.coat.colorScheme)
@@ -479,6 +555,118 @@ struct SettingsView: View {
         } header: {
             SectionTitle("Pomodoro", icon: "timer", color: .red)
         }
+    }
+
+    /// „Musik-Einstellungen …“ und Co.: gleich zum gewünschten Bereich scrollen
+    private func scrollToRequested(_ proxy: ScrollViewProxy) {
+        guard let target = settings.scrollTarget else { return }
+        // Kurz warten, bis das Fenster aufgebaut ist
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target, anchor: .top) }
+            settings.scrollTarget = nil
+        }
+    }
+
+    // MARK: Musik
+
+    private var musicSection: some View {
+        Section {
+            Picker("", selection: $settings.musicSource) {
+                Text(t("Eigene Beats", "My beats")).tag(MusicSourceKind.beat)
+                Text("Spotify").tag(MusicSourceKind.spotify)
+                Text("Apple Music").tag(MusicSourceKind.appleMusic)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            switch settings.musicSource {
+            case .beat: beatSourceRows
+            case .spotify: spotifyRows
+            case .appleMusic: appleMusicRows
+            }
+            Toggle(t("Im Pomodoro-Fokus abspielen", "Play during Pomodoro focus"), isOn: $settings.musicDuringFocus)
+            hint(t("Startet mit dem Fokus und pausiert in der Pause. Ein Klick im Menü gilt bis zur nächsten Phase.",
+                   "Starts with the focus and pauses during the break. A click in the menu lasts until the next phase."))
+            Toggle(t("In Videocalls pausieren", "Pause during video calls"), isOn: $settings.musicPauseInCalls)
+            hint(t("Bei Kamera, Mikrofon oder geteiltem Bildschirm, danach geht es weiter. Im Menü: Lo-Fi-Musik.",
+                   "While your camera, mic or screen sharing is on, then it carries on. In the menu: Lo-fi music."))
+        } header: {
+            SectionTitle(t("Musik", "Music"), icon: "music.note", color: .indigo)
+        }
+    }
+
+    @ViewBuilder private var beatSourceRows: some View {
+        HStack {
+            Picker(t("Beat", "Beat"), selection: Binding(get: { settings.selectedBeat.id },
+                                                          set: { settings.musicBeatID = $0 })) {
+                ForEach(settings.lofiBeats) { beat in Text(beat.name).tag(beat.id) }
+            }
+            Button(t("Beat-Baukasten …", "Beat Builder …")) { settings.onOpenBeatBuilder?() }
+        }
+        HStack {
+            Text(t("Lautstärke", "Volume"))
+            Slider(value: $settings.musicVolume, in: 0.1...1)
+        }
+        hint(t("Selbst gemachte Lo-Fi-Beats, ganz ohne Internet. Im Baukasten baust du dir eigene.",
+               "Home-made lo-fi beats, no internet needed. Build your own in the Beat Builder."))
+    }
+
+    private var shuffleToggle: some View {
+        Toggle(isOn: $settings.musicShuffle) {
+            Label(t("Zufällige Reihenfolge", "Shuffle"), systemImage: "shuffle")
+        }
+    }
+
+    @ViewBuilder private var spotifyRows: some View {
+        MusicAccessRow(access: spotifyAccess, downloadURL: URL(string: "https://www.spotify.com/download/mac/"))
+        HStack(spacing: 8) {
+            TextField(t("Playlist-Link", "Playlist link"), text: $spotifyLink,
+                      prompt: Text("https://open.spotify.com/playlist/…"))
+                .onChange(of: spotifyLink) { value in
+                    if let uri = SpotifyLink.uri(from: value) { settings.spotifyURI = uri }
+                }
+            Button(t("Einfügen", "Paste")) {
+                if let text = NSPasteboard.general.string(forType: .string) { spotifyLink = text }
+            }
+        }
+        .onAppear { if spotifyLink.isEmpty, !settings.spotifyURI.isEmpty { spotifyLink = SpotifyLink.webLink(for: settings.spotifyURI) } }
+        if !spotifyLink.isEmpty, SpotifyLink.uri(from: spotifyLink) == nil {
+            Label(t("Das sieht nicht wie ein Spotify-Link aus.", "That doesn't look like a Spotify link."),
+                  systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.callout)
+        } else if !settings.spotifyURI.isEmpty {
+            Label(t("Playlist erkannt. Im Menü: Lo-Fi-Musik.", "Playlist recognized. In the menu: Lo-fi music."),
+                  systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.callout)
+        }
+        shuffleToggle
+        hint(t("So kommst du an den Link: In Spotify bei der Playlist auf ⋯ › Teilen › Link zur Playlist kopieren. Ohne Premium kommt Werbung dazwischen.",
+               "To get the link: in Spotify, click ⋯ on the playlist › Share › Copy link to playlist. Without Premium there are ads."))
+    }
+
+    @ViewBuilder private var appleMusicRows: some View {
+        MusicAccessRow(access: musicAccess, downloadURL: nil)
+        if musicAccess.state == .granted {
+            HStack {
+                Picker(t("Playlist", "Playlist"), selection: $settings.appleMusicPlaylist) {
+                    if settings.appleMusicPlaylist.isEmpty { Text(t("Bitte wählen", "Please choose")).tag("") }
+                    let names = musicAccess.playlists.contains(settings.appleMusicPlaylist) || settings.appleMusicPlaylist.isEmpty
+                        ? musicAccess.playlists : [settings.appleMusicPlaylist] + musicAccess.playlists
+                    ForEach(names, id: \.self) { Text($0).tag($0) }
+                }
+                Button {
+                    Task { await musicAccess.loadPlaylists() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help(t("Playlists neu laden", "Reload playlists"))
+            }
+            .onAppear { if musicAccess.playlists.isEmpty { Task { await musicAccess.loadPlaylists() } } }
+        }
+        shuffleToggle
+        hint(t("Es geht um Playlists aus deiner Mediathek. Für Titel aus Apple Music brauchst du ein Abo.",
+               "This uses playlists from your library. Songs from Apple Music need a subscription."))
     }
 
     private var reminderSection: some View {
@@ -1073,4 +1261,84 @@ struct SettingsHeader: View {
         .padding(.top, 34)
         .padding(.bottom, 4)
     }
+}
+
+/// Eine Zeile: Ist die App da, darf Pixelcat sie steuern? Mit dem passenden Knopf zum Erlauben.
+private struct MusicAccessRow: View {
+    @ObservedObject var access: MusicAppAccess
+    let downloadURL: URL?
+
+    private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundStyle(color)
+            Text(text)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            if access.busy {
+                ProgressView().controlSize(.small)
+            } else {
+                switch access.state {
+                case .notInstalled:
+                    if let downloadURL {
+                        Button(t("Laden …", "Get it …")) { NSWorkspace.shared.open(downloadURL) }
+                    }
+                case .unknown:
+                    Button(t("Erlauben …", "Allow …")) { Task { await access.request() } }
+                        .buttonStyle(.borderedProminent)
+                case .denied:
+                    Button(t("Systemeinstellungen …", "System Settings …")) { MusicAppAccess.openAutomationSettings() }
+                case .granted:
+                    EmptyView()
+                }
+            }
+        }
+        .onAppear { access.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            access.refresh()
+        }
+    }
+
+    private var icon: String {
+        switch access.state {
+        case .notInstalled: return "xmark.circle.fill"
+        case .unknown: return "hand.raised.fill"
+        case .granted: return "checkmark.circle.fill"
+        case .denied: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch access.state {
+        case .notInstalled: return .secondary
+        case .unknown: return .orange
+        case .granted: return .green
+        case .denied: return .red
+        }
+    }
+
+    private var text: String {
+        let name = access.app.title
+        switch access.state {
+        case .notInstalled:
+            return t("\(name) ist auf diesem Mac nicht installiert.", "\(name) isn't installed on this Mac.")
+        case .unknown:
+            return t("Pixelcat braucht einmal deine Erlaubnis, um \(name) zu steuern.",
+                     "Pixelcat needs your permission once to control \(name).")
+        case .granted:
+            return t("Pixelcat darf \(name) steuern.", "Pixelcat may control \(name).")
+        case .denied:
+            return t("Nicht erlaubt. Du kannst es in den Systemeinstellungen unter Automation ändern.",
+                     "Not allowed. You can change it in System Settings under Automation.")
+        }
+    }
+}
+
+/// Bereiche der Einstellungen, zu denen man direkt springen kann
+enum SettingsSection: Hashable {
+    case music
 }

@@ -24,6 +24,8 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Pixelcat startet und pausiert deine Lo-Fi-Playlist in Spotify oder Musik, zum Beispiel während eines Pomodoros. · Pixelcat starts and pauses your lo-fi playlist in Spotify or Music, for example during a Pomodoro.</string>
 	<key>NSFocusStatusUsageDescription</key>
 	<string>Pixelcat bleibt still und ruhig, solange ein Fokus aktiv ist. · Pixelcat stays quiet and calm while a Focus is on.</string>
 	<key>NSHighResolutionCapable</key>
