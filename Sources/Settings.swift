@@ -755,7 +755,8 @@ struct SettingsView: View {
             Toggle(t("Mit dem Mac starten", "Open at login"), isOn: Binding(
                 get: { launchAtLogin },
                 set: { on in
-                    LoginItem.set(on)
+                    let done = LoginItem.set(on)
+                    if on, !done || LoginItem.needsApproval { LoginItem.openSystemSettings() }
                     refreshLoginItem()
                 }))
                 .disabled(!LoginItem.isAvailable)

@@ -98,9 +98,6 @@ struct OnboardingView: View {
     @State private var forward = true
     /// Das Zuhause gilt erst am Ende, wenn die Katze aufs Dock kommt
     @State private var home: Home
-    /// Mit dem Mac starten: Beim ersten Mal ist Ja vorgewählt, später gilt, was macOS eingetragen hat.
-    /// Wie das Zuhause wird es erst mit „Fertig“ übernommen.
-    @State private var launchAtLogin: Bool
 
     static let maxNameLength = 16
 
@@ -109,9 +106,7 @@ struct OnboardingView: View {
         self.settings = settings
         self.onFinish = onFinish
         _step = State(initialValue: start)
-        _home = State(initialValue: Home(settings))
-        _launchAtLogin = State(initialValue: !settings.onboardingDone || LoginItem.isEnabled)
-    }
+        _home = State(initialValue: Home(settings))    }
 
     private func t(_ de: String, _ en: String) -> String { L10n.s(de, en) }
 
@@ -309,23 +304,28 @@ struct OnboardingView: View {
                 MenuBarSketch()
             }
         case .launchAtLogin:
-            OnboardingPage(title: t("Soll ich mit deinem Mac aufwachen?", "Shall I wake up with your Mac?"),
-                           text: t("Dann bin ich jedes Mal da, wenn du ihn einschaltest. Du kannst es später in den Einstellungen ändern.",
-                                   "Then I'm there every time you turn it on. You can change it later in the settings.")) {
-                HStack(spacing: 18) {
-                    ChoiceCard(selected: launchAtLogin, title: t("Ja, immer", "Yes, always")) {
-                        VStack(spacing: 4) {
-                            FloatingHeart()
-                            PixelCat(coat: settings.coat, pose: .sit, scale: 4)
-                        }
-                    } action: {
-                        launchAtLogin = true
+            OnboardingPage(title: t("Automatisch starten?", "Open automatically?"),
+                           text: t("Soll Pixelcat sich jedes Mal von selbst öffnen, wenn du deinen Mac startest? Dafür trage ich mich bei macOS als Anmeldeobjekt ein. Du kannst es jederzeit in den Einstellungen ändern.",
+                                   "Should Pixelcat open by itself every time you start your Mac? For that I add myself to macOS as a login item. You can change it any time in the settings.")) {
+                HStack(alignment: .bottom, spacing: 18) {
+                    Image(systemName: "power.circle.fill")
+                        .font(.system(size: 64))
+                        .foregroundStyle(Color.accentColor)
+                    PixelCat(coat: settings.coat, pose: .sit, scale: 5)
+                }
+            } below: {
+                HStack(spacing: 14) {
+                    Button(t("Nein, danke", "No, thanks")) {
+                        if LoginItem.isEnabled { LoginItem.set(false) }
+                        go(1)
                     }
-                    ChoiceCard(selected: !launchAtLogin, title: t("Nein, danke", "No, thanks")) {
-                        PixelCat(coat: settings.coat, pose: .sleep, scale: 4)
-                    } action: {
-                        launchAtLogin = false
+                    .buttonStyle(CapsuleButtonStyle(prominent: false))
+                    Button(t("Ja, automatisch starten", "Yes, open at login")) {
+                        // Jetzt gleich bei macOS eintragen. Braucht es noch die Erlaubnis, gleich die Systemeinstellungen zeigen.
+                        if !LoginItem.set(true) || LoginItem.needsApproval { LoginItem.openSystemSettings() }
+                        go(1)
                     }
+                    .buttonStyle(CapsuleButtonStyle())
                 }
             }
         case .done:
@@ -375,9 +375,9 @@ struct OnboardingView: View {
             Button(nextTitle, action: next)
                 .buttonStyle(CapsuleButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                // Bei der Frage nach der Freigabe antwortet man mit Ja oder Nein
-                .opacity(step == .bedAccess ? 0 : 1)
-                .disabled(step == .bedAccess)
+                // Bei der Frage nach der Freigabe und nach dem Autostart antwortet man mit Ja oder Nein
+                .opacity(step == .bedAccess || step == .launchAtLogin ? 0 : 1)
+                .disabled(step == .bedAccess || step == .launchAtLogin)
             .frame(width: 140, alignment: .trailing)
         }
         .padding(.horizontal, 32)
@@ -396,8 +396,6 @@ struct OnboardingView: View {
         if step == .done {
             guard wokeAt == nil else { return }
             settings.onboardingDone = true
-            // Nur ändern, wenn sich etwas ändert: macOS meldet jedes neue Anmeldeobjekt mit einer Mitteilung
-            if launchAtLogin != LoginItem.isEnabled { LoginItem.set(launchAtLogin) }
             // Aufwachen, aufstehen, dann aus dem Fenster aufs Dock springen. Das Zuhause gilt erst, wenn sie unten ist
             wokeAt = Date()
             let home = home
