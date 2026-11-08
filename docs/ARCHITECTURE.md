@@ -1,13 +1,13 @@
 # Pixelcat architecture
 
-A technical sketch of how Pixelcat works. About 8,700 lines of Swift in `Sources/`, built with `swiftc` directly
+A technical sketch of how Pixelcat works. About 14,000 lines of Swift in `Sources/`, built with `swiftc` directly
 (no Xcode project) into a menu bar app (`LSUIElement`) for macOS 13 and later.
 
 ## The big picture
 
 ```
 ┌─ Menu bar ──────────────────────────────── [cat] ◄── NSStatusItem (AppDelegate)
-│                                                       menu: Pomodoro, timer, reminders, settings
+│                                                       menu: lo-fi music, Pomodoro, timer, reminders, settings
 │
 │     ┌─────────────┐        ┌────────┐
 │     │ eye break   │        │ /\_/\  │ ◄── borderless, transparent NSPanel (CatController)
@@ -32,7 +32,9 @@ flowchart LR
     Controller --> Bubble[ThoughtBubble<br/>PixelFont]
     Brain --> Sprites[Sprites · Frames · Coat]
     View --> Sprites
-    App --> Windows[SettingsWindow · TasksWindow<br/>OnboardingWindow  SwiftUI]
+    App --> Windows[SettingsWindow · TasksWindow<br/>OnboardingWindow · BeatBuilderWindow  SwiftUI]
+    App --> Music[MusicController<br/>own beats · Spotify · Music]
+    Controller -- Pomodoro stage, calls --> Music
     Windows --> Settings
 ```
 
@@ -54,6 +56,11 @@ flowchart LR
 | `Bird.swift` | The bird she chases while you're away: steering flight, swoops, dodging, flying off |
 | `Bubble.swift`, `PixelFont.swift` | Thought bubbles with a hand drawn pixel font (letters, umlauts, digits, punctuation) |
 | `Sensors.swift` | `CallDetector` (camera, microphone, screen sharing), `FocusMonitor` |
+| `CallPolicy.swift` | What each reminder does in a video call and while sharing the screen: show quietly, later or never |
+| `Lofi.swift` | `LofiBeat` (grid, chords, tempo, swing, warmth, crackle), `LofiRenderer` (synthesizes a seamless loop), `MusicCoordinator` (when music plays), `SpotifyLink`, `ExternalMusic` (AppleScript) |
+| `Music.swift` | `LofiPlayer` (AVAudioEngine loop), `MusicAppAccess` (Automation permission), `MusicController` |
+| `MusicMenu.swift`, `BeatBuilder.swift` | The lo-fi row at the top of the menu and the Beat Builder window |
+| `LoginItem.swift` | Open at login (`SMAppService`) |
 | `Sound.swift` | `Meow` and `Purr` |
 | `Settings.swift` | `AppSettings` and the settings window |
 | `TasksWindow.swift` | The tasks window |
@@ -157,7 +164,7 @@ flowchart LR
     Cheer[motivation: morning, before the end of the day<br/>at least 4 h apart] --> Queue
     Queue[ErrandScheduler queue<br/>one of each kind] --> Gate{cat free?<br/>no break, Pomodoro,<br/>timer, call}
     Gate -- yes --> Run[walk in · water bowl / window / bubble · meow]
-    Gate -- in a call --> TaskOnly[only tasks, if allowed:<br/>bubble at the Dock, cat hidden]
+    Gate -- in a call --> Policy[CallPolicy per reminder:<br/>show as bubble at the Dock · later · never]
     Run --> Back[back to bed or roaming]
 ```
 
@@ -188,7 +195,7 @@ sounds until it is turned off.
 
 Motivation has its own times: each day the scheduler picks one between 9 and 10 in the morning and one 30 to 75
 minutes before the end of the workday, plus one in the middle when the day is longer than eight hours. Two sayings are
-always at least four hours apart. Like every reminder except tasks, it waits while a call is going on.
+always at least four hours apart. During calls it follows the video call settings like every other reminder.
 
 The bird is an errand too. When no input has arrived for the set time, the controller starts it: the cat comes in
 (or climbs out of her bed), peeks left and right, then chases. `CatBrain` runs under the bird, swats when it flies low
@@ -259,6 +266,22 @@ and strolls slowly, and only later sits, grooms or stretches. The petting page t
 the purr. The last page and the drop show her current outfit (`CatController.outfitNow()`), so she wears her top hat in
 the evening right away.
 
+## Lo-fi music
+
+`MusicCoordinator` is pure logic: a click in the menu, the Pomodoro stage (play in focus, pause for the break, a click
+lasts until the next stage) and calls decide whether music should play. `MusicController` plays either an own beat or
+a playlist. Own beats are rendered by `LofiRenderer` into a four bar loop (kick and snare from sine and noise, an
+electric piano with a slight tape wobble, bass, crackle, a low pass for warmth) and looped by `LofiPlayer`. Spotify and
+Music are controlled with AppleScript (`ExternalMusic`); macOS asks once for the Automation permission. Spotify starts
+the playlist muted, skips one track when shuffling and restores the volume; a pushy app is hidden so your app stays in
+front. Every four seconds a status check lets go when you pause there (or, in Music, play another playlist).
+
+## Signing
+
+`build.sh` signs with the self-signed certificate “Pixelcat Signing” from `make-signing-cert.sh`, so the designated
+requirement (`identifier "local.pixelkatze" and certificate leaf = …`) stays the same across builds and macOS keeps the
+permissions. `release.sh` refuses ad-hoc builds.
+
 ## Sounds
 
 Real cat recordings from “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0), trimmed and leveled, in
@@ -267,6 +290,7 @@ Real cat recordings from “Cat Purr & Meow” by Kerzoven (opengameart.org, CC0
 ## Testing
 
 - `test.sh` compiles the sources with `Tests/main.swift` and plays through scenarios without a screen: the cat bed,
-  every reminder, overlaps, the scheduler queue, the bird chase and the welcome page cat.
+  every reminder, overlaps, the scheduler queue, the bird chase, the welcome page cat, video call policy, lo-fi
+  beats and scripts, and when music plays.
 - `preview.sh` renders sprites, bubbles, props and all windows to `build/preview/` for a visual check.
 - `--selftest` runs every reminder on the real screen and checks the result. `--selftest calls` simulates a call.
