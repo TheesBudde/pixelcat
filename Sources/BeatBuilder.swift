@@ -314,7 +314,7 @@ struct BeatBuilderView: View {
     private var footer: some View {
         let inUse = settings.musicSource == .beat && settings.selectedBeat.id == beat.wrappedValue.id
         return HStack {
-            Text(inUse ? t("Läuft als deine Musik (Menü › Lo-Fi-Musik).", "This is your music (menu › Lo-Fi music).")
+            Text(inUse ? t("Läuft als deine Musik (Menü › Lo-Fi-Musik).", "This is your music (menu › Lo-fi music).")
                        : t("Änderungen werden sofort gespeichert.", "Changes are saved right away."))
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.secondary)

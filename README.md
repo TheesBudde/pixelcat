@@ -138,6 +138,11 @@ averages over the days you started or ended. An ⓘ next to each chart explains 
 - **With Pomodoro:** If you like, the music plays during focus and pauses for the break. During video calls it
   pauses too.
 
+<p align="center">
+  <img src="docs/img/beat-builder.png" width="58%" alt="Beat Builder">
+  <img src="docs/img/music-settings.png" width="40%" alt="Music settings">
+</p>
+
 ### Outfits
 
 - **Evening:** Top hat and bow tie after work, until bedtime.
@@ -153,6 +158,9 @@ averages over the days you started or ended. An ⓘ next to each chart explains 
   and *While sharing* and choose for each reminder (tasks, drinking, eye breaks, end of workday, motivation):
   **Show** it right away as a small, silent thought bubble at the Dock without the cat, show it **Later** once the
   call or the sharing is over, or **Never**. Break questions always come after the call.
+
+  <img src="docs/img/video-calls.png" width="420" alt="Video call settings">
+
 - **Focus:** During a macOS Focus like Do Not Disturb she stays quiet and sleeps more.
 - **Sounds:** Soft, real cat sounds for Pomodoro, timers, breaks, drinking, eye breaks, motivation and the end of
   the day.
